@@ -103,7 +103,7 @@
 **************************************************/
 #define BC_FWIMG_ST_ADDR	0x00000000
 /* FIXME: jarod: there's a kernel function that'll do this for us... */
-#define rotr32_1(x,n)		(((x) >> n) | ((x) << (32 - n)))
+#define rotr32_1(x, n)		(((x) >> n) | ((x) << (32 - n)))
 #define bswap_32_1(x)		((rotr32_1((x), 24) & 0x00ff00ff) | (rotr32_1((x), 8) & 0xff00ff00))
 
 #define DecHt_HostSwReset	0x340000
@@ -166,10 +166,10 @@ typedef union _link_misc_perst_clk_ctrl_ {
 
 typedef union _link_misc_perst_decoder_ctrl_ {
 	struct {
-		uint32_t	bcm_7412_rst:1;			/* 1 -> BCM7412 is held in reset. Reset value 1.*/
-		uint32_t	res0:3;					/* Reserved.No Effect*/
-		uint32_t	stop_7412_clk:1;		/* 1 ->Stops branch of 27MHz clk used to clk BCM7412*/
-		uint32_t	res1:27;				/* Reseved. No Effect*/		 
+		uint32_t	bcm_7412_rst:1; /* 1 -> BCM7412 is held in reset. Reset value 1.*/
+		uint32_t	res0:3; /* Reserved.No Effect*/
+		uint32_t	stop_7412_clk:1; /* 1 ->Stops branch of 27MHz clk used to clk BCM7412*/
+		uint32_t	res1:27; /* Reseved. No Effect */
 	};
 
 	uint32_t	whole_reg;

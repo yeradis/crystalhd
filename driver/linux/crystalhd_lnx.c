@@ -28,15 +28,11 @@
 
 #include "crystalhd_lnx.h"
 
-static struct crystalhd_adp *g_adp_info = NULL;
+static struct crystalhd_adp *g_adp_info;
 
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,18)
 static irqreturn_t chd_dec_isr(int irq, void *arg)
-#else
-static irqreturn_t chd_dec_isr(int irq, void *arg, struct pt_regs *r)
-#endif
 {
-	struct crystalhd_adp *adp = (struct crystalhd_adp*)arg;
+	struct crystalhd_adp *adp = (struct crystalhd_adp *) arg;
 	int rc = 0;
 	if (adp)
 		rc = crystalhd_cmd_interrupt(&adp->cmds);
@@ -59,7 +55,7 @@ static int chd_dec_enable_int(struct crystalhd_adp *adp)
 		adp->msi = pci_enable_msi(adp->pdev);
 
 	rc = request_irq(adp->pdev->irq, chd_dec_isr, IRQF_SHARED,
-			 adp->name, (void*)adp);
+			 adp->name, (void *)adp);
 	if (rc) {
 		BCMLOG_ERR("Interrupt request failed.. \n");
 		pci_disable_msi(adp->pdev);
@@ -77,9 +73,8 @@ static int chd_dec_disable_int(struct crystalhd_adp *adp)
 
 	free_irq(adp->pdev->irq, adp);
 
-	if (adp->msi) {
+	if (adp->msi)
 		pci_disable_msi(adp->pdev);
-	}
 
 	return 0;
 }
@@ -100,7 +95,7 @@ crystalhd_ioctl_data *chd_dec_alloc_iodata(struct crystalhd_adp *adp, bool isr)
 		memset(temp, 0, sizeof(*temp));
 	}
 
-	spin_unlock_irqrestore(&adp->lock,flags);
+	spin_unlock_irqrestore(&adp->lock, flags);
 	return temp;
 }
 
@@ -118,7 +113,7 @@ void chd_dec_free_iodata(struct crystalhd_adp *adp, crystalhd_ioctl_data *iodata
 	spin_unlock_irqrestore(&adp->lock, flags);
 }
 
-inline static int crystalhd_user_data(unsigned long ud,void *dr, int size,int set)
+static inline int crystalhd_user_data(unsigned long ud, void *dr, int size, int set)
 {
 	int rc;
 
@@ -153,7 +148,7 @@ static int chd_dec_fetch_cdata(struct crystalhd_adp *adp, crystalhd_ioctl_data *
 
 	io->add_cdata = vmalloc(m_sz);
 	if (!io->add_cdata) {
-		BCMLOG_ERR("kalloc fail for sz:%x\n",m_sz);
+		BCMLOG_ERR("kalloc fail for sz:%x\n", m_sz);
 		return -ENOMEM;
 	}
 
@@ -222,17 +217,17 @@ static int chd_dec_proc_user_data(struct crystalhd_adp *adp,
 	}
 
 	switch (io->cmd) {
-		case BCM_IOC_MEM_RD:
-		case BCM_IOC_MEM_WR:
-		case BCM_IOC_FW_DOWNLOAD:
-			m_sz = io->udata.u.devMem.NumDwords * 4;
-			if (set)
-				rc = chd_dec_release_cdata(adp, io, ua);
-			else
-				rc = chd_dec_fetch_cdata(adp, io, m_sz, ua);
-			break;
-		default:
-			break;
+	case BCM_IOC_MEM_RD:
+	case BCM_IOC_MEM_WR:
+	case BCM_IOC_FW_DOWNLOAD:
+		m_sz = io->udata.u.devMem.NumDwords * 4;
+		if (set)
+			rc = chd_dec_release_cdata(adp, io, ua);
+		else
+			rc = chd_dec_fetch_cdata(adp, io, m_sz, ua);
+		break;
+	default:
+		break;
 	}
 
 	return rc;
@@ -245,7 +240,7 @@ static int chd_dec_api_cmd(struct crystalhd_adp *adp, unsigned long ua,
 	crystalhd_ioctl_data *temp;
 	BC_STATUS sts = BC_STS_SUCCESS;
 
-	temp = chd_dec_alloc_iodata(adp,0);
+	temp = chd_dec_alloc_iodata(adp, 0);
 	if (!temp) {
 		BCMLOG_ERR("Failed to get iodata..\n");
 		return -EINVAL;
@@ -264,7 +259,7 @@ static int chd_dec_api_cmd(struct crystalhd_adp *adp, unsigned long ua,
 	}
 
 	if (temp) {
-		chd_dec_free_iodata(adp, temp,0);
+		chd_dec_free_iodata(adp, temp, 0);
 		temp = NULL;
 	}
 
@@ -284,7 +279,7 @@ static int chd_dec_ioctl(struct inode *in, struct file *fd,
 		return -EINVAL;
 	}
 
-	uc = (struct crystalhd_user*)fd->private_data;
+	uc = (struct crystalhd_user *)fd->private_data;
 	if (!uc) {
 		BCMLOG_ERR("Failed to get uc\n");
 		return -ENODATA;
@@ -313,13 +308,13 @@ static int chd_dec_open(struct inode *in, struct file *fd)
 	}
 
 	if (adp->cfg_users >= BC_LINK_MAX_OPENS) {
-		BCMLOG(BCMLOG_INFO,"Already in use.%d\n",adp->cfg_users);
+		BCMLOG(BCMLOG_INFO, "Already in use.%d\n", adp->cfg_users);
 		return -EBUSY;
 	}
 
 	sts = crystalhd_user_open(&adp->cmds, &uc);
 	if (sts != BC_STS_SUCCESS) {
-		BCMLOG_ERR("cmd_user_open - %d \n",sts);
+		BCMLOG_ERR("cmd_user_open - %d \n", sts);
 		rc = -EBUSY;
 	}
 
@@ -347,14 +342,14 @@ static int chd_dec_close(struct inode *in, struct file *fd)
 		return -ENODATA;
 	}
 
-	crystalhd_user_close(&adp->cmds,uc);
+	crystalhd_user_close(&adp->cmds, uc);
 
 	adp->cfg_users--;
 
 	return 0;
 }
 
-static struct file_operations chd_dec_fops = {
+static const struct file_operations chd_dec_fops = {
 	.owner   = THIS_MODULE,
 	.ioctl   = chd_dec_ioctl,
 	.open    = chd_dec_open,
@@ -462,11 +457,11 @@ static int chd_pci_reserve_mem(struct crystalhd_adp *pinfo)
 
 	rc = pci_request_regions(pinfo->pdev, pinfo->name);
 	if (rc < 0) {
-		BCMLOG_ERR("Region request failed: %d\n",rc);
+		BCMLOG_ERR("Region request failed: %d\n", rc);
 		return rc;
 	}
 
-	BCMLOG(BCMLOG_SSTEP,"Mapped addr:0x%08lx  i2o_addr:0x%08lx\n",
+	BCMLOG(BCMLOG_SSTEP, "Mapped addr:0x%08lx  i2o_addr:0x%08lx\n",
 	       (unsigned long)pinfo->addr, (unsigned long)pinfo->i2o_addr);
 
 	return 0;
@@ -494,7 +489,7 @@ static void chd_dec_pci_remove(struct pci_dev *pdev)
 
 	BCMLOG_ENTER;
 
-	pinfo = (struct crystalhd_adp*)pci_get_drvdata(pdev);
+	pinfo = (struct crystalhd_adp *) pci_get_drvdata(pdev);
 	if (!pinfo) {
 		BCMLOG_ERR("could not get adp\n");
 		return;
@@ -502,7 +497,7 @@ static void chd_dec_pci_remove(struct pci_dev *pdev)
 
 	sts = crystalhd_delete_cmd_context(&pinfo->cmds);
 	if (sts != BC_STS_SUCCESS)
-		BCMLOG_ERR("cmd delete :%d \n",sts);
+		BCMLOG_ERR("cmd delete :%d \n", sts);
 
 	chd_dec_release_chdev(pinfo);
 
@@ -556,13 +551,13 @@ static int chd_dec_pci_probe(struct pci_dev *pdev,
 	pinfo->drv_data = entry->driver_data;
 
 	/* Setup adapter level lock.. */
-	pinfo->lock = SPIN_LOCK_UNLOCKED;
+	spin_lock_init(&pinfo->lock);
 
 	/* setup api stuff.. */
 	chd_dec_init_chdev(pinfo);
 	rc = chd_dec_enable_int(pinfo);
 	if (rc) {
-		BCMLOG_ERR("_enable_int err:%d \n",rc);
+		BCMLOG_ERR("_enable_int err:%d \n", rc);
 		pci_disable_device(pdev);
 		return -ENODEV;
 	}
@@ -575,14 +570,14 @@ static int chd_dec_pci_probe(struct pci_dev *pdev,
 		pci_set_consistent_dma_mask(pdev, DMA_BIT_MASK(32));
 		pinfo->dmabits = 32;
 	} else {
-		BCMLOG_ERR("Unabled to setup DMA %d\n",rc);
+		BCMLOG_ERR("Unabled to setup DMA %d\n", rc);
 		pci_disable_device(pdev);
 		return -ENODEV;
 	}
 
 	sts = crystalhd_setup_cmd_context(&pinfo->cmds, pinfo);
 	if (sts != BC_STS_SUCCESS) {
-		BCMLOG_ERR("cmd setup :%d \n",sts);
+		BCMLOG_ERR("cmd setup :%d \n", sts);
 		pci_disable_device(pdev);
 		return -ENODEV;
 	}
@@ -657,7 +652,7 @@ int chd_dec_pci_resume(struct pci_dev *pdev)
 
 	rc = chd_dec_enable_int(adp);
 	if (rc) {
-		BCMLOG_ERR("_enable_int err:%d \n",rc);
+		BCMLOG_ERR("_enable_int err:%d \n", rc);
 		pci_disable_device(pdev);
 		return -ENODEV;
 	}
@@ -696,17 +691,17 @@ void chd_set_log_level(struct crystalhd_adp *adp, char *arg)
 {
 	if ((!arg) || (strlen(arg) < 3))
 		g_linklog_level = BCMLOG_ERROR | BCMLOG_DATA;
-	else if (!strncmp(arg,"sstep",5))
+	else if (!strncmp(arg, "sstep", 5))
 		g_linklog_level = BCMLOG_INFO | BCMLOG_DATA | BCMLOG_DBG |
 				  BCMLOG_SSTEP | BCMLOG_ERROR;
-	else if (!strncmp(arg,"info",4))
+	else if (!strncmp(arg, "info", 4))
 		g_linklog_level = BCMLOG_ERROR | BCMLOG_DATA | BCMLOG_INFO;
-	else if (!strncmp(arg,"debug",5))
+	else if (!strncmp(arg, "debug", 5))
 		g_linklog_level = BCMLOG_ERROR | BCMLOG_DATA | BCMLOG_INFO |
 				  BCMLOG_DBG;
-	else if (!strncmp(arg,"pball",5))
+	else if (!strncmp(arg, "pball", 5))
 		g_linklog_level = 0xFFFFFFFF & ~(BCMLOG_SPINLOCK);
-	else if (!strncmp(arg,"silent",6))
+	else if (!strncmp(arg, "silent", 6))
 		g_linklog_level = 0;
 	else
 		g_linklog_level = 0;
@@ -722,20 +717,20 @@ int __init chd_dec_module_init(void)
 	int rc;
 
 	chd_set_log_level(NULL, "debug");
-	BCMLOG(BCMLOG_DATA,"Loading crystalhd %d.%d.%d \n",
+	BCMLOG(BCMLOG_DATA, "Loading crystalhd %d.%d.%d \n",
 	       crystalhd_kmod_major, crystalhd_kmod_minor, crystalhd_kmod_rev);
 
 	rc = pci_register_driver(&bc_chd_70012_driver);
 
 	if (rc < 0)
-		BCMLOG_ERR("Could not find any devices. err:%d \n",rc);
+		BCMLOG_ERR("Could not find any devices. err:%d \n", rc);
 
 	return rc;
 }
 
-void __exit chd_dec_module_cleanup( void )
+void __exit chd_dec_module_cleanup(void)
 {
-	BCMLOG(BCMLOG_DATA,"unloading crystalhd %d.%d.%d \n",
+	BCMLOG(BCMLOG_DATA, "unloading crystalhd %d.%d.%d \n",
 	       crystalhd_kmod_major, crystalhd_kmod_minor, crystalhd_kmod_rev);
 
 	pci_unregister_driver(&bc_chd_70012_driver);

@@ -132,19 +132,19 @@ BC_STATUS crystalhd_mem_wr(struct crystalhd_adp *, uint32_t, uint32_t, uint32_t 
 
 /*==========Link (70012) PCIe Config access routines.================*/
 BC_STATUS crystalhd_pci_cfg_rd(struct crystalhd_adp *, uint32_t, uint32_t, uint32_t *);
-BC_STATUS crystalhd_pci_cfg_wr(struct crystalhd_adp *, uint32_t, uint32_t, uint32_t );
+BC_STATUS crystalhd_pci_cfg_wr(struct crystalhd_adp *, uint32_t, uint32_t, uint32_t);
 
 /*========= Linux Kernel Interface routines. ======================= */
 void *bc_kern_dma_alloc(struct crystalhd_adp *, uint32_t, dma_addr_t *);
 void bc_kern_dma_free(struct crystalhd_adp *, uint32_t,
 		      void *, dma_addr_t);
-#define crystalhd_create_event(_ev)	init_waitqueue_head( _ev)
-#define crystalhd_set_event(_ev)		wake_up_interruptible( _ev)
+#define crystalhd_create_event(_ev)	init_waitqueue_head(_ev)
+#define crystalhd_set_event(_ev)		wake_up_interruptible(_ev)
 #define crystalhd_wait_on_event(ev, condition, timeout, ret, nosig)	\
 do {									\
 	DECLARE_WAITQUEUE(entry, current);				\
 	unsigned long end = jiffies + ((timeout * HZ) / 1000);		\
-		ret=0;							\
+		ret = 0;						\
 	add_wait_queue(ev, &entry);					\
 	for (;;) {							\
 		__set_current_state(TASK_INTERRUPTIBLE);		\
@@ -163,14 +163,15 @@ do {									\
 	}								\
 	__set_current_state(TASK_RUNNING);				\
 	remove_wait_queue(ev, &entry);					\
-} while(0)
+} while (0)
 
 /*================ Direct IO mapping routines ==================*/
-extern int crystalhd_create_dio_pool(struct crystalhd_adp *, uint32_t );
+extern int crystalhd_create_dio_pool(struct crystalhd_adp *, uint32_t);
 extern void crystalhd_destroy_dio_pool(struct crystalhd_adp *);
-extern BC_STATUS crystalhd_map_dio(struct crystalhd_adp *,void *, uint32_t, uint32_t, 
-				bool, bool,crystalhd_dio_req** );
-extern BC_STATUS crystalhd_unmap_dio(struct crystalhd_adp *,crystalhd_dio_req*);
+extern BC_STATUS crystalhd_map_dio(struct crystalhd_adp *, void *, uint32_t,
+				   uint32_t, bool, bool, crystalhd_dio_req**);
+
+extern BC_STATUS crystalhd_unmap_dio(struct crystalhd_adp *, crystalhd_dio_req*);
 #define crystalhd_get_sgle_paddr(_dio, _ix) (cpu_to_le64(sg_dma_address(&_dio->sg[_ix])))
 #define crystalhd_get_sgle_len(_dio, _ix) (cpu_to_le32(sg_dma_len(&_dio->sg[_ix])))
 
@@ -179,12 +180,12 @@ extern BC_STATUS crystalhd_create_dioq(struct crystalhd_adp *, crystalhd_dioq_t 
 extern void crystalhd_delete_dioq(struct crystalhd_adp *, crystalhd_dioq_t *);
 extern BC_STATUS crystalhd_dioq_add(crystalhd_dioq_t *ioq, void *data, bool wake, uint32_t tag);
 extern void *crystalhd_dioq_fetch(crystalhd_dioq_t *ioq);
-extern void *crystalhd_dioq_find_and_fetch(crystalhd_dioq_t *ioq,uint32_t tag);
+extern void *crystalhd_dioq_find_and_fetch(crystalhd_dioq_t *ioq, uint32_t tag);
 extern void *crystalhd_dioq_fetch_wait(crystalhd_dioq_t *ioq, uint32_t to_secs, uint32_t *sig_pend);
 
 #define crystalhd_dioq_count(_ioq)	((_ioq) ? _ioq->count : 0)
 
-extern int crystalhd_create_elem_pool(struct crystalhd_adp *, uint32_t );
+extern int crystalhd_create_elem_pool(struct crystalhd_adp *, uint32_t);
 extern void crystalhd_delete_elem_pool(struct crystalhd_adp *);
 
 
@@ -220,9 +221,9 @@ if (g_linklog_level & trace) {			\
 
 #define BCMLOG_ERR(fmt, args...)					\
 do {									\
-	if(g_linklog_level & BCMLOG_ERROR){				\
-	  printk("*ERR*:%s:%d: "fmt,__FILE__,__LINE__, ##args);		\
+	if (g_linklog_level & BCMLOG_ERROR) {				\
+		printk("*ERR*:%s:%d: "fmt, __FILE__, __LINE__, ##args);	\
 	}								\
-} while(0);
+} while (0);
 
 #endif

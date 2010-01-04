@@ -25,10 +25,6 @@
 #ifndef _BC_DTS_TYPES_H_
 #define _BC_DTS_TYPES_H_
 
-#ifdef __LINUX_USER__	// Don't include these for KERNEL..
-#include <stdint.h>
-#endif
-
 #if defined(_WIN64) || defined(_WIN32)
 typedef uint32_t		U32;
 typedef int32_t			S32;
@@ -39,7 +35,7 @@ typedef char			S8;
 #endif
 
 #ifndef PVOID
-typedef void	*		PVOID;
+typedef void	*PVOID;
 #endif
 
 #ifndef BOOL
@@ -56,13 +52,13 @@ typedef int	BOOL;
 #if !(defined(POINTER_32))
 #define POINTER_32	__ptr32
 #endif
-#else	//_WIN32
+#else	/* _WIN32 */
 #define POINTER_32
 #endif
 
 #if defined(__KERNEL__) || defined(__LINUX_USER__)
 
-#ifdef __LINUX_USER__	// Don't include these for KERNEL..
+#ifdef __LINUX_USER__	/* Don't include these for KERNEL */
 typedef uint32_t	ULONG;
 typedef int32_t		LONG;
 typedef void		*HANDLE;
@@ -74,15 +70,17 @@ typedef uint32_t	*LPDWORD;
 typedef unsigned char	*PUCHAR;
 
 #ifndef TRUE
-#define TRUE		1
+	#define TRUE		1
 #endif
 
 #ifndef FALSE
-#define FALSE		0
+	#define FALSE		0
 #endif
 
 #define TEXT
+
 #else
+
 /* For Kernel usage.. */
 typedef bool	bc_bool_t;
 #endif

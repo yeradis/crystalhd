@@ -30,8 +30,8 @@
 
 static void crystalhd_enable_uarts(struct crystalhd_adp *adp)
 {
-	bc_dec_reg_wr(adp,UartSelectA,BSVS_UART_STREAM);
-	bc_dec_reg_wr(adp,UartSelectB,BSVS_UART_DEC_OUTER);
+	bc_dec_reg_wr(adp, UartSelectA, BSVS_UART_STREAM);
+	bc_dec_reg_wr(adp, UartSelectB, BSVS_UART_DEC_OUTER);
 }
 
 
@@ -69,7 +69,7 @@ static bool crystalhd_bring_out_of_rst(struct crystalhd_adp *adp)
 	 * delay to allow PLL to lock Clear alternate clock, stop clock bits
 	 */
 	rst_clk_cntrl.whole_reg = crystalhd_reg_rd(adp, MISC_PERST_CLOCK_CTRL);
-	rst_clk_cntrl.pll_pwr_dn =0;
+	rst_clk_cntrl.pll_pwr_dn = 0;
 	crystalhd_reg_wr(adp, MISC_PERST_CLOCK_CTRL, rst_clk_cntrl.whole_reg);
 	msleep_interruptible(50);
 
@@ -104,7 +104,7 @@ static bool crystalhd_bring_out_of_rst(struct crystalhd_adp *adp)
 	msleep_interruptible(50);
 
 	/* Disable OTP_CONTENT_MISC to 0 to disable all secure modes */
-	crystalhd_reg_wr(adp,OTP_CONTENT_MISC, 0);
+	crystalhd_reg_wr(adp, OTP_CONTENT_MISC, 0);
 
 	/* Clear bit 29 of 0x404 */
 	temp = crystalhd_reg_rd(adp, PCIE_TL_TRANSACTION_CONFIGURATION);
@@ -202,7 +202,7 @@ static void crystalhd_enable_interrupts(struct crystalhd_adp *adp)
 	intr_mask.mask_rx_err  = 1;
 	intr_mask.mask_tx_done = 1;
 	intr_mask.mask_tx_err  = 1;
-	crystalhd_reg_wr(adp,INTR_INTR_MSK_CLR_REG,intr_mask.whole_reg);
+	crystalhd_reg_wr(adp, INTR_INTR_MSK_CLR_REG, intr_mask.whole_reg);
 
 	return;
 }
@@ -326,7 +326,7 @@ static bool crystalhd_stop_device(struct crystalhd_adp *adp)
 {
 	uint32_t reg;
 
-	BCMLOG(BCMLOG_INFO,"Stopping BCM70012 Device\n");
+	BCMLOG(BCMLOG_INFO, "Stopping BCM70012 Device\n");
 	/* Clear and disable interrupts */
 	crystalhd_disable_interrupts(adp);
 	crystalhd_clear_errors(adp);
@@ -363,7 +363,7 @@ static crystalhd_rx_dma_pkt *crystalhd_hw_alloc_rx_pkt(struct crystalhd_hw *hw)
 		temp->pkt_tag = 0;
 		temp->flags = 0;
 	}
-	spin_unlock_irqrestore(&hw->lock,flags);
+	spin_unlock_irqrestore(&hw->lock, flags);
 
 	return temp;
 }
@@ -408,7 +408,7 @@ static void crystalhd_rx_pkt_rel_call_back(void *context, void *data)
 	crystalhd_rx_dma_pkt *pkt = (crystalhd_rx_dma_pkt *)data;
 
 	if (!pkt || !hw) {
-		BCMLOG_ERR("Invalid arg - %p %p\n",hw,pkt);
+		BCMLOG_ERR("Invalid arg - %p %p\n", hw, pkt);
 		return;
 	}
 
@@ -431,7 +431,7 @@ static void crystalhd_hw_delete_ioqs(struct crystalhd_hw *hw)
 	if (!hw)
 		return;
 
-	BCMLOG(BCMLOG_DBG,"Deleting IOQs \n");
+	BCMLOG(BCMLOG_DBG, "Deleting IOQs \n");
 	crystalhd_hw_delete_ioq(hw->adp, hw->tx_actq);
 	crystalhd_hw_delete_ioq(hw->adp, hw->tx_freeq);
 	crystalhd_hw_delete_ioq(hw->adp, hw->rx_actq);
@@ -440,9 +440,11 @@ static void crystalhd_hw_delete_ioqs(struct crystalhd_hw *hw)
 }
 
 #define crystalhd_hw_create_ioq(sts, hw, q, cb)			\
-	sts = crystalhd_create_dioq(hw->adp, &q, cb, hw);		\
+do {								\
+	sts = crystalhd_create_dioq(hw->adp, &q, cb, hw);	\
 	if (sts != BC_STS_SUCCESS)				\
-		goto hw_create_ioq_err;
+		goto hw_create_ioq_err;				\
+} while (0)
 
 /*
  * Create IOQs..
@@ -567,7 +569,7 @@ static bool crystalhd_tx_list0_handler(struct crystalhd_hw *hw, uint32_t err_sts
 	if (!(err_sts & err_mask))
 		return false;
 
-	BCMLOG_ERR("Error on Tx-L0 %x \n",err_sts);
+	BCMLOG_ERR("Error on Tx-L0 %x \n", err_sts);
 
 	tmp = err_mask;
 
@@ -590,7 +592,7 @@ static bool crystalhd_tx_list0_handler(struct crystalhd_hw *hw, uint32_t err_sts
 static bool crystalhd_tx_list1_handler(struct crystalhd_hw *hw, uint32_t err_sts)
 {
 	uint32_t err_mask, tmp;
-	unsigned long flags=0;
+	unsigned long flags = 0;
 
 	err_mask = MISC1_TX_DMA_ERROR_STATUS_TX_L1_DESC_TX_ABORT_ERRORS_MASK |
 		MISC1_TX_DMA_ERROR_STATUS_TX_L1_DMA_DATA_TX_ABORT_ERRORS_MASK |
@@ -599,7 +601,7 @@ static bool crystalhd_tx_list1_handler(struct crystalhd_hw *hw, uint32_t err_sts
 	if (!(err_sts & err_mask))
 		return false;
 
-	BCMLOG_ERR("Error on Tx-L1 %x \n",err_sts);
+	BCMLOG_ERR("Error on Tx-L1 %x \n", err_sts);
 
 	tmp = err_mask;
 
@@ -661,11 +663,12 @@ static void crystalhd_hw_dump_desc(pdma_descriptor p_dma_desc,
 
 	/* FIXME: jarod: perhaps a modparam desc_debug to enable this, rather than
 	 * setting ll (log level, I presume) to non-zero? */
-	if (!ll) return;
+	if (!ll)
+		return;
 
-	for (ix=ul_desc_index; ix<(ul_desc_index+cnt); ix++) {
-		BCMLOG(ll,"%s[%d] Buff[%x:%x] Next:[%x:%x] XferSz:%x Intr:%x,Last:%x\n",
-		       ((p_dma_desc[ul_desc_index].dma_dir)?"TDesc":"RDesc"),
+	for (ix = ul_desc_index; ix < (ul_desc_index + cnt); ix++) {
+		BCMLOG(ll, "%s[%d] Buff[%x:%x] Next:[%x:%x] XferSz:%x Intr:%x,Last:%x\n",
+		       ((p_dma_desc[ul_desc_index].dma_dir) ? "TDesc" : "RDesc"),
 		       ul_desc_index,
 		       p_dma_desc[ul_desc_index].buff_addr_high,
 		       p_dma_desc[ul_desc_index].buff_addr_low,
@@ -721,11 +724,11 @@ static BC_STATUS crystalhd_hw_fill_desc(crystalhd_dio_req *ioreq,
 		desc[ix].next_desc_addr_low = addr_temp.low_part;
 		desc[ix].next_desc_addr_high = addr_temp.high_part;
 
-		if ((count+len) > xfr_sz)
+		if ((count + len) > xfr_sz)
 			len = xfr_sz - count;
 
 		/* Debug.. */
-		if ((!len) || (len>crystalhd_get_sgle_len(ioreq,sg_ix)) ) {
+		if ((!len) || (len > crystalhd_get_sgle_len(ioreq, sg_ix))) {
 			BCMLOG_ERR("inv-len(%x) Ix(%d) count:%x xfr_sz:%x sg_cnt:%d\n",
 				   len, ix, count, xfr_sz, sg_cnt);
 			return BC_STS_ERROR;
@@ -877,20 +880,18 @@ static BC_STATUS crystalhd_stop_tx_dma_engine(struct crystalhd_hw *hw)
 	dma_cntrl &= ~DMA_START_BIT;
 	crystalhd_reg_wr(hw->adp, MISC1_TX_SW_DESC_LIST_CTRL_STS, dma_cntrl);
 
-	BCMLOG(BCMLOG_DBG,"Cleared the DMA Start bit\n");
+	BCMLOG(BCMLOG_DBG, "Cleared the DMA Start bit\n");
 
 	/* Poll for 3seconds (30 * 100ms) on both the lists..*/
 	while ((l1 || l2) && cnt) {
 
 		if (l1) {
-			l1 = crystalhd_reg_rd(hw->adp,
-					    MISC1_TX_FIRST_DESC_L_ADDR_LIST0);
+			l1 = crystalhd_reg_rd(hw->adp, MISC1_TX_FIRST_DESC_L_ADDR_LIST0);
 			l1 &= DMA_START_BIT;
 		}
 
 		if (l2) {
-			l2 = crystalhd_reg_rd(hw->adp,
-					    MISC1_TX_FIRST_DESC_L_ADDR_LIST1);
+			l2 = crystalhd_reg_rd(hw->adp, MISC1_TX_FIRST_DESC_L_ADDR_LIST1);
 			l2 &= DMA_START_BIT;
 		}
 
@@ -984,8 +985,7 @@ static uint32_t crystalhd_get_addr_from_pib_Q(struct crystalhd_hw *hw)
 	return addr_entry;
 }
 
-static bool crystalhd_rel_addr_to_pib_Q(struct crystalhd_hw* hw,
-				      uint32_t addr_to_rel)
+static bool crystalhd_rel_addr_to_pib_Q(struct crystalhd_hw *hw, uint32_t addr_to_rel)
 {
 	uint32_t Q_addr;
 	uint32_t r_offset, w_offset, n_offset;
@@ -1286,7 +1286,7 @@ static void crystalhd_hw_finalize_pause(struct crystalhd_hw *hw)
 
 	aspm = crystalhd_reg_rd(hw->adp, PCIE_DLL_DATA_LINK_CONTROL);
 	aspm |= ASPM_L1_ENABLE;
-// NAREN BCMLOG(BCMLOG_INFO, "aspm on\n");
+	/* NAREN BCMLOG(BCMLOG_INFO, "aspm on\n"); */
 	crystalhd_reg_wr(hw->adp, PCIE_DLL_DATA_LINK_CONTROL, aspm);
 }
 
@@ -1506,7 +1506,7 @@ static void crystalhd_rx_isr(struct crystalhd_hw *hw, uint32_t intr_sts)
 				hw->stats.rx_errors++;
 				crystalhd_get_dnsz(hw, i, &y_dn_sz, &uv_dn_sz);
 				/* FIXME: jarod: this is where my mini pci-e card is tripping up */
-				BCMLOG(BCMLOG_DBG,"list_index:%x rx[%d] Y:%x "
+				BCMLOG(BCMLOG_DBG, "list_index:%x rx[%d] Y:%x "
 				       "UV:%x Int:%x YDnSz:%x UVDnSz:%x\n",
 				       i, hw->stats.rx_errors, y_err_sts,
 				       uv_err_sts, intr_sts, y_dn_sz, uv_dn_sz);
@@ -1550,7 +1550,7 @@ static BC_STATUS crystalhd_fw_cmd_post_proc(struct crystalhd_hw *hw,
 		st_rsp = (DecRspChannelStartVideo *)fw_cmd->rsp;
 		hw->pib_del_Q_addr = st_rsp->picInfoDeliveryQ;
 		hw->pib_rel_Q_addr = st_rsp->picInfoReleaseQ;
-		BCMLOG(BCMLOG_DBG,"DelQAddr:%x RelQAddr:%x\n",
+		BCMLOG(BCMLOG_DBG, "DelQAddr:%x RelQAddr:%x\n",
 		       hw->pib_del_Q_addr, hw->pib_rel_Q_addr);
 		break;
 	case eCMD_C011_INIT:
@@ -1692,7 +1692,7 @@ BC_STATUS crystalhd_download_fw(struct crystalhd_adp *adp, void *buffer, uint32_
 	crystalhd_reg_wr(adp, DCI_CMD, reg_data);
 	msleep_interruptible(10);
 
-	reg_data =0;
+	reg_data = 0;
 	reg_data = crystalhd_reg_rd(adp, DCI_STATUS);
 
 	if ((reg_data & BC_BIT(9)) == BC_BIT(9)) {
@@ -1714,7 +1714,7 @@ BC_STATUS crystalhd_download_fw(struct crystalhd_adp *adp, void *buffer, uint32_
 		return BC_STS_FW_AUTH_FAILED;
 	}
 
-	BCMLOG(BCMLOG_INFO,"Firmware Downloaded Successfully\n");
+	BCMLOG(BCMLOG_INFO, "Firmware Downloaded Successfully\n");
 	return BC_STS_SUCCESS;;
 }
 
@@ -1871,8 +1871,8 @@ BC_STATUS crystalhd_hw_open(struct crystalhd_hw *hw, struct crystalhd_adp *adp)
 	memset(hw, 0, sizeof(struct crystalhd_hw));
 
 	hw->adp = adp;
-	hw->lock = SPIN_LOCK_UNLOCKED;
-	hw->rx_lock = SPIN_LOCK_UNLOCKED;
+	spin_lock_init(&hw->lock);
+	spin_lock_init(&hw->rx_lock);
 	/* FIXME: jarod: what are these magic numbers?!? */
 	hw->tx_ioq_tag_seed = 0x70023070;
 	hw->rx_pkt_tag_seed = 0x70029070;
@@ -1916,12 +1916,13 @@ BC_STATUS crystalhd_hw_setup_dma_rings(struct crystalhd_hw *hw)
 	BC_STATUS sts = BC_STS_SUCCESS;
 	crystalhd_rx_dma_pkt *rpkt;
 
-	if (!hw || !hw->adp ) {
+	if (!hw || !hw->adp) {
 		BCMLOG_ERR("Invalid Arguments\n");
 		return BC_STS_INV_ARG;
 	}
 
-	if ((sts = crystalhd_hw_create_ioqs(hw)) != BC_STS_SUCCESS) {
+	sts = crystalhd_hw_create_ioqs(hw);
+	if (sts != BC_STS_SUCCESS) {
 		BCMLOG_ERR("Failed to create IOQs..\n");
 		return sts;
 	}
@@ -1973,7 +1974,7 @@ BC_STATUS crystalhd_hw_setup_dma_rings(struct crystalhd_hw *hw)
 		rpkt->desc_mem.phy_addr = phy_addr;
 		rpkt->desc_mem.sz  = BC_LINK_MAX_SGLS * sizeof(dma_descriptor);
 		rpkt->pkt_tag = hw->rx_pkt_tag_seed + i;
-		crystalhd_hw_free_rx_pkt(hw,rpkt);
+		crystalhd_hw_free_rx_pkt(hw, rpkt);
 	}
 
 	return BC_STS_SUCCESS;
@@ -1982,7 +1983,7 @@ BC_STATUS crystalhd_hw_setup_dma_rings(struct crystalhd_hw *hw)
 BC_STATUS crystalhd_hw_free_dma_rings(struct crystalhd_hw *hw)
 {
 	unsigned int i;
-	crystalhd_rx_dma_pkt *rpkt=NULL;
+	crystalhd_rx_dma_pkt *rpkt = NULL;
 
 	if (!hw || !hw->adp) {
 		BCMLOG_ERR("Invalid Arguments\n");
@@ -2003,7 +2004,7 @@ BC_STATUS crystalhd_hw_free_dma_rings(struct crystalhd_hw *hw)
 		}
 	}
 
-	BCMLOG(BCMLOG_DBG,"Releasing RX Pkt pool\n");
+	BCMLOG(BCMLOG_DBG, "Releasing RX Pkt pool\n");
 	do {
 		rpkt = crystalhd_hw_alloc_rx_pkt(hw);
 		if (!rpkt)
@@ -2094,7 +2095,7 @@ BC_STATUS crystalhd_hw_post_tx(struct crystalhd_hw *hw, crystalhd_dio_req *ioreq
 
 	hw->tx_list_post_index = (hw->tx_list_post_index + 1) % DMA_ENGINE_CNT;
 
-	spin_unlock_irqrestore(&hw->lock,flags);
+	spin_unlock_irqrestore(&hw->lock, flags);
 
 
 	/* Insert in Active Q..*/
@@ -2162,7 +2163,7 @@ BC_STATUS crystalhd_hw_add_cap_buffer(struct crystalhd_hw *hw,
 	if (sts != BC_STS_SUCCESS)
 		return sts;
 
-	rpkt->uv_phy_addr=0;
+	rpkt->uv_phy_addr = 0;
 
 	/* Store the address of UV in the rx packet for post*/
 	if (uv_desc_ix)
@@ -2279,7 +2280,7 @@ BC_STATUS crystalhd_hw_unpause(struct crystalhd_hw *hw)
 
 	aspm = crystalhd_reg_rd(hw->adp, PCIE_DLL_DATA_LINK_CONTROL);
 	aspm &= ~ASPM_L1_ENABLE;
-// NAREN BCMLOG(BCMLOG_INFO, "aspm off\n");
+/* NAREN BCMLOG(BCMLOG_INFO, "aspm off\n"); */
 	crystalhd_reg_wr(hw->adp, PCIE_DLL_DATA_LINK_CONTROL, aspm);
 
 	sts = crystalhd_hw_start_capture(hw);
@@ -2338,14 +2339,14 @@ BC_STATUS crystalhd_hw_set_core_clock(struct crystalhd_hw *hw)
 	}
 
 	/* FIXME: jarod: wha? */
-//	n = (hw->core_clock_mhz * 3) / 20 + 1;
+	/*n = (hw->core_clock_mhz * 3) / 20 + 1; */
 	n = hw->core_clock_mhz/5;
 
 	if (n == hw->prev_n)
 		return BC_STS_CLK_NOCHG;
 
 	if (hw->pwr_lock > 0) {
-		//BCMLOG(BCMLOG_INFO,"pwr_lock is %u\n", hw->pwr_lock)
+		/* BCMLOG(BCMLOG_INFO,"pwr_lock is %u\n", hw->pwr_lock) */
 		return BC_STS_CLK_NOCHG;
 	}
 
@@ -2365,7 +2366,7 @@ BC_STATUS crystalhd_hw_set_core_clock(struct crystalhd_hw *hw)
 	reg |= n;
 	reg |= vco_mg << 12;
 
-	BCMLOG(BCMLOG_INFO,"clock is moving to %d with n %d with vco_mg %d\n",
+	BCMLOG(BCMLOG_INFO, "clock is moving to %d with n %d with vco_mg %d\n",
 	       hw->core_clock_mhz, n, vco_mg);
 
 	/* Change the DRAM refresh rate to accomodate the new frequency */
@@ -2378,17 +2379,17 @@ BC_STATUS crystalhd_hw_set_core_clock(struct crystalhd_hw *hw)
 	i = 0;
 
 	for (i = 0; i < 10; i++) {
-		reg = bc_dec_reg_rd(hw->adp,DecHt_PllACtl);
+		reg = bc_dec_reg_rd(hw->adp, DecHt_PllACtl);
 
 		if (reg & 0x00020000) {
 			hw->prev_n = n;
 			/* FIXME: jarod: outputting a random "C" is... confusing... */
-			BCMLOG(BCMLOG_INFO,"C");
+			BCMLOG(BCMLOG_INFO, "C");
 			return BC_STS_SUCCESS;
 		} else {
 			msleep_interruptible(10);
 		}
 	}
-	BCMLOG(BCMLOG_INFO,"clk change failed\n");
+	BCMLOG(BCMLOG_INFO, "clk change failed\n");
 	return BC_STS_CLK_NOCHG;
 }

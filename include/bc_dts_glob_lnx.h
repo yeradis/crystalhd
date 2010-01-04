@@ -189,12 +189,12 @@ typedef struct _BC_DEC_OUT_BUFF{
 	BC_PIC_INFO_BLOCK	PibInfo;
 	uint32_t		Flags;
 	uint32_t		BadFrCnt;
-}BC_DEC_OUT_BUFF;
+} BC_DEC_OUT_BUFF;
 
 typedef struct _BC_NOTIFY_MODE {
 	uint32_t		Mode;
 	uint32_t		Rsvr[3];
-}BC_NOTIFY_MODE;
+} BC_NOTIFY_MODE;
 
 typedef struct _BC_CLOCK {
 	uint32_t		clk;
@@ -220,7 +220,7 @@ typedef struct _BC_IOCTL_DATA {
 		BC_DTS_STATS		drvStat;
 		BC_NOTIFY_MODE		NotifyMode;
 		BC_CLOCK			clockValue;
-	}u;
+	} u;
 	struct _BC_IOCTL_DATA	*next;
 } BC_IOCTL_DATA;
 
@@ -249,11 +249,11 @@ typedef enum _BC_DRV_CMD{
 
 	/* MUST be the last one.. */
 	DRV_CMD_END,			/* End of the List.. */
-}BC_DRV_CMD;
+} BC_DRV_CMD;
 
 #define BC_IOC_BASE		'b'
 #define BC_IOC_VOID		_IOC_NONE
-#define BC_IOC_IOWR(nr,type)	_IOWR(BC_IOC_BASE,nr,type)
+#define BC_IOC_IOWR(nr, type)	_IOWR(BC_IOC_BASE, nr, type)
 #define BC_IOCTL_MB		BC_IOCTL_DATA
 
 #define	BCM_IOC_GET_VERSION	BC_IOC_IOWR(DRV_CMD_VERSION, BC_IOCTL_MB)

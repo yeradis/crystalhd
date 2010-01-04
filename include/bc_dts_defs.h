@@ -29,7 +29,7 @@
 #include "bc_dts_types.h"
 
 /* BIT Mask */
-#define BC_BIT(_x)		( 1 << (_x) )
+#define BC_BIT(_x)		(1 << (_x))
 
 typedef enum _BC_STATUS {
 	BC_STS_SUCCESS		= 0,
@@ -195,9 +195,9 @@ typedef struct _BC_PIB_EXT_H264 {
 
 	/* H264_VALID_PANSCAN */
 	uint32_t	pan_scan_count;
-	int32_t		pan_scan_left  [3];
-	int32_t		pan_scan_right [3];
-	int32_t		pan_scan_top   [3];
+	int32_t		pan_scan_left[3];
+	int32_t		pan_scan_right[3];
+	int32_t		pan_scan_top[3];
 	int32_t		pan_scan_bottom[3];
 
 	/* H264_VALID_SPS_CROP */
@@ -241,8 +241,7 @@ typedef struct _BC_PIB_EXT_VC1 {
 #if defined(_WIN32) || defined(_WIN64) || defined(__LINUX_USER__)
 /* Values for 'pulldown' field.  '0' means no pulldown information
  * was present for this picture. */
-enum
-{
+enum {
 	vdecNoPulldownInfo	= 0,
 	vdecTop			= 1,
 	vdecBottom		= 2,
@@ -257,8 +256,7 @@ enum
 };
 
 /* Values for the 'frame_rate' field. */
-enum
-{
+enum {
 	vdecFrameRateUnknown = 0,
 	vdecFrameRate23_97,
 	vdecFrameRate24,
@@ -271,8 +269,7 @@ enum
 };
 
 /* Values for the 'aspect_ratio' field. */
-enum
-{
+enum {
 	vdecAspectRatioUnknown = 0,
 	vdecAspectRatioSquare,
 	vdecAspectRatio12_11,
@@ -294,8 +291,7 @@ enum
 };
 
 /* Values for the 'colour_primaries' field. */
-enum
-{
+enum {
 	vdecColourPrimariesUnknown = 0,
 	vdecColourPrimariesBT709,
 	vdecColourPrimariesUnspecified,
@@ -307,43 +303,42 @@ enum
 	vdecColourPrimariesGenericFilm,
 };
 
-enum
-{
-	vdecRESOLUTION_CUSTOM	= 0x00000000, // custom
-	vdecRESOLUTION_480i	= 0x00000001, // 480i
-	vdecRESOLUTION_1080i	= 0x00000002, // 1080i (1920x1080, 60i)
-	vdecRESOLUTION_NTSC	= 0x00000003, // NTSC (720x483, 60i)
-	vdecRESOLUTION_480p	= 0x00000004, // 480p (720x480, 60p)
-	vdecRESOLUTION_720p	= 0x00000005, // 720p (1280x720, 60p)
-	vdecRESOLUTION_PAL1	= 0x00000006, // PAL_1 (720x576, 50i)
-	vdecRESOLUTION_1080i25	= 0x00000007, // 1080i25 (1920x1080, 50i)
-	vdecRESOLUTION_720p50	= 0x00000008, // 720p50 (1280x720, 50p)
-	vdecRESOLUTION_576p	= 0x00000009, // 576p (720x576, 50p)
-	vdecRESOLUTION_1080i29_97 = 0x0000000A, // 1080i (1920x1080, 59.94i)
-	vdecRESOLUTION_720p59_94  = 0x0000000B, // 720p (1280x720, 59.94p)
-	vdecRESOLUTION_SD_DVD	= 0x0000000C, // SD DVD (720x483, 60i)
-	vdecRESOLUTION_480p656	= 0x0000000D, // 480p (720x480, 60p), output bus width 8 bit, clock 74.25MHz.
-	vdecRESOLUTION_1080p23_976 = 0x0000000E, // 1080p23_976 (1920x1080, 23.976p)
-	vdecRESOLUTION_720p23_976  = 0x0000000F, // 720p23_976 (1280x720p, 23.976p)
-	vdecRESOLUTION_240p29_97   = 0x00000010, // 240p (1440x240, 29.97p )
-	vdecRESOLUTION_240p30	= 0x00000011, // 240p (1440x240, 30p)
-	vdecRESOLUTION_288p25	= 0x00000012, // 288p (1440x288p, 25p)
-	vdecRESOLUTION_1080p29_97 = 0x00000013, // 1080p29_97 (1920x1080, 29.97p)
-	vdecRESOLUTION_1080p30	= 0x00000014, // 1080p30 (1920x1080, 30p)
-	vdecRESOLUTION_1080p24	= 0x00000015, // 1080p24 (1920x1080, 24p)
-	vdecRESOLUTION_1080p25	= 0x00000016, // 1080p25 (1920x1080, 25p)
-	vdecRESOLUTION_720p24	= 0x00000017, // 720p24 (1280x720, 25p)
-	vdecRESOLUTION_720p29_97  = 0x00000018, // 720p29.97 (1280x720, 29.97p)
-	vdecRESOLUTION_480p23_976 = 0x00000019, // 480p23.976 (720*480, 23.976)
-	vdecRESOLUTION_480p29_97  = 0x0000001A, // 480p29.976 (720*480, 29.97p)
-	vdecRESOLUTION_576p25	= 0x0000001B, // 576p25 (720*576, 25p)
-	//For Zero Frame Rate
-	vdecRESOLUTION_480p0	= 0x0000001C, // 480p (720x480, 0p)
-	vdecRESOLUTION_480i0	= 0x0000001D, // 480i (720x480, 0i)
-	vdecRESOLUTION_576p0	= 0x0000001E, // 576p (720x576, 0p)
-	vdecRESOLUTION_720p0	= 0x0000001F, // 720p (1280x720, 0p)
-	vdecRESOLUTION_1080p0	= 0x00000020, // 1080p (1920x1080, 0p)
-	vdecRESOLUTION_1080i0	= 0x00000021, // 1080i (1920x1080, 0i)
+enum {
+	vdecRESOLUTION_CUSTOM	= 0x00000000, /* custom */
+	vdecRESOLUTION_480i	= 0x00000001, /* 480i */
+	vdecRESOLUTION_1080i	= 0x00000002, /* 1080i (1920x1080, 60i) */
+	vdecRESOLUTION_NTSC	= 0x00000003, /* NTSC (720x483, 60i) */
+	vdecRESOLUTION_480p	= 0x00000004, /* 480p (720x480, 60p) */
+	vdecRESOLUTION_720p	= 0x00000005, /* 720p (1280x720, 60p) */
+	vdecRESOLUTION_PAL1	= 0x00000006, /* PAL_1 (720x576, 50i) */
+	vdecRESOLUTION_1080i25	= 0x00000007, /* 1080i25 (1920x1080, 50i) */
+	vdecRESOLUTION_720p50	= 0x00000008, /* 720p50 (1280x720, 50p) */
+	vdecRESOLUTION_576p	= 0x00000009, /* 576p (720x576, 50p) */
+	vdecRESOLUTION_1080i29_97 = 0x0000000A, /* 1080i (1920x1080, 59.94i) */
+	vdecRESOLUTION_720p59_94  = 0x0000000B, /* 720p (1280x720, 59.94p) */
+	vdecRESOLUTION_SD_DVD	= 0x0000000C, /* SD DVD (720x483, 60i) */
+	vdecRESOLUTION_480p656	= 0x0000000D, /* 480p (720x480, 60p), output bus width 8 bit, clock 74.25MHz */
+	vdecRESOLUTION_1080p23_976 = 0x0000000E, /* 1080p23_976 (1920x1080, 23.976p) */
+	vdecRESOLUTION_720p23_976  = 0x0000000F, /* 720p23_976 (1280x720p, 23.976p) */
+	vdecRESOLUTION_240p29_97   = 0x00000010, /* 240p (1440x240, 29.97p ) */
+	vdecRESOLUTION_240p30	= 0x00000011, /* 240p (1440x240, 30p) */
+	vdecRESOLUTION_288p25	= 0x00000012, /* 288p (1440x288p, 25p) */
+	vdecRESOLUTION_1080p29_97 = 0x00000013, /* 1080p29_97 (1920x1080, 29.97p) */
+	vdecRESOLUTION_1080p30	= 0x00000014, /* 1080p30 (1920x1080, 30p) */
+	vdecRESOLUTION_1080p24	= 0x00000015, /* 1080p24 (1920x1080, 24p) */
+	vdecRESOLUTION_1080p25	= 0x00000016, /* 1080p25 (1920x1080, 25p) */
+	vdecRESOLUTION_720p24	= 0x00000017, /* 720p24 (1280x720, 25p) */
+	vdecRESOLUTION_720p29_97  = 0x00000018, /* 720p29.97 (1280x720, 29.97p) */
+	vdecRESOLUTION_480p23_976 = 0x00000019, /* 480p23.976 (720*480, 23.976) */
+	vdecRESOLUTION_480p29_97  = 0x0000001A, /* 480p29.976 (720*480, 29.97p) */
+	vdecRESOLUTION_576p25	= 0x0000001B, /* 576p25 (720*576, 25p) */
+	/* For Zero Frame Rate */
+	vdecRESOLUTION_480p0	= 0x0000001C, /* 480p (720x480, 0p) */
+	vdecRESOLUTION_480i0	= 0x0000001D, /* 480i (720x480, 0i) */
+	vdecRESOLUTION_576p0	= 0x0000001E, /* 576p (720x576, 0p) */
+	vdecRESOLUTION_720p0	= 0x0000001F, /* 720p (1280x720, 0p) */
+	vdecRESOLUTION_1080p0	= 0x00000020, /* 1080p (1920x1080, 0p) */
+	vdecRESOLUTION_1080i0	= 0x00000021, /* 1080i (1920x1080, 0i) */
 };
 
 /* Bit definitions for 'flags' field */
@@ -363,7 +358,7 @@ enum
 
 #define VDEC_FLAG_PICTURE_META_DATA_PRESENT	(0x40000)
 
-#endif // _WIN32 || _WIN64
+#endif /* _WIN32 || _WIN64 */
 
 enum _BC_OUTPUT_FORMAT {
 	MODE420				= 0x0,
@@ -390,11 +385,10 @@ typedef struct _BC_PIC_INFO_BLOCK {
 	uint32_t	n_drop;	/* number of non-reference frames remaining to be dropped */
 
 	/* Protocol-specific extensions. */
-	union
-	{
-	  BC_PIB_EXT_H264	h264;
-	  BC_PIB_EXT_MPEG	mpeg;
-	  BC_PIB_EXT_VC1	 vc1;
+	union {
+		BC_PIB_EXT_H264	h264;
+		BC_PIB_EXT_MPEG	mpeg;
+		BC_PIB_EXT_VC1	 vc1;
 	} other;
 
 } BC_PIC_INFO_BLOCK, *PBC_PIC_INFO_BLOCK;
@@ -419,14 +413,14 @@ enum _POUT_OPTIONAL_IN_FLAGS_{
 };
 
 #if defined(__KERNEL__) || defined(__LINUX_USER__)
-typedef BC_STATUS (*dts_pout_callback)(void  *shnd, uint32_t width, uint32_t height, uint32_t stride, void *pOut);
+typedef BC_STATUS(*dts_pout_callback)(void  *shnd, uint32_t width, uint32_t height, uint32_t stride, void *pOut);
 #else
-typedef BC_STATUS (*dts_pout_callback)(void  *shnd, uint32_t width, uint32_t height, uint32_t stride, struct _BC_DTS_PROC_OUT *pOut);
+typedef BC_STATUS(*dts_pout_callback)(void  *shnd, uint32_t width, uint32_t height, uint32_t stride, struct _BC_DTS_PROC_OUT *pOut);
 #endif
 
-//Line 21 Closed Caption
-//User Data
-#define MAX_UD_SIZE		1792	//1920 - 128
+/* Line 21 Closed Caption */
+/* User Data */
+#define MAX_UD_SIZE		1792	/* 1920 - 128 */
 
 typedef struct _BC_DTS_PROC_OUT {
 	uint8_t		*Ybuff;			/* Caller Supplied buffer for Y data */
@@ -444,8 +438,8 @@ typedef struct _BC_DTS_PROC_OUT {
 
 	BC_PIC_INFO_BLOCK PicInfo;		/* Picture Information Block Data */
 
-	//Line 21 Closed Caption
-	//User Data
+	/* Line 21 Closed Caption */
+	/* User Data */
 	uint32_t	UserDataSz;
 	uint8_t		UserData[MAX_UD_SIZE];
 
@@ -488,10 +482,10 @@ typedef struct _BC_DTS_STATUS {
 } BC_DTS_STATUS;
 
 #define BC_SWAP32(_v)			\
-	( (((_v) & 0xFF000000)>>24)|	\
+	((((_v) & 0xFF000000)>>24)|	\
 	  (((_v) & 0x00FF0000)>>8)|	\
 	  (((_v) & 0x0000FF00)<<8)|	\
-	  (((_v) & 0x000000FF)<<24) )
+	  (((_v) & 0x000000FF)<<24))
 
 #define WM_AGENT_TRAYICON_DECODER_OPEN	10001
 #define WM_AGENT_TRAYICON_DECODER_CLOSE	10002
@@ -501,4 +495,4 @@ typedef struct _BC_DTS_STATUS {
 #define WM_AGENT_TRAYICON_DECODER_PAUSE	10006
 
 
-#endif	//_BC_DTS_DEFS_H_
+#endif	/* _BC_DTS_DEFS_H_ */

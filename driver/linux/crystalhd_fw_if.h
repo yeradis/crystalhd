@@ -28,8 +28,8 @@
 #define _CRYSTALHD_FW_IF_H_
 
 /* TBD: Pull in only required defs into this file.. */
-//#include "7411d.h"
-//#include "vdec_info.h"
+
+
 
 /* User Data Header */
 typedef struct user_data {
@@ -102,10 +102,10 @@ typedef struct {
  * Content of the film grain SEI message.
  */
 
-//maximum number of model-values as for Thomson spec(standard says 5)
+/* maximum number of model-values as for Thomson spec(standard says 5) */
 #define MAX_FGT_MODEL_VALUE	 (3)
 
-//maximum number of intervals(as many as 256 intervals?)
+/* maximum number of intervals(as many as 256 intervals?) */
 #define MAX_FGT_VALUE_INTERVAL	(256)
 
 typedef struct FGT_SEI {
@@ -117,7 +117,7 @@ typedef struct FGT_SEI {
     unsigned char cancel_flag;	/* Cancel flag: 1 no film grain. */
     unsigned char model_id;	/* Model id. */
 
-    //+unused SE based on Thomson spec
+    /* +unused SE based on Thomson spec */
     unsigned char color_desc_flag;	/* Separate color descrition flag. */
     unsigned char bit_depth_luma;	/* Bit depth luma minus 8. */
     unsigned char bit_depth_chroma;	/* Bit depth chroma minus 8. */
@@ -125,7 +125,7 @@ typedef struct FGT_SEI {
     unsigned char color_primaries;	/* Color primaries. */
     unsigned char transfer_charact;	/* Transfer characteristics. */
     unsigned char matrix_coeff;		/*< Matrix coefficients. */
-    //-unused SE based on Thomson spec
+    /* -unused SE based on Thomson spec */
 
     unsigned char blending_mode_id;	/* Blending mode. */
     unsigned char log2_scale_factor;	/* Log2 scale factor (2-7). */
@@ -256,12 +256,10 @@ typedef struct {
 #define eCMD_C011_CMD_BASE	  (0x73763000)
 
 /* host commands */
-typedef enum
-{
-
-    eCMD_TS_GET_NEXT_PIC	= 0x7376F100, // debug get next picture
-    eCMD_TS_GET_LAST_PIC	= 0x7376F102, // debug get last pic status
-    eCMD_TS_READ_WRITE_MEM	= 0x7376F104, // debug read write memory
+typedef enum {
+    eCMD_TS_GET_NEXT_PIC	= 0x7376F100, /* debug get next picture */
+    eCMD_TS_GET_LAST_PIC	= 0x7376F102, /* debug get last pic status */
+    eCMD_TS_READ_WRITE_MEM	= 0x7376F104, /* debug read write memory */
 
     /* New API commands */
     /* General commands */
