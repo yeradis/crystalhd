@@ -23,6 +23,8 @@ cp -a $me/driver/linux/*.c $dest/
 cp -a $me/driver/linux/*.h $dest/
 cp -a $me/include/*.h $dest/
 cp -a $me/include/link/*.h $dest/
+# except these
+rm -f $dest/vdec_info.h $dest/7411d.h
 
 # Now run unifdef over the source to strip out legacy compat
 pushd $dest
