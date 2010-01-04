@@ -30,7 +30,11 @@
 
 static struct crystalhd_adp *g_adp_info;
 
+#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 18)
 static irqreturn_t chd_dec_isr(int irq, void *arg)
+#else
+static irqreturn_t chd_dec_isr(int irq, void *arg, struct pt_regs *r)
+#endif
 {
 	struct crystalhd_adp *adp = (struct crystalhd_adp *) arg;
 	int rc = 0;

@@ -113,7 +113,13 @@ static void crystalhd_free_elem(struct crystalhd_adp *adp, crystalhd_elem_t *ele
 static inline void crystalhd_set_sg(struct scatterlist *sg, struct page *page,
 				  unsigned int len, unsigned int offset)
 {
+#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 23)
 	sg_set_page(sg, page, len, offset);
+#else
+	sg->page       = page;
+	sg->offset     = offset;
+	sg->length     = len;
+#endif
 #ifdef CONFIG_X86_64
 	sg->dma_length = len;
 #endif
@@ -122,7 +128,9 @@ static inline void crystalhd_set_sg(struct scatterlist *sg, struct page *page,
 static inline void crystalhd_init_sg(struct scatterlist *sg, unsigned int entries)
 {
 	/* http://lkml.org/lkml/2007/11/27/68 */
+#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 23)
 	sg_init_table(sg, entries);
+#endif
 }
 
 /*========================== Extern ========================================*/
@@ -759,8 +767,11 @@ BC_STATUS crystalhd_map_dio(struct crystalhd_adp *adp, void *ubuff,
 	crystalhd_set_sg(&dio->sg[0], dio->pages[0], 0, uaddr & ~PAGE_MASK);
 	if (nr_pages > 1) {
 		dio->sg[0].length = PAGE_SIZE - dio->sg[0].offset;
-#if defined(CONFIG_X86_64)
+
+#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 23)
+#ifdef CONFIG_X86_64
 		dio->sg[0].dma_length = dio->sg[0].length;
+#endif
 #endif
 		count -= dio->sg[0].length;
 		for (i = 1; i < nr_pages; i++) {
@@ -781,8 +792,10 @@ BC_STATUS crystalhd_map_dio(struct crystalhd_adp *adp, void *ubuff,
 		} else {
 			dio->sg[0].length = count - dio->fb_size;
 		}
-#if defined(CONFIG_X86_64)
+#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 23)
+#ifdef CONFIG_X86_64
 		dio->sg[0].dma_length = dio->sg[0].length;
+#endif
 #endif
 	}
 	dio->sg_cnt = pci_map_sg(adp->pdev, dio->sg,
