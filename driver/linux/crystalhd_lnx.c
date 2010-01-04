@@ -28,6 +28,8 @@
 
 #include "crystalhd_lnx.h"
 
+static struct class *crystalhd_class;
+
 static struct crystalhd_adp *g_adp_info;
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 18)
@@ -363,36 +365,63 @@ static const struct file_operations chd_dec_fops = {
 static int chd_dec_init_chdev(struct crystalhd_adp *adp)
 {
 	crystalhd_ioctl_data *temp;
-	int rc = 0, i = 0;
+	struct device *dev;
+	int rc = -ENODEV, i = 0;
 
 	if (!adp)
-		return -ENODEV;
+		goto fail;
 
 	adp->chd_dec_major = register_chrdev(0, CRYSTALHD_API_NAME,
 					     &chd_dec_fops);
 	if (adp->chd_dec_major < 0) {
 		BCMLOG_ERR("Failed to create config dev\n");
-		return adp->chd_dec_major;
+		rc = adp->chd_dec_major;
+		goto fail;
+	}
+
+	/* register crystalhd class */
+	crystalhd_class = class_create(THIS_MODULE, "crystalhd");
+	if (IS_ERR(crystalhd_class)) {
+		BCMLOG_ERR("failed to create class\n");
+		goto fail;
+	}
+
+	dev = device_create(crystalhd_class, NULL, MKDEV(adp->chd_dec_major, 0),
+			    NULL, "crystalhd");
+	if (!dev) {
+		BCMLOG_ERR("failed to create device\n");
+		goto device_create_fail;
 	}
 
 	rc = crystalhd_create_elem_pool(adp, BC_LINK_ELEM_POOL_SZ);
-	if (rc)
-		return rc;
+	if (rc) {
+		BCMLOG_ERR("failed to create device\n");
+		goto elem_pool_fail;
+	}
 
 	/* Allocate general purpose ioctl pool. */
 	for (i = 0; i < CHD_IODATA_POOL_SZ; i++) {
 		/* FIXME: jarod: why atomic? */
 		temp = kzalloc(sizeof(crystalhd_ioctl_data), GFP_ATOMIC);
 		if (!temp) {
-			BCMLOG_ERR("kalloc failed\n");
-			crystalhd_delete_elem_pool(adp);
-			return -ENOMEM;
+			BCMLOG_ERR("ioctl data pool kzalloc failed\n");
+			rc = -ENOMEM;
+			goto kzalloc_fail;
 		}
 		/* Add to global pool.. */
 		chd_dec_free_iodata(adp, temp, 0);
 	}
 
 	return 0;
+
+kzalloc_fail:
+	crystalhd_delete_elem_pool(adp);
+elem_pool_fail:
+	device_destroy(crystalhd_class, MKDEV(adp->chd_dec_major, 0));
+device_create_fail:
+	class_destroy(crystalhd_class);
+fail:
+	return rc;
 }
 
 static void chd_dec_release_chdev(struct crystalhd_adp *adp)
@@ -402,9 +431,12 @@ static void chd_dec_release_chdev(struct crystalhd_adp *adp)
 		return;
 
 	if (adp->chd_dec_major > 0) {
+		/* unregister crystalhd class */
+		device_destroy(crystalhd_class, MKDEV(adp->chd_dec_major, 0));
 		unregister_chrdev(adp->chd_dec_major, CRYSTALHD_API_NAME);
 		BCMLOG(BCMLOG_INFO, "released api device - %d\n",
 		       adp->chd_dec_major);
+		class_destroy(crystalhd_class);
 	}
 	adp->chd_dec_major = 0;
 
