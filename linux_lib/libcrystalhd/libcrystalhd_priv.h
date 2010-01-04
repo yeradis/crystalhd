@@ -116,8 +116,7 @@ enum _DtsAppSpecificCfgFlags {
 #define DECOHEXFILE		"vdec_outer.hex"
 #define DECIHEXFILE		"vdec_inner.hex"
 #define FWBINFILE		"bcmDecFw.bin"
-//#define FWBINFILE_LNK	"link_fw.bin"
-#define FWBINFILE_LNK	"bcmFilePlayFw.bin"
+#define FWBINFILE_LNK		"bcm70012fw.bin"
 #define FWBIN_FILE_PLAY_LNK	"bcmFilePlayFw.bin"
 
 #define BC_DTS_DEF_OPTIONS	0x0D

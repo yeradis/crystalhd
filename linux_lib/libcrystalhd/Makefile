@@ -53,7 +53,7 @@ install:
 	cp libcrystalhd_if.h /usr/include/libcrystalhd/
 	cp $(ROOTDIR)/include/bc_dts_defs.h /usr/include/libcrystalhd/
 	cp $(ROOTDIR)/include/bc_dts_types.h /usr/include/libcrystalhd/
-	cp $(ROOTDIR)/firmware/fwbin/70012/bcmFilePlayFw.bin /lib/firmware/
+	cp $(ROOTDIR)/firmware/fwbin/70012/bcm70012fw.bin /lib/firmware/
 	install -m 755 $(BCLIB) $(LIBDIR)
 	(cd $(LIBDIR); ln -sf $(BCLIB) $(BCLIB_NAME))
 	(cd $(LIBDIR); ln -sf $(BCLIB) $(BCLIB_SL))
