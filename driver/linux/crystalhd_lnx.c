@@ -386,8 +386,13 @@ static int chd_dec_init_chdev(struct crystalhd_adp *adp)
 		goto fail;
 	}
 
+#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 25)
 	dev = device_create(crystalhd_class, NULL, MKDEV(adp->chd_dec_major, 0),
 			    NULL, "crystalhd");
+#else
+	dev = device_create(crystalhd_class, NULL, MKDEV(adp->chd_dec_major, 0),
+			    "crystalhd");
+#endif
 	if (!dev) {
 		BCMLOG_ERR("failed to create device\n");
 		goto device_create_fail;
