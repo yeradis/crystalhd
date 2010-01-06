@@ -49,12 +49,14 @@ clean:
 	rm -f  ${OBJFILES}
 
 install:
-	mkdir -p /usr/include/libcrystalhd
-	cp libcrystalhd_if.h /usr/include/libcrystalhd/
-	cp $(ROOTDIR)/include/bc_dts_defs.h /usr/include/libcrystalhd/
-	cp $(ROOTDIR)/include/bc_dts_types.h /usr/include/libcrystalhd/
-	cp $(ROOTDIR)/firmware/fwbin/70012/bcm70012fw.bin /lib/firmware/
-	install -m 755 $(BCLIB) $(LIBDIR)
-	(cd $(LIBDIR); ln -sf $(BCLIB) $(BCLIB_NAME))
-	(cd $(LIBDIR); ln -sf $(BCLIB) $(BCLIB_SL))
+	mkdir -p $(DESTDIR)$(LIBDIR)
+	mkdir -p $(DESTDIR)/lib/firmware
+	mkdir -p $(DESTDIR)/usr/include/libcrystalhd
+	cp libcrystalhd_if.h $(DESTDIR)/usr/include/libcrystalhd/
+	cp $(ROOTDIR)/include/bc_dts_defs.h $(DESTDIR)/usr/include/libcrystalhd/
+	cp $(ROOTDIR)/include/bc_dts_types.h $(DESTDIR)/usr/include/libcrystalhd/
+	cp $(ROOTDIR)/firmware/fwbin/70012/bcm70012fw.bin $(DESTDIR)/lib/firmware/
+	install -m 755 $(BCLIB) $(DESTDIR)$(LIBDIR)
+	(cd $(DESTDIR)$(LIBDIR); ln -sf $(BCLIB) $(BCLIB_NAME))
+	(cd $(DESTDIR)$(LIBDIR); ln -sf $(BCLIB) $(BCLIB_SL))
 
