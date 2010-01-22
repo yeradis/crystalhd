@@ -1337,13 +1337,13 @@ DtsProcInput( HANDLE  hDevice ,
 			temp = (uint8_t*) ((uintptr_t)temp & ~0x3); /*Take care of alignment*/
 
 			if(temp==NULL){
-				DebugLog_Trace(TEXT("DtsProcInput: Failed to alloc mem for  ASFHdr for SPES:%x\n"),(char *)sts);
+				DebugLog_Trace(LDIL_DBG,"DtsProcInput: Failed to alloc mem for  ASFHdr for SPES:%x\n",sts);
 				return BC_STS_INSUFF_RES;
 			}
 
 			sts =DtsPrepareMdataASFHdr(Ctx, im, temp);
 			if(sts != BC_STS_SUCCESS){
-				DebugLog_Trace(TEXT("DtsProcInput: Failed to Prepare ASFHdr for SPES:%x\n"),(char *)sts);
+				DebugLog_Trace(LDIL_DBG,"DtsProcInput: Failed to Prepare ASFHdr for SPES:%x\n",sts);
 				return sts;
 			}
 			
@@ -1363,7 +1363,7 @@ DtsProcInput( HANDLE  hDevice ,
 
 		sts = DtsInsertMdata(Ctx,im);
 		if(sts != BC_STS_SUCCESS){
-			DebugLog_Trace(TEXT("DtsProcInput: DtsInsertMdata failed\n"),(char *)sts);
+			DebugLog_Trace(LDIL_DBG,"DtsProcInput: DtsInsertMdata failed\n",sts);
 		}
 	}
 	
