@@ -24,7 +24,7 @@ CPPFLAGS = -D__LINUX_USER__
 
 CPPFLAGS += ${INCLUDES}
 CPPFLAGS += -g -Wall -fPIC -shared
-LDFLAGS = -Wl,-soname,${BCLIB_SL}
+LDFLAGS = -Wl,-soname,${BCLIB_SL} -pthread
 
 SRCFILES = 	libcrystalhd_if.cpp \
 		libcrystalhd_int_if.cpp \
