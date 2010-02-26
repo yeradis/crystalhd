@@ -83,8 +83,6 @@ typedef unsigned char	*PUCHAR;
 	#define FALSE		0
 #endif
 
-#define TEXT
-
 #else
 
 /* For Kernel usage.. */
