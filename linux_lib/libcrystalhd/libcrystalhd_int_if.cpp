@@ -771,6 +771,9 @@ DtsGetDrvStat(
 	if(!(pIocData = DtsAllocIoctlData(Ctx)))
 		return BC_STS_INSUFF_RES;
 
+	if(Ctx->SingleThreadedAppMode)
+		pIocData->u.drvStat.DrvNextMDataPLD = pDrvStat->DrvNextMDataPLD;
+
 	if( (sts=DtsDrvCmd(Ctx,BCM_IOC_GET_DRV_STAT,0,pIocData,FALSE)) != BC_STS_SUCCESS){
 		DtsRelIoctlData(Ctx,pIocData);
 		DebugLog_Trace(LDIL_DBG,"DtsGetDriveStats: Ioctl failed: %d\n",sts);
@@ -800,6 +803,7 @@ DtsGetDrvStat(
 	pDrvStat->DrvRepeatedFrms = pIntDrvStat->DrvRepeatedFrms;	
 	pDrvStat->TxFifoBsyCnt = pIntDrvStat->TxFifoBsyCnt;
 	pDrvStat->pwr_state_change = pIntDrvStat->pwr_state_change;
+	pDrvStat->DrvNextMDataPLD = pIntDrvStat->DrvNextMDataPLD;
 
 	DtsRelIoctlData(Ctx,pIocData);
 

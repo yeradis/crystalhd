@@ -660,7 +660,8 @@ void *crystalhd_dioq_fetch_wait(crystalhd_dioq_t *ioq, uint32_t to_secs,
 	while ((ioq->count == 0) && count) {
 		spin_unlock_irqrestore(&ioq->lock, flags);
 
-		crystalhd_wait_on_event(&ioq->event, (ioq->count > 0), 1000, rc, 0);
+		crystalhd_wait_on_event(&ioq->event, (ioq->count > 0),
+					1000, rc, false);
 		if (rc == 0) {
 			goto out;
 		} else if (rc == -EINTR) {

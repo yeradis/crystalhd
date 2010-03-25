@@ -399,7 +399,7 @@ static BC_STATUS bc_cproc_codein_sleep(struct crystalhd_cmd *ctx)
 		return BC_STS_CMD_CANCELLED;
 	}
 	crystalhd_create_event(&sleep_ev);
-	crystalhd_wait_on_event(&sleep_ev, 0, 100, rc, 0);
+	crystalhd_wait_on_event(&sleep_ev, 0, 100, rc, false);
 	if (rc == -EINTR)
 		return BC_STS_IO_USER_ABORT;
 
@@ -447,7 +447,7 @@ static BC_STATUS bc_cproc_hw_txdma(struct crystalhd_cmd *ctx,
 	ctx->tx_list_id = tx_listid;
 
 	/* _post() succeeded.. wait for the completion. */
-	crystalhd_wait_on_event(&event, (dio->uinfo.ev_sts), 3000, rc, 0);
+	crystalhd_wait_on_event(&event, (dio->uinfo.ev_sts), 3000, rc, false);
 	ctx->tx_list_id = 0;
 	if (!rc) {
 		return dio->uinfo.comp_sts;
@@ -686,6 +686,8 @@ static BC_STATUS bc_cproc_get_stats(struct crystalhd_cmd *ctx,
 {
 	BC_DTS_STATS *stats;
 	struct crystalhd_hw_stats	hw_stats;
+	uint32_t pic_width;
+	unsigned long flags = 0;
 
 	if (!ctx || !idata) {
 		BCMLOG_ERR("Invalid Arg!!\n");
@@ -709,6 +711,17 @@ static BC_STATUS bc_cproc_get_stats(struct crystalhd_cmd *ctx,
 		stats->pwr_state_change = 1;
 	if (ctx->state & BC_LINK_PAUSED)
 		stats->DrvPauseTime = 1;
+
+	rystalhd_hw_check_input_full(ctx->adp, 0, &stats->DrvcpbEmptySize, false, flags);
+
+	/* status peek ahead to retreive the next decoded frame timestamp */
+	if (stats->drvRLL && (stats->DrvNextMDataPLD & BC_BIT(31))) {
+		pic_width = stats->DrvNextMDataPLD & 0xffff;
+		stats->DrvNextMDataPLD = 0;
+		if (pic_width <= 1920)
+			crystalhd_hw_peek_next_decoded_frame(&ctx->hw_ctx,
+				&stats->DrvNextMDataPLD, pic_width);
+	}
 
 	return BC_STS_SUCCESS;
 }

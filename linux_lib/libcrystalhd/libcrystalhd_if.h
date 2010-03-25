@@ -353,8 +353,13 @@ Parameters:
                     1080i data. When this flag is not set, the decoder will
                     use pull-down information in the input stream to decide
                     the decoded data format.
-    Reserved        This field is reserved for possible future expansion.
-                    Set to 0.
+    OptFlags        In this field bits 0:3 are used pass default frame rate,
+                    bits 4:5 are for operation mode (used to indicate Blu-ray
+                    mode to the decoder) and bit 6 is for the flag mpcOutPutMaxFRate
+                    which when set tells the FW to output at the max rate for the
+                    resolution and ignore the frame rate determined from the
+                    stream. Bit 7 is set to indicate that this is single threaded mode
+                    and the driver will be peeked to get timestamps ahead of time.
 
 Return:
 

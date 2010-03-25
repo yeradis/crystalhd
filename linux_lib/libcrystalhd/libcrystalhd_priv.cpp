@@ -1452,6 +1452,50 @@ BC_STATUS DtsFetchMdata(DTS_LIB_CONTEXT *Ctx, uint16_t snum, BC_DTS_PROC_OUT *po
 
 	return sts;
 }
+
+//------------------------------------------------------------------------
+// Name: DtsFetchTimeStampMdata
+// Description: Get the Timestamp from the Meta Data field with the
+//              specifc picture number. Do not change the mdata list
+//              in any way.
+//
+//------------------------------------------------------------------------
+BC_STATUS DtsFetchTimeStampMdata(DTS_LIB_CONTEXT *Ctx, uint16_t snum, uint64_t *TimeStamp)
+{
+	uint32_t InTag;
+	DTS_INPUT_MDATA *temp=NULL;
+	BC_STATUS sts = BC_STS_NO_DATA;
+
+	if (!Ctx)
+		return BC_STS_INV_ARG;
+
+	if (!snum) {
+		/* Zero is not a valid SeqNum. */
+		*TimeStamp = 0;
+		DebugLog_Trace(LDIL_DBG, "SeqNum is zero \n");
+		return BC_STS_NO_DATA;
+	}
+
+	InTag = DtsMdataGetIntTag(Ctx, snum);
+	temp = Ctx->MDPendHead;
+
+	DtsLock(Ctx);
+	while (temp != DTS_MDATA_PEND_LINK(Ctx)) {
+		if (temp->IntTag == InTag) {
+
+			*TimeStamp = temp->appTimeStamp;
+			/* DebugLog_Trace(LDIL_DBG, "Found entry for %x %x tstamp: %x\n", */
+			/*	snum, temp->IntTag, pout->PicInfo.timeStamp); */
+			sts = BC_STS_SUCCESS;
+			break;
+		}
+		temp = temp->flink;
+	}
+	DtsUnLock(Ctx);
+
+	return sts;
+}
+
 //------------------------------------------------------------------------
 // Name: DtsPrepareMdata
 // Description: Insert Meta Data..

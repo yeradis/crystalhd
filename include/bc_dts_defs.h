@@ -125,7 +125,11 @@ enum _DtsDeviceFixMode {
 	DTS_ADAPTIVE_OUTPUT_PER	= BC_BIT(17),
 	DTS_INTELLIMAP		= BC_BIT(18),
 	/* b[19]-b[21] : select clock frequency */
-	DTS_PLAYBACK_DROP_RPT_MODE = BC_BIT(22)
+	DTS_PLAYBACK_DROP_RPT_MODE = BC_BIT(22),
+	DTS_DIAG_TEST_MODE = BC_BIT(23),
+	DTS_SINGLE_THREADED_MODE = BC_BIT(24),
+	DTS_FILTER_MODE = BC_BIT(25),
+	DTS_MFT_MODE = BC_BIT(26)
 };
 
 #define DTS_DFLT_RESOLUTION(x)	(x<<11)
@@ -472,11 +476,11 @@ typedef struct _BC_DTS_STATUS {
 	uint32_t	PIBMissCount;	/* Amount of times a PIB is invalid. (reported by DIL) */
 
 	uint32_t	cpbEmptySize;	/* supported only for H.264, specifically changed for
-					 * Adobe. Report size of CPB buffer available.
+					 * SingleThreadedAppMode. Report size of CPB buffer available.
 					 * Reported by DIL */
 	uint64_t	NextTimeStamp;	/* TimeStamp of the next picture that will be returned
-					 * by a call to ProcOutput. Added for Adobe. Reported
-					 * back from the driver */
+					 * by a call to ProcOutput. Added for SingleThreadedAppMode.
+					 * Reported back from the driver */
 	uint8_t		reserved__[16];
 
 } BC_DTS_STATUS;
