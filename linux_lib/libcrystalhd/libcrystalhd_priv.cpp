@@ -576,7 +576,7 @@ static BC_STATUS DtsDeleteMdataPool(DTS_LIB_CONTEXT *Ctx)
 	temp = Ctx->MDPendHead;
 
 	while(temp != DTS_MDATA_PEND_LINK(Ctx)){
-		DebugLog_Trace(LDIL_DBG,"Clearing InMdata %lx %x \n", (uintptr_t)temp->Spes.SeqNum, temp->IntTag);
+		DebugLog_Trace(LDIL_DBG,"Clearing InMdata %p %x \n", temp->Spes.SeqNum, temp->IntTag);
 		DtsRemoveMdata(Ctx,temp,FALSE);
 		temp = Ctx->MDPendHead;
 	}

@@ -211,20 +211,20 @@ int main()
           // Read format data from driver
           printf("New Format\n----------------------------------\n");
           printf("\tTimeStamp: %llu\n", output.PicInfo.timeStamp);
-          printf("\tPicture Number: %lu\n", output.PicInfo.picture_number);
-          printf("\tWidth: %lu\n", output.PicInfo.width);
-          printf("\tHeight: %lu\n", output.PicInfo.height);
+          printf("\tPicture Number: %u\n", output.PicInfo.picture_number);
+          printf("\tWidth: %u\n", output.PicInfo.width);
+          printf("\tHeight: %u\n", output.PicInfo.height);
           printf("\tChroma: 0x%03x\n", output.PicInfo.chroma_format);
-          printf("\tPulldown: %lu\n", output.PicInfo.pulldown);
+          printf("\tPulldown: %u\n", output.PicInfo.pulldown);
           printf("\tFlags: 0x%08x\n", output.PicInfo.flags);
-          printf("\tFrame Rate/Res: %lu\n", output.PicInfo.frame_rate);
-          printf("\tAspect Ratio: %lu\n", output.PicInfo.aspect_ratio);
-          printf("\tColor Primaries: %lu\n", output.PicInfo.colour_primaries);
-          printf("\tMetaData: %lu\n", output.PicInfo.picture_meta_payload);
-          printf("\tSession Number: %lu\n", output.PicInfo.sess_num);
-          printf("\tTimeStamp: %lu\n", output.PicInfo.ycom);
-          printf("\tCustom Aspect: %lu\n", output.PicInfo.custom_aspect_ratio_width_height);
-          printf("\tFrames to Drop: %lu\n", output.PicInfo.n_drop);
+          printf("\tFrame Rate/Res: %u\n", output.PicInfo.frame_rate);
+          printf("\tAspect Ratio: %u\n", output.PicInfo.aspect_ratio);
+          printf("\tColor Primaries: %u\n", output.PicInfo.colour_primaries);
+          printf("\tMetaData: %u\n", output.PicInfo.picture_meta_payload);
+          printf("\tSession Number: %u\n", output.PicInfo.sess_num);
+          printf("\tTimeStamp: %u\n", output.PicInfo.ycom);
+          printf("\tCustom Aspect: %u\n", output.PicInfo.custom_aspect_ratio_width_height);
+          printf("\tFrames to Drop: %u\n", output.PicInfo.n_drop);
           printf("\tH264 Valid Fields: 0x%08x\n", output.PicInfo.other.h264.valid);
         }
         // TODO: Handle change
