@@ -67,7 +67,7 @@ typedef enum _BC_STATUS {
 /*------------------------------------------------------*
  *    Registry Key Definitions				*
  *------------------------------------------------------*/
-#define BC_REG_KEY_MAIN_PATH	"Software\\Broadcom\\MediaPC\\70010"
+#define BC_REG_KEY_MAIN_PATH	"Software\\Broadcom\\MediaPC\\CrystalHD"
 #define BC_REG_KEY_FWPATH		"FirmwareFilePath"
 #define BC_REG_KEY_SEC_OPT		"DbgOptions"
 
@@ -159,6 +159,7 @@ enum _DtsSetVideoParamsAlgo {
 	BC_VID_ALGO_H264		= 0,
 	BC_VID_ALGO_MPEG2		= 1,
 	BC_VID_ALGO_VC1			= 4,
+	BC_VID_ALGO_DIVX		= 6,
 	BC_VID_ALGO_VC1MP		= 7,
 };
 
@@ -364,12 +365,6 @@ enum {
 
 #endif /* _WIN32 || _WIN64 */
 
-enum _BC_OUTPUT_FORMAT {
-	MODE420				= 0x0,
-	MODE422_YUY2			= 0x1,
-	MODE422_UYVY			= 0x2,
-};
-
 typedef struct _BC_PIC_INFO_BLOCK {
 	/* Common fields. */
 	uint64_t	timeStamp;	/* Timestamp */
@@ -414,6 +409,15 @@ enum _POUT_OPTIONAL_IN_FLAGS_{
 	BC_POUT_FLAGS_PIB_VALID	  = 0x20000,	/* PIB Information valid */
 	BC_POUT_FLAGS_ENCRYPTED	  = 0x40000,	/* Data is encrypted. */
 	BC_POUT_FLAGS_FLD_BOT	  = 0x80000,	/* Bottom Field data */
+};
+
+//Decoder Capability
+enum DECODER_CAP_FLAGS
+{
+	BC_DEC_FLAGS_H264		= 0x01,
+	BC_DEC_FLAGS_MPEG2		= 0x02,
+	BC_DEC_FLAGS_VC1		= 0x04,
+	BC_DEC_FLAGS_M4P2		= 0x08,	//MPEG-4 Part 2: Divx, Xvid etc.
 };
 
 #if defined(__KERNEL__) || defined(__LINUX_USER__)
@@ -481,7 +485,9 @@ typedef struct _BC_DTS_STATUS {
 	uint64_t	NextTimeStamp;	/* TimeStamp of the next picture that will be returned
 					 * by a call to ProcOutput. Added for SingleThreadedAppMode.
 					 * Reported back from the driver */
-	uint8_t		reserved__[16];
+	uint8_t		TxBufData;
+
+	uint8_t		reserved__[15];
 
 } BC_DTS_STATUS;
 
@@ -498,5 +504,126 @@ typedef struct _BC_DTS_STATUS {
 #define WM_AGENT_TRAYICON_DECODER_RUN	10005
 #define WM_AGENT_TRAYICON_DECODER_PAUSE	10006
 
+#define MAX_COLOR_SPACES	3
+
+typedef enum _BC_OUTPUT_FORMAT {
+	MODE420				= 0x0,
+	MODE422_YUY2			= 0x1,
+	MODE422_UYVY			= 0x2,
+	MODE_INVALID			= 0xFF,
+} BC_OUTPUT_FORMAT;
+
+/*
+typedef enum _BC_OUTPUT_FORMAT {
+		OUTPUT_MODE420		= 0x0,
+		OUTPUT_MODE422_YUY2	= 0x1,
+		OUTPUT_MODE422_UYVY	= 0x2,
+		OUTPUT_MODE_INVALID	= 0xFF,
+}BC_OUTPUT_FORMAT;
+*/
+
+typedef struct _BC_COLOR_SPACES_ {
+	BC_OUTPUT_FORMAT	OutFmt[MAX_COLOR_SPACES];
+	uint16_t		Count;
+} BC_COLOR_SPACES;
+
+
+typedef enum _BC_CAPS_FLAGS_ {
+	PES_CONV_SUPPORT	= 1,	/*Support PES Conversion*/
+	MULTIPLE_DECODE_SUPPORT	= 2	/*Support multiple stream decode*/
+} BC_CAPS_FLAGS;
+
+typedef struct _BC_HW_CAPABILITY_ {
+	BC_CAPS_FLAGS		flags;
+	BC_COLOR_SPACES		ColorCaps;
+	void*			Reserved1;	/* Expansion Of API */
+
+	//Decoder Capability
+	uint32_t		DecCaps;	//DECODER_CAP_FLAGS
+} BC_HW_CAPS, *PBC_HW_CAPS;
+
+typedef struct _BC_SCALING_PARAMS_ {
+	uint32_t	sWidth;
+	uint32_t	sHeight;
+	uint32_t	DNR;
+	uint32_t	Reserved1;	/*Expansion Of API*/
+	uint8_t		*Reserved2;	/*Expansion OF API*/
+	uint32_t	Reserved3;	/*Expansion Of API*/
+	uint8_t		*Reserved4;	/*Expansion Of API*/
+
+} BC_SCALING_PARAMS, *PBC_SCALING_PARAMS;
+
+typedef enum _BC_MEDIA_SUBTYPE_ {
+	BC_MSUBTYPE_INVALID = 0,
+	BC_MSUBTYPE_MPEG1VIDEO,
+	BC_MSUBTYPE_MPEG2VIDEO,
+	BC_MSUBTYPE_H264,
+	BC_MSUBTYPE_WVC1,
+	BC_MSUBTYPE_WMV3,
+	BC_MSUBTYPE_AVC1,
+	BC_MSUBTYPE_WMVA,
+	BC_MSUBTYPE_VC1,
+	BC_MSUBTYPE_DIVX,
+	BC_MSUBTYPE_OTHERS	/*Types to facilitate PES conversion*/
+} BC_MEDIA_SUBTYPE;
+
+typedef struct _BC_INPUT_FORMAT_ {
+	BOOL        FGTEnable;      /*Enable processing of FGT SEI*/
+	BOOL        MetaDataEnable; /*Enable retrieval of picture metadata to be sent to video pipeline.*/
+	BOOL        Progressive;    /*Instruct decoder to always try to send back progressive
+				     frames. If input content is 1080p, the decoder will
+				     ignore pull-down flags and always give 1080p output.
+				     If 1080i content is processed, the decoder will return
+				     1080i data. When this flag is not set, the decoder will
+				     use pull-down information in the input stream to decide
+				     the decoded data format.*/
+	uint32_t    OptFlags;       /*In this field bits 0:3 are used pass default frame rate, bits 4:5 are for operation mode
+				     (used to indicate Blu-ray mode to the decoder) and bit 6 is for the flag mpcOutPutMaxFRate
+				     which when set tells the FW to output at the max rate for the resolution and ignore the
+				     frame rate determined from the stream. Bit 7 is set to indicate that this is single threaded
+				     mode and the driver will be peeked to get timestamps ahead of time*/
+	BC_MEDIA_SUBTYPE mSubtype;  /* Video Media Type*/
+	uint32_t    width;
+	uint32_t    height;
+	uint32_t    startCodeSz;    /*Start code size for H264 clips*/
+	uint8_t     *pMetaData;     /*Metadata buffer that is used to pass sequence header*/
+	uint32_t    metaDataSz;     /*Metadata size*/
+	uint8_t     bEnableScaling;
+} BC_INPUT_FORMAT;
+
+typedef struct _BC_INFO_CRYSTAL_ {
+	uint8_t device;
+	union {
+		struct {
+			uint32_t dilRelease:8;
+			uint32_t dilMajor:8;
+			uint32_t dilMinor:16;
+		};
+		uint32_t version;
+	} dilVersion;
+
+	union {
+		struct {
+			uint32_t drvRelease:4;
+			uint32_t drvMajor:8;
+			uint32_t drvMinor:12;
+			uint32_t drvBuild:8;
+		};
+		uint32_t version;
+	} drvVersion;
+
+	union {
+		struct {
+			uint32_t fwRelease:4;
+			uint32_t fwMajor:8;
+			uint32_t fwMinor:12;
+			uint32_t fwBuild:8;
+		};
+		uint32_t version;
+	} fwVersion;
+
+	uint32_t Reserved1; // For future expansion
+	uint32_t Reserved2; // For future expansion
+} BC_INFO_CRYSTAL, *PBC_INFO_CRYSTAL;
 
 #endif	/* _BC_DTS_DEFS_H_ */
