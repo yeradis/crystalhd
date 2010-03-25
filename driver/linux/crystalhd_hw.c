@@ -436,7 +436,9 @@ static bool GetPictureInfo(struct crystalhd_hw *hw, crystalhd_dio_req *dio,
 	if (!dio || !PicWidth)
 		goto getpictureinfo_err;
 
-	Base = (uint8_t*)vmap(dio->pages, dio->page_cnt, VM_MAP, PAGE_KERNEL);
+	Base = (uint8_t *)vmap(dio->pages, dio->page_cnt, VM_MAP, PAGE_KERNEL);
+	if (!Base)
+		goto getpictureinfo_err;
 
 	/*
 	 * -- Ajitabh[01-16-2009]: Strictly check against done size.
