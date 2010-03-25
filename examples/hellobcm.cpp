@@ -67,18 +67,10 @@ int main()
       printf("crap, DtsStartCapture failed\n");
       throw "Failed to start capture";
     }
-#if 0
-    TRY_CALL_2(DtsDeviceOpen, &device, mode, "Failed to open device");
-    TRY_CALL_2(DtsOpenDecoder, device, BC_STREAM_TYPE_ES, "Failed to open decoder");
-    TRY_CALL_6(DtsSetVideoParams, device, BC_VID_ALGO_H264, FALSE, FALSE, TRUE, 0x80000000 | vdecFrameRate23_97, "Failed to set video params");
-    TRY_CALL_2(DtsSet422Mode, device, MODE422_YUY2, "Failed to set 422 mode");
-    TRY_CALL_1(DtsStartDecoder, device, "Failed to start decoder");
-    TRY_CALL_1(DtsStartCapture, device, "Failed to start capture");
-#endif
     printf("try calls done\n");
 
     // Open the input stream
-    inFile.open("/home/jarod/src/bcm70012/testing/test_video.264", std::ios::in | std::ios::binary);
+    inFile.open("/tmp/test_video.264", std::ios::in | std::ios::binary);
     if (!inFile.is_open())
       throw "Unable to open input file";
     else
@@ -129,7 +121,7 @@ int main()
     uint32_t lastDecoded = 0xFF;
     for (;;)
     {
-      for (int i = 0; i < 2; i++)
+      for (int i = 0; i < 6; i++)
       {
         // Read from input file if previously-read data was sent successfully
         if (needData)
@@ -147,7 +139,7 @@ int main()
         }
 
         // Push input data to driver
-        ret = DtsProcInput(device, input, inputLen, 0, FALSE);
+        ret = DtsProcInput(device, input, inputLen, 0, 0);
         if (ret == BC_STS_SUCCESS)
         {
           chunksSent++;
@@ -260,7 +252,7 @@ int main()
       }
     }
   }
-  catch(char* msg)
+  catch(const char* msg)
   {
     printf("%s\n", msg);
   }
