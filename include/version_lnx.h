@@ -61,6 +61,11 @@
 #define RC_LEGAL_TRADEMARKS	" \0"
 #define BRCM_MAJOR_VERSION	0
 
+#define DRIVER_MAJOR_VERSION        BRCM_MAJOR_VERSION
+#define DRIVER_MINOR_VERSION        1
+#define DRIVER_REVISION             18
+
+#define RC_FILE_VERSION             STRINGIFY_VERSION(DRIVER_MAJOR_VERSION,DRIVER_MINOR_VERSION,DRIVER_REVISION) ".0"
 
 /*======================= Device Interface Library ========================*/
 #define DIL_MAJOR_VERSION	BRCM_MAJOR_VERSION
@@ -75,5 +80,9 @@
 #define DECONF_REVISION		17
 #define DECONF_RC_FILE_VERSION  STRINGIFY_VERSION(DIL_MAJOR_VERSION,DIL_MINOR_VERSION,DIL_REVISION)
 
+/*========================== Firmware ==============================*/
+#define FW_MAJOR_VERSION        BRCM_MAJOR_VERSION
+#define FW_MINOR_VERSION        60
+#define FW_REVISION		39
 
 #endif

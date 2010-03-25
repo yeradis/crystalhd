@@ -7,6 +7,8 @@
  *
  * Revision History:
  *
+ * $brcm_Log: /brickstone/sw/emb/stream/c011api.h $
+ *
  * sw_branch_7411_d0/sw_branch_7412_a0/sw_branch_7412_a0_apple/2   10/25/06 5:27p xshi
  * Code clean: removed sdramInputBuf0/1 in channelOpenRsp; obsoleted
  * sdramInputDmaBufferSize in startVideoCmd.
@@ -233,6 +235,8 @@ typedef enum
     eCMD_C011_ENC_CHAN_STATISTICS       = eCMD_C011_CMD_BASE + 0x204,
 
     eNOTIFY_C011_ENC_CHAN_EVENT	 = eCMD_C011_CMD_BASE + 0x210,
+
+    eCMD_C011_DEC_CHAN_SET_SINGLE_FIELD = eCMD_C011_CMD_BASE + 0x501,
 
 } eC011_TS_CMD;
 
@@ -1268,6 +1272,14 @@ typedef struct {
     uint32_t	dbgMode;
 } DecCmdChannelActivate;
 
+//For Single Field
+typedef struct {
+	unsigned long             command;
+	unsigned long             sequence;
+	unsigned long             channelId;
+	unsigned long             SingleField;
+} DecCmdChannelSingleField;
+
 /* DecChannelStatus */
 typedef struct {
     uint32_t	command;
@@ -1939,6 +1951,65 @@ typedef struct {
     eC011_STREAM_TYPE	 streamType;
 } DecCmdChannelStreamOpen;
 
+/*DecCmdChannelChannelOpen*/
+typedef struct
+{
+	uint32_t		command;
+	uint32_t		sequence;
+	eC011_INPUT_PORT	inPort;
+	uint32_t		outVidPort;
+	eC011_STREAM_TYPE	streamType;
+	uint32_t		maxPicSize;
+	uint32_t		outCtrlMode;
+	uint32_t		chanType;
+	uint32_t		reservedWord8;
+	eC011_VIDEO_ALG		videoAlg;
+	uint32_t		sourceMode;
+	uint32_t		pulldown;
+	uint32_t		picInfo;
+	uint32_t		displayOrder;
+	uint32_t		reservedWord14;
+	uint32_t		reservedWord15;
+	uint32_t		streamId; /* for multi-stream */
+	uint32_t		deblocking;
+	uint32_t		vcxoControl;
+	uint32_t		displayTiming;
+	uint32_t		videoDisplayOffset;
+	uint32_t		userDataMode;
+	uint32_t		enableUserDataInterrupt;
+	uint32_t		ptsStcDiffThreshold;
+	uint32_t		stcPtsDiffThreshold;
+	uint32_t		enableFirstPtsInterrupt;
+	uint32_t		enableStcPtsThresholdInterrupt;
+	uint32_t		frameRateDefinition;
+	uint32_t		hostDmaInterruptEnable;
+	uint32_t		asynchEventNotifyEnable;
+	uint32_t		enablePtsStcChangeInterrupt;
+	uint32_t		enablePtsErrorInterrupt;
+	uint32_t		enableFgt;
+	uint32_t		enable23_297FrameRateOutput;
+	uint32_t		enableVideoDataUnderflowInterrupt;
+	uint32_t		reservedWord35;
+	uint32_t		pictureInfoInterruptEnable;
+} DecCmdChannelChannelOpen;
+
+typedef struct
+{
+	uint32_t command;
+	uint32_t sequence;
+	uint32_t status;
+	uint32_t ChannelID;
+	uint32_t picBuf;
+	uint32_t picRelBuf;
+	uint32_t picInfoDeliveryQ;
+	uint32_t picInfoReleaseQ;
+	uint32_t channelStatus;
+	uint32_t userDataDeliveryQ;
+	uint32_t userDataReleaseQ;
+	uint32_t transportStreamCaptureAddr;
+	uint32_t asyncEventQ;
+} DecRspChannelChannelOpen;
+
 typedef struct {
     uint32_t	command;
     uint32_t	sequence;
@@ -2358,6 +2429,7 @@ typedef struct {
    DecRspSetContentKey,
    DecRspSetSessionKey,
    DecRspFormatChangeAck,
+   DecRspChannelSingleField,
 
    DecRspChannelUnknownCmd;
 #endif // __INC_C011API_H__

@@ -19,6 +19,7 @@
 #ifndef __INC_VDEC_INFO_H__
 #define __INC_VDEC_INFO_H__
 
+#include "bc_dts_types.h"
 #pragma pack (1)
 
 /* User Data Header */
