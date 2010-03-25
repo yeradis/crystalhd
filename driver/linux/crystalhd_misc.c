@@ -148,12 +148,17 @@ static inline void crystalhd_init_sg(struct scatterlist *sg, unsigned int entrie
  */
 uint32_t bc_dec_reg_rd(struct crystalhd_adp *adp, uint32_t reg_off)
 {
+	uint32_t val;
+
 	if (!adp || (reg_off > adp->pci_mem_len)) {
 		BCMLOG_ERR("dec_rd_reg_off outof range: 0x%08x\n", reg_off);
 		return 0;
 	}
 
-	return readl(adp->addr + reg_off);
+	val = readl(adp->addr + reg_off);
+	printk(KERN_DEBUG "%s: read(0x%p) = 0x%08x\n",
+	       __func__, adp->addr + reg_off, val);
+	return val;
 }
 
 /**
@@ -172,9 +177,11 @@ uint32_t bc_dec_reg_rd(struct crystalhd_adp *adp, uint32_t reg_off)
 void bc_dec_reg_wr(struct crystalhd_adp *adp, uint32_t reg_off, uint32_t val)
 {
 	if (!adp || (reg_off > adp->pci_mem_len)) {
-		BCMLOG_ERR("dec_wr_reg_off outof range: 0x%08x\n", reg_off);
+		BCMLOG_ERR("dec_wr_reg_off out of range: 0x%08x\n", reg_off);
 		return;
 	}
+	printk(KERN_DEBUG "%s: writel(0x%08x @ 0x%p).\n",
+	       __func__, val, adp->addr + reg_off);
 	writel(val, adp->addr + reg_off);
 	udelay(8);
 }
@@ -194,11 +201,16 @@ void bc_dec_reg_wr(struct crystalhd_adp *adp, uint32_t reg_off, uint32_t val)
  */
 uint32_t crystalhd_reg_rd(struct crystalhd_adp *adp, uint32_t reg_off)
 {
+	uint32_t val;
+
 	if (!adp || (reg_off > adp->pci_i2o_len)) {
-		BCMLOG_ERR("link_rd_reg_off outof range: 0x%08x\n", reg_off);
+		BCMLOG_ERR("link_rd_reg_off out of range: 0x%08x\n", reg_off);
 		return 0;
 	}
-	return readl(adp->i2o_addr + reg_off);
+	val = readl(adp->i2o_addr + reg_off);
+	printk(KERN_DEBUG "%s: read(0x%p) = 0x%08x\n",
+	       __func__, adp->i2o_addr + reg_off, val);
+	return val;
 }
 
 /**
@@ -221,6 +233,8 @@ void crystalhd_reg_wr(struct crystalhd_adp *adp, uint32_t reg_off, uint32_t val)
 		BCMLOG_ERR("link_wr_reg_off outof range: 0x%08x\n", reg_off);
 		return;
 	}
+	printk(KERN_DEBUG "%s: writel(0x%08x @ 0x%p).\n",
+	       __func__, val, adp->i2o_addr + reg_off);
 	writel(val, adp->i2o_addr + reg_off);
 }
 
