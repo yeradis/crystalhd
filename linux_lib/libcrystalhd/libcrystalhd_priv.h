@@ -30,6 +30,7 @@
 #define _BCM_DRV_IF_PRIV_
 
 #include "bc_dts_glob_lnx.h"
+#include "libcrystalhd_parser.h"
 #include "7411d.h"
 #include <semaphore.h>
 
@@ -73,6 +74,7 @@ enum _BC_PCI_DEV_IDS {
 	BC_PCI_DEVID_LOCKE	= 0x1613,
 	BC_PCI_DEVID_DEMOBRD	= 0x7411,
 	BC_PCI_DEVID_MORPHEUS	= 0x7412,
+	BC_PCI_DEVID_FLEA	= 0x1615,
 };
 
 enum _DtsRunState {
@@ -122,6 +124,21 @@ enum _DtsAppSpecificCfgFlags {
 #define BC_DTS_DEF_OPTIONS	0x0D
 #define BC_DTS_DEF_OPTIONS_LINK	0xB0000005
 
+#define BC_FW_CMD_TIMEOUT		2
+//Use the Last Un-Fetched One
+#define MAX_DISOEDER_GAP	5
+
+#define ALIGN_BUF_SIZE	(512*1024)
+#define TX_CIRCULAR_BUFFER
+#ifdef TX_CIRCULAR_BUFFER
+	#define	TX_HOLD_BUF_SIZE (4 * 1024 * 1024)
+	#define TX_BUF_THRESHOLD 64*1024
+	#define TX_BUF_DELIVER_THRESHOLD 5
+#else
+	#define	TX_HOLD_BUF_SIZE (64 * 1024)
+#endif
+#define FP_TX_BUF_SIZE (1024 * 1024 + 512 * 1024)
+
 typedef struct _DTS_MPOOL_TYPE {
 	uint32_t	type;
 	uint32_t	sz;
@@ -137,8 +154,15 @@ typedef struct _DTS_VIDEO_PARAMS {
 	BOOL		FGTEnable;
 	BOOL		MetaDataEnable;
 	BOOL		Progressive;
-	BOOL		FrameRate; //currently not used, frame rate is passed in the 1st byte of the OptFlags member
+	BOOL		FrameRate;  //currently not used, frame rate is passed in the 1st byte of the OptFlags member
 	uint32_t	OptFlags; //currently has the DEc_operation_mode in bits 4 and 5, bits 0:3 have the default framerate, Ignore frame rate is bit 6. Bit 7 is SingleThreadedAppMode
+	BC_MEDIA_SUBTYPE MediaSubType;
+	uint32_t	StartCodeSz;
+	uint8_t		*pMetaData;
+	uint32_t	MetaDataSz;
+	uint32_t	NumOfRefFrames;
+	uint32_t	LevelIDC;
+	uint32_t	StreamType;
 } DTS_VIDEO_PARAMS;
 
 /* Input MetaData handling.. */
@@ -160,12 +184,12 @@ typedef struct _BC_PES_HDR_FORMAT{
 }BC_PES_HDR_FORMAT;
 
 typedef struct _DTS_INPUT_MDATA{
-	struct _DTS_INPUT_MDATA		*flink;
-	struct _DTS_INPUT_MDATA		*blink;
-	uint32_t							IntTag;
-	uint32_t							Reserved;
-	uint64_t							appTimeStamp;
-	BC_SEQ_HDR_FORMAT			Spes;
+	struct _DTS_INPUT_MDATA	*flink;
+	struct _DTS_INPUT_MDATA	*blink;
+	uint32_t		IntTag;
+	uint32_t		Reserved;
+	uint64_t		appTimeStamp;
+	BC_SEQ_HDR_FORMAT	Spes;
 }DTS_INPUT_MDATA;
 
 
@@ -189,8 +213,6 @@ typedef struct _DTS_LIB_CONTEXT{
 	uint32_t				FixFlags;		/* Flags for conditionally enabling fixes */
 
 	pthread_mutex_t  thLock;
-
-
 
 	DTS_VIDEO_PARAMS VidParams;		/* App specific Video Params */
 
@@ -232,6 +254,9 @@ typedef struct _DTS_LIB_CONTEXT{
 	BOOL			FlushIssued;			/* Flag to start EOS detection */
 	uint32_t				eosCnt;					/* Last picture repetition count */
 	uint32_t				LastPicNum;				/* Last picture number */
+	uint32_t				LastSessNum;			/* Last session number */
+	uint8_t 				PullDownFlag;
+	BOOL			bEOS;
 
 	/* Statistics Related */
 	uint32_t				prevPicNum;				/* Previous received frame */
@@ -243,7 +268,7 @@ typedef struct _DTS_LIB_CONTEXT{
 
 	char				FwBinFile[MAX_PATH+1];	/* Firmware Bin file place holder */
 
-	uint8_t				b422Mode;				/* 422 Mode Identifier for Link */
+	BC_OUTPUT_FORMAT			b422Mode;	/* 422 Mode Identifier for Link */
 	uint32_t				picWidth;
 	uint32_t				picHeight;
 
@@ -251,6 +276,26 @@ typedef struct _DTS_LIB_CONTEXT{
 	uint8_t				SingleThreadedAppMode;	/* flag to indicate that we are running in single threaded mode */
 	uint32_t				cpbBase;	/* Only used in single threaded mode to save base and end to reduce number of HW reads */
 	uint32_t				cpbEnd;
+	PES_CONVERT_PARAMS PESConvParams;
+	BC_HW_CAPS			capInfo;
+	uint16_t				InSampleCount;
+	uint8_t				bMapOutBufDone;
+#ifdef TX_CIRCULAR_BUFFER
+	uint32_t				nTxHoldBufRead;
+	uint32_t				nTxHoldBufWrite;
+	uint16_t				nTxHoldBufCounter;
+#else
+	uint32_t				nPendBufInd;
+#endif
+	uint32_t				nPendFPBufInd;
+	uint8_t				FPDrain; // FP has initiated drain operation
+
+	BC_PIC_INFO_BLOCK	FormatInfo;
+
+	__attribute__((aligned(4))) uint8_t		alignBuf[ALIGN_BUF_SIZE];
+	__attribute__((aligned(4))) uint8_t		pendingBuf[TX_HOLD_BUF_SIZE];
+	__attribute__((aligned(4))) uint8_t		FPpendingBuf[FP_TX_BUF_SIZE];
+	uint8_t				bScaling;
 
 	/* Power management and dynamic clock frequency changes related */
 	uint8_t				totalPicsCounted;
@@ -307,9 +352,39 @@ BC_STATUS DtsInsertMdata(DTS_LIB_CONTEXT *Ctx, DTS_INPUT_MDATA	*Mdata);
 BC_STATUS DtsRemoveMdata(DTS_LIB_CONTEXT *Ctx, DTS_INPUT_MDATA	*Mdata, BOOL sync);
 BC_STATUS DtsFetchMdata(DTS_LIB_CONTEXT *Ctx, uint16_t snum, BC_DTS_PROC_OUT *pout);
 BC_STATUS DtsFetchTimeStampMdata(DTS_LIB_CONTEXT *Ctx, uint16_t snum, uint64_t *TimeStamp);
-BC_STATUS DtsPrepareMdata(DTS_LIB_CONTEXT *Ctx, uint64_t timeStamp, DTS_INPUT_MDATA **mData);
 BC_STATUS DtsPrepareMdataASFHdr(DTS_LIB_CONTEXT *Ctx, DTS_INPUT_MDATA *mData, uint8_t* buf);
-BC_STATUS DtsNotifyOperatingMode(HANDLE hDevice,uint32_t Mode);
+BC_STATUS DtsPrepareMdata(DTS_LIB_CONTEXT *Ctx, uint64_t timeStamp, DTS_INPUT_MDATA **mData, uint8_t** pDataBuf, uint32_t *pSize);
+BC_STATUS OldDtsPrepareMdata(DTS_LIB_CONTEXT *Ctx, uint64_t timeStamp, DTS_INPUT_MDATA **mData);
+BC_STATUS DtsNotifyOperatingMode(HANDLE hDevice, uint32_t Mode);
+/* Internal helper function */
+uint32_t DtsGetWidthfromResolution(DTS_LIB_CONTEXT *Ctx, uint32_t Resolution);
+
+#ifdef _DYNAMIC_BUFFERS_
+BC_STATUS
+DtsAddBuffsWithFmtChInfo(DTS_LIB_CONTEXT	*Ctx);
+
+BC_STATUS
+DtsAllocNewRxBuffs(DTS_LIB_CONTEXT		*Ctx,
+					uint32_t				BuffSz,
+					uint32_t				BuffCnt);
+
+BC_STATUS
+DtsFreeRxBuffs(DTS_LIB_CONTEXT		*Ctx);
+
+void
+DtsGetMaxSize(DTS_LIB_CONTEXT *Ctx, U32 *Sz);
+
+BC_STATUS
+DtsHandleTimingMrkr(DTS_LIB_CONTEXT *Ctx);
+
+#if 0
+BC_STATUS
+DtsWaitForFlushDone(DTS_LIB_CONTEXT *Ctx,
+			  HANDLE hDevice,
+			  uint8_t *EOSDetected);
+#endif
+
+#endif
 /*====================== Performance Counter Routines ============================*/
 void DtsUpdateInStats(DTS_LIB_CONTEXT	*Ctx, uint32_t	size);
 void DtsUpdateOutStats(DTS_LIB_CONTEXT	*Ctx, BC_DTS_PROC_OUT *pOut);

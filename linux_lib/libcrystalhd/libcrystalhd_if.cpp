@@ -33,6 +33,14 @@
 #define REG_DecCA_RegCinEnd	0xa10
 #define REG_DecCA_RegCinWrPtr	0xa04
 #define REG_DecCA_RegCinRdPtr	0xa08
+#define REG_Dec_TsUser0Base	0x100864
+#define REG_Dec_TsUser0Rdptr	0x100868
+#define REG_Dec_TsUser0Wrptr	0x10086C
+#define REG_Dec_TsUser0End	0x100874
+#define REG_Dec_TsAudCDB2Base	0x10036c
+#define REG_Dec_TsAudCDB2Rdptr	0x100378
+#define REG_Dec_TsAudCDB2Wrptr	0x100374
+#define REG_Dec_TsAudCDB2End	0x100370
 
 #include <sys/types.h>
 #include <sys/ipc.h>
@@ -42,6 +50,239 @@
 #include "version_lnx.h"
 #include "libcrystalhd_fwcmds.h"
 #include "libcrystalhd_priv.h"
+
+#if (!__STDC_WANT_SECURE_LIB__)
+inline bool memcpy_s(void *dest, size_t sizeInBytes, void *src, size_t count)
+{
+	bool status = false;
+	if (count > sizeInBytes) {
+		DebugLog_Trace(LDIL_DBG,"memcpy_s: buffer overflow\n");
+	} else {
+		memcpy(dest, src, count);
+		status = true;
+	}
+
+	return(status);
+}
+
+inline bool memmove_s(void *dest, size_t sizeInBytes, void *src, size_t count)
+{
+	bool status = false;
+	if (count > sizeInBytes) {
+		DebugLog_Trace(LDIL_DBG,"memmove_s: buffer overflow\n");
+	} else {
+		memmove(dest, src, count);
+		status = true;
+	}
+
+	return(status);
+}
+#endif
+
+// Full TS packet of EOS
+static __attribute__((aligned(4))) uint8_t eos_mpeg[184] =
+{
+	0x00, 0x00, 0x01, 0xb7,
+	0x00, 0x00, 0x01, 0xb7,
+	0x00, 0x00, 0x01, 0xb7,
+	0x00, 0x00, 0x01, 0xb7,
+	0x00, 0x00, 0x01, 0xb7,
+	0x00, 0x00, 0x01, 0xb7,
+	0x00, 0x00, 0x01, 0xb7,
+	0x00, 0x00, 0x01, 0xb7,
+	0x00, 0x00, 0x01, 0xb7,
+	0x00, 0x00, 0x01, 0xb7,
+	0x00, 0x00, 0x01, 0xb7,
+	0x00, 0x00, 0x01, 0xb7,
+	0x00, 0x00, 0x01, 0xb7,
+	0x00, 0x00, 0x01, 0xb7,
+	0x00, 0x00, 0x01, 0xb7,
+	0x00, 0x00, 0x01, 0xb7,
+	0x00, 0x00, 0x01, 0xb7,
+	0x00, 0x00, 0x01, 0xb7,
+	0x00, 0x00, 0x01, 0xb7,
+	0x00, 0x00, 0x01, 0xb7,
+	0x00, 0x00, 0x01, 0xb7,
+	0x00, 0x00, 0x01, 0xb7,
+	0x00, 0x00, 0x01, 0xb7,
+	0x00, 0x00, 0x01, 0xb7,
+	0x00, 0x00, 0x01, 0xb7,
+	0x00, 0x00, 0x01, 0xb7,
+	0x00, 0x00, 0x01, 0xb7,
+	0x00, 0x00, 0x01, 0xb7,
+	0x00, 0x00, 0x01, 0xb7,
+	0x00, 0x00, 0x01, 0xb7,
+	0x00, 0x00, 0x01, 0xb7,
+	0x00, 0x00, 0x01, 0xb7,
+	0x00, 0x00, 0x01, 0xb7,
+	0x00, 0x00, 0x01, 0xb7,
+	0x00, 0x00, 0x01, 0xb7,
+	0x00, 0x00, 0x01, 0xb7,
+	0x00, 0x00, 0x01, 0xb7,
+	0x00, 0x00, 0x01, 0xb7,
+	0x00, 0x00, 0x01, 0xb7,
+	0x00, 0x00, 0x01, 0xb7,
+	0x00, 0x00, 0x01, 0xb7,
+	0x00, 0x00, 0x01, 0xb7,
+	0x00, 0x00, 0x01, 0xb7,
+	0x00, 0x00, 0x01, 0xb7,
+	0x00, 0x00, 0x01, 0xb7,
+	0x00, 0x00, 0x01, 0xb7
+};
+
+static __attribute__((aligned(4))) uint8_t eos_avc_vc1[184] =
+{
+	0x00, 0x00, 0x01, 0x0a,
+	0x00, 0x00, 0x01, 0x0a,
+	0x00, 0x00, 0x01, 0x0a,
+	0x00, 0x00, 0x01, 0x0a,
+	0x00, 0x00, 0x01, 0x0a,
+	0x00, 0x00, 0x01, 0x0a,
+	0x00, 0x00, 0x01, 0x0a,
+	0x00, 0x00, 0x01, 0x0a,
+	0x00, 0x00, 0x01, 0x0a,
+	0x00, 0x00, 0x01, 0x0a,
+	0x00, 0x00, 0x01, 0x0a,
+	0x00, 0x00, 0x01, 0x0a,
+	0x00, 0x00, 0x01, 0x0a,
+	0x00, 0x00, 0x01, 0x0a,
+	0x00, 0x00, 0x01, 0x0a,
+	0x00, 0x00, 0x01, 0x0a,
+	0x00, 0x00, 0x01, 0x0a,
+	0x00, 0x00, 0x01, 0x0a,
+	0x00, 0x00, 0x01, 0x0a,
+	0x00, 0x00, 0x01, 0x0a,
+	0x00, 0x00, 0x01, 0x0a,
+	0x00, 0x00, 0x01, 0x0a,
+	0x00, 0x00, 0x01, 0x0a,
+	0x00, 0x00, 0x01, 0x0a,
+	0x00, 0x00, 0x01, 0x0a,
+	0x00, 0x00, 0x01, 0x0a,
+	0x00, 0x00, 0x01, 0x0a,
+	0x00, 0x00, 0x01, 0x0a,
+	0x00, 0x00, 0x01, 0x0a,
+	0x00, 0x00, 0x01, 0x0a,
+	0x00, 0x00, 0x01, 0x0a,
+	0x00, 0x00, 0x01, 0x0a,
+	0x00, 0x00, 0x01, 0x0a,
+	0x00, 0x00, 0x01, 0x0a,
+	0x00, 0x00, 0x01, 0x0a,
+	0x00, 0x00, 0x01, 0x0a,
+	0x00, 0x00, 0x01, 0x0a,
+	0x00, 0x00, 0x01, 0x0a,
+	0x00, 0x00, 0x01, 0x0a,
+	0x00, 0x00, 0x01, 0x0a,
+	0x00, 0x00, 0x01, 0x0a,
+	0x00, 0x00, 0x01, 0x0a,
+	0x00, 0x00, 0x01, 0x0a,
+	0x00, 0x00, 0x01, 0x0a,
+	0x00, 0x00, 0x01, 0x0a,
+	0x00, 0x00, 0x01, 0x0a
+};
+
+static __attribute__((aligned(4))) uint8_t eos_vc1_spmp_link[32] =
+{
+	0x5a, 0x5a, 0x5a, 0x5a,
+	0x00, 0x00, 0x00, 0x20,
+	0x00, 0x00, 0x00, 0x05,
+	0x5a, 0x5a, 0x5a, 0x5a,
+	0x0d, 0x00, 0x00, 0x01,
+	0x0a, 0xe0, 0x55, 0x00,
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00
+};
+
+
+static __attribute__((aligned(4))) uint8_t eos_divx[184] =
+{
+	0x00, 0x00, 0x01, 0xb1,
+	0x00, 0x00, 0x01, 0xb1,
+	0x00, 0x00, 0x01, 0xb1,
+	0x00, 0x00, 0x01, 0xb1,
+	0x00, 0x00, 0x01, 0xb1,
+	0x00, 0x00, 0x01, 0xb1,
+	0x00, 0x00, 0x01, 0xb1,
+	0x00, 0x00, 0x01, 0xb1,
+	0x00, 0x00, 0x01, 0xb1,
+	0x00, 0x00, 0x01, 0xb1,
+	0x00, 0x00, 0x01, 0xb1,
+	0x00, 0x00, 0x01, 0xb1,
+	0x00, 0x00, 0x01, 0xb1,
+	0x00, 0x00, 0x01, 0xb1,
+	0x00, 0x00, 0x01, 0xb1,
+	0x00, 0x00, 0x01, 0xb1,
+	0x00, 0x00, 0x01, 0xb1,
+	0x00, 0x00, 0x01, 0xb1,
+	0x00, 0x00, 0x01, 0xb1,
+	0x00, 0x00, 0x01, 0xb1,
+	0x00, 0x00, 0x01, 0xb1,
+	0x00, 0x00, 0x01, 0xb1,
+	0x00, 0x00, 0x01, 0xb1,
+	0x00, 0x00, 0x01, 0xb1,
+	0x00, 0x00, 0x01, 0xb1,
+	0x00, 0x00, 0x01, 0xb1,
+	0x00, 0x00, 0x01, 0xb1,
+	0x00, 0x00, 0x01, 0xb1,
+	0x00, 0x00, 0x01, 0xb1,
+	0x00, 0x00, 0x01, 0xb1,
+	0x00, 0x00, 0x01, 0xb1,
+	0x00, 0x00, 0x01, 0xb1,
+	0x00, 0x00, 0x01, 0xb1,
+	0x00, 0x00, 0x01, 0xb1,
+	0x00, 0x00, 0x01, 0xb1,
+	0x00, 0x00, 0x01, 0xb1,
+	0x00, 0x00, 0x01, 0xb1,
+	0x00, 0x00, 0x01, 0xb1,
+	0x00, 0x00, 0x01, 0xb1,
+	0x00, 0x00, 0x01, 0xb1,
+	0x00, 0x00, 0x01, 0xb1,
+	0x00, 0x00, 0x01, 0xb1,
+	0x00, 0x00, 0x01, 0xb1,
+	0x00, 0x00, 0x01, 0xb1,
+	0x00, 0x00, 0x01, 0xb1,
+	0x00, 0x00, 0x01, 0xb1
+};
+
+static __attribute__((aligned(4))) uint8_t btp_video_done_es_private[] =
+{
+	/* 0x81, 0x01, 0x14, 0x80,*/
+	0x42, 0x52, 0x43, 0x4D, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+	/*, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00,*/
+};
+
+static __attribute__((aligned(4))) uint8_t btp_video_done_es[] =
+{
+					    /*0x81, 0x01, 0x14, 0x80, 0x42, 0x52, 0x43, 0x4D, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF,*/ 0x00, 0x00, 0x00,
+	0x00, 0x0C, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xAA, 0xBB, 0xCC, 0xDD, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0xBC, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
+};
+
+#if 0
+static __attribute__((aligned(4))) uint8_t btp_video_plunge_es[] =
+{
+					    /*0x81, 0x01, 0x14, 0x80, 0x42, 0x52, 0x43, 0x4D, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF,*/ 0x00, 0x00, 0x00,
+	0x00, 0x0A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xAA, 0xBB, 0xCC, 0xDD, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0xBC, 0xAA, 0xBB, 0xCC, 0xDD, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
+};
+#endif
 
 static BC_STATUS DtsSetupHardware(HANDLE hDevice, BOOL IgnClkChk)
 {
@@ -725,6 +966,57 @@ DtsSetVideoParams(
 	return BC_STS_SUCCESS;
 }
 
+DRVIFLIB_API BC_STATUS
+DtsSetInputFormat(HANDLE hDevice, BC_INPUT_FORMAT *pInputFormat )
+{
+	DTS_LIB_CONTEXT *Ctx = NULL;
+	uint32_t videoAlgo = BC_VID_ALGO_H264;
+
+	DTS_GET_CTX(hDevice,Ctx);
+
+	Ctx->VidParams.MediaSubType = pInputFormat->mSubtype;
+	Ctx->VidParams.WidthInPixels = pInputFormat->width;
+	Ctx->VidParams.HeightInPixels = pInputFormat->height;
+	if (pInputFormat->startCodeSz)
+		Ctx->VidParams.StartCodeSz = pInputFormat->startCodeSz;
+	else
+		Ctx->VidParams.StartCodeSz = BRCM_START_CODE_SIZE;
+
+	if (pInputFormat->metaDataSz) {
+		if (Ctx->VidParams.pMetaData)
+			delete Ctx->VidParams.pMetaData;
+		Ctx->VidParams.pMetaData = new uint8_t[pInputFormat->metaDataSz];
+		memcpy(Ctx->VidParams.pMetaData, pInputFormat->pMetaData, pInputFormat->metaDataSz);
+
+		Ctx->VidParams.MetaDataSz = pInputFormat->metaDataSz;
+	}
+
+	if(Ctx->VidParams.MediaSubType == BC_MSUBTYPE_H264 || Ctx->VidParams.MediaSubType== BC_MSUBTYPE_AVC1)
+		videoAlgo = BC_VID_ALGO_H264;
+	else if (Ctx->VidParams.MediaSubType==BC_MSUBTYPE_DIVX)
+		videoAlgo = BC_VID_ALGO_DIVX;
+	else if(Ctx->VidParams.MediaSubType == BC_MSUBTYPE_MPEG2VIDEO )
+		videoAlgo = BC_VID_ALGO_MPEG2;
+	else if(Ctx->VidParams.MediaSubType == BC_MSUBTYPE_WVC1 || Ctx->VidParams.MediaSubType == BC_MSUBTYPE_WMVA ||Ctx->VidParams.MediaSubType == BC_MSUBTYPE_VC1)
+		videoAlgo = BC_VID_ALGO_VC1;
+	else  if (Ctx->VidParams.MediaSubType == BC_MSUBTYPE_WMV3)
+		videoAlgo = BC_VID_ALGO_VC1MP;	// Main Profile
+
+	if (Ctx->DevId == BC_PCI_DEVID_FLEA || Ctx->VidParams.MediaSubType == BC_MSUBTYPE_WMV3)
+		Ctx->VidParams.StreamType = BC_STREAM_TYPE_PES;
+	else
+		Ctx->VidParams.StreamType = BC_STREAM_TYPE_ES;
+
+	DtsSetVideoParams(hDevice, videoAlgo, pInputFormat->FGTEnable, pInputFormat->MetaDataEnable, pInputFormat->Progressive, pInputFormat->OptFlags);
+	DtsSetPESConverter(hDevice);
+
+	//	if (Ctx->DevId == BC_PCI_DEVID_FLEA && !Ctx->adobeMode)
+	// Always enable scaling to work around FP performance problem with YUY2
+	if (Ctx->DevId == BC_PCI_DEVID_FLEA)
+		Ctx->bScaling = pInputFormat->bEnableScaling;
+	return DtsCheckProfile(hDevice);
+}
+
 DRVIFLIB_API BC_STATUS 
 DtsGetVideoParams(
     HANDLE  hDevice,
@@ -1001,7 +1293,7 @@ DtsProcOutput(
 			return BC_STS_FMT_CHANGE;
 		}
 
-		if(pOut->DropFrames)
+		if (pOut->DropFrames)
 		{
 			/* We need to release the buffers even if we fail to copy..*/
 			stRel = DtsRelRxBuff(Ctx,&Ctx->pOutData->u.RxBuffs,FALSE);
@@ -1020,7 +1312,9 @@ DtsProcOutput(
 		else
 			break;
 
-	}while((pOut->DropFrames >= 0));
+	/* this can't be right, DropFrames is a uint8_t so it will always be greater than or equal to zero. */
+	/* } while((pOut->DropFrames >= 0)); */
+	} while((pOut->DropFrames > 0));
 
 	if(pOut->AppCallBack && pOut->hnd && (OutBuffs.PoutFlags & BC_POUT_FLAGS_PIB_VALID))
 	{
@@ -1310,6 +1604,672 @@ DtsReleaseOutputBuffs(
 	return DtsRelRxBuff(Ctx, &Ctx->pOutData->u.RxBuffs, FALSE);
 }
 
+// NAREN this function is used to send data buffered to the HW
+// This is initially for FP since it needs buffering to avoid stalling the CPU
+// and excessive polling from the single thread plugin due to the HW returning 0 size
+// buffers when it is absorbing data
+// FP tries to send bursts of data to return from hide or minimized operation to full visible
+// operation and this will allow bigger bursts
+DRVIFLIB_API BC_STATUS
+DtsSendDataFPMode( HANDLE  hDevice ,
+				 uint8_t *pUserData,
+				 uint32_t ulSizeInBytes,
+				 uint64_t timeStamp,
+				 BOOL encrypted
+			    )
+{
+	uint32_t	DramOff;
+	BC_STATUS	sts = BC_STS_SUCCESS;
+	DTS_LIB_CONTEXT		*Ctx = NULL;
+	BC_DTS_STATUS pStat;
+	uint32_t TransferSz = 0;
+	//unused uint32_t i_cnt=0, p_cnt=0;
+
+	//unused BC_DTS_STATS *pDtsStat = DtsGetgStats();
+
+	DTS_GET_CTX(hDevice,Ctx);
+
+	// Not really needed for FP since it only used H.264. But leave it just in case
+	if(Ctx->VidParams.VideoAlgo == BC_VID_ALGO_VC1MP)
+		encrypted|=0x2;
+
+	if(ulSizeInBytes > FP_TX_BUF_SIZE)
+		return BC_STS_INSUFF_RES; //Error
+
+	// This hack only works because FP is single threaded and we are sure that no one else is using this function
+	// For other cases we will have to use synchronization
+	Ctx->SingleThreadedAppMode |= 0x8; // get the HW free size always in this function
+	// First get the available size from the HW
+	sts = DtsGetDriverStatus(hDevice, &pStat);
+	Ctx->SingleThreadedAppMode &= 0x7;
+	if(sts != BC_STS_SUCCESS)
+		return sts;
+
+	/* If we are aborting TX then clear the buffer and return */
+	if(pStat.cpbEmptySize & 0x80000000)
+	{
+		Ctx->nPendFPBufInd = 0;
+		return BC_STS_SUCCESS;
+	}
+
+	// Check for Drain condition. In case of FP Drain will be posted from ProcOutput
+	if((ulSizeInBytes == 0) && (pUserData == NULL))
+	{
+		// first make sure the HW can deal with the data
+		if(pStat.cpbEmptySize == 0)
+			return BC_STS_SUCCESS;
+
+		if(Ctx->nPendFPBufInd <= pStat.cpbEmptySize)
+			TransferSz = Ctx->nPendFPBufInd;
+		else
+			TransferSz = pStat.cpbEmptySize;
+
+		sts = DtsTxDmaText(hDevice, Ctx->FPpendingBuf, TransferSz, &DramOff, encrypted);
+		if(sts == BC_STS_SUCCESS)
+			DtsUpdateInStats(Ctx, TransferSz);
+		else
+			return sts;
+
+		Ctx->nPendFPBufInd -= TransferSz;
+		if (Ctx->nPendFPBufInd == 0)
+			return BC_STS_SUCCESS;
+		// Then clean up the buffer for the next time
+		if(memmove_s(Ctx->FPpendingBuf, FP_TX_BUF_SIZE, Ctx->FPpendingBuf + TransferSz, Ctx->nPendFPBufInd))
+			return BC_STS_INSUFF_RES;
+		else
+			return BC_STS_SUCCESS;
+	}
+
+	// We can safely buffer if we can't send because FP has checked for enough space before the TX
+	// if the cpb returns empty - we are either in PD or don't have space
+	// just buffer and return
+	if(pStat.cpbEmptySize == 0)
+	{
+		if(memcpy_s(Ctx->FPpendingBuf + Ctx->nPendFPBufInd, FP_TX_BUF_SIZE - Ctx->nPendFPBufInd, pUserData, ulSizeInBytes))
+			return BC_STS_INSUFF_RES;
+		Ctx->nPendFPBufInd += ulSizeInBytes;
+		return BC_STS_SUCCESS;
+	}
+
+	// We can send some data. If we can send without buffering data send directly
+	if((Ctx->nPendFPBufInd == 0) && (ulSizeInBytes <= pStat.cpbEmptySize))
+	{
+		sts = DtsTxDmaText(hDevice, pUserData, ulSizeInBytes, &DramOff, encrypted);
+		if(sts == BC_STS_SUCCESS)
+			DtsUpdateInStats(Ctx,ulSizeInBytes);
+		return sts;
+	}
+
+	// We were unable to send all the data. So buffer the rest.
+	// Do a poor man's queue here. Ugly, so fix this if it is a performance problem
+	// First add to the buffer
+	if(memcpy_s(Ctx->FPpendingBuf + Ctx->nPendFPBufInd, FP_TX_BUF_SIZE - Ctx->nPendFPBufInd, pUserData, ulSizeInBytes))
+		return BC_STS_INSUFF_RES;
+	Ctx->nPendFPBufInd += ulSizeInBytes;
+	if(Ctx->nPendFPBufInd <= pStat.cpbEmptySize)
+		TransferSz = Ctx->nPendFPBufInd;
+	else
+		TransferSz = pStat.cpbEmptySize;
+
+	sts = DtsTxDmaText(hDevice, Ctx->FPpendingBuf, TransferSz, &DramOff, encrypted);
+	if(sts == BC_STS_SUCCESS)
+		DtsUpdateInStats(Ctx, TransferSz);
+	else
+		return sts;
+	Ctx->nPendFPBufInd -= TransferSz;
+	if (Ctx->nPendFPBufInd == 0)
+		return BC_STS_SUCCESS;
+	// Then clean up the buffer for the next time
+	if(memmove_s(Ctx->FPpendingBuf, FP_TX_BUF_SIZE, Ctx->FPpendingBuf + TransferSz, Ctx->nPendFPBufInd))
+		return BC_STS_INSUFF_RES;
+	else
+		return BC_STS_SUCCESS;
+
+}
+
+DRVIFLIB_API BC_STATUS
+DtsSendDataBuffer( HANDLE  hDevice ,
+				 uint8_t *pUserData,
+				 uint32_t ulSizeInBytes,
+				 uint64_t timeStamp,
+				 BOOL encrypted
+			    )
+{
+	uint32_t	DramOff;
+	BC_STATUS	sts = BC_STS_SUCCESS;
+	DTS_LIB_CONTEXT		*Ctx = NULL;
+	BC_IOCTL_DATA		*pIocData = NULL;
+	uint8_t bForceDeliver = false;
+	uint8_t bFlushing = false;
+
+	//unused uint8_t* pData;
+	uint32_t	ulSize;
+
+	uint32_t ulTxBufAvailSize;
+	//unused BC_DTS_STATS *pDtsStat = DtsGetgStats( );
+
+	DTS_GET_CTX(hDevice,Ctx);
+
+	if(Ctx->VidParams.VideoAlgo == BC_VID_ALGO_VC1MP)
+		encrypted|=0x2;
+
+	// ulSizeInBytes = 0 && pUserData = NULL ==> Drain input buffer
+
+	if (pUserData == NULL && ulSizeInBytes == 0)
+		bFlushing = true;
+
+#ifdef TX_CIRCULAR_BUFFER
+	if (Ctx->nTxHoldBufWrite >= Ctx->nTxHoldBufRead)
+	{
+		ulTxBufAvailSize = TX_HOLD_BUF_SIZE - (Ctx->nTxHoldBufWrite - Ctx->nTxHoldBufRead);
+	}
+	else
+	{
+		ulTxBufAvailSize = Ctx->nTxHoldBufRead - Ctx->nTxHoldBufWrite;
+	}
+	if (ulSizeInBytes && ulTxBufAvailSize > ulSizeInBytes)
+	{
+		if ((TX_HOLD_BUF_SIZE - Ctx->nTxHoldBufWrite) >= ulSizeInBytes)
+		{
+			memcpy(Ctx->pendingBuf+Ctx->nTxHoldBufWrite, pUserData, ulSizeInBytes);
+			Ctx->nTxHoldBufWrite = (Ctx->nTxHoldBufWrite + ulSizeInBytes) % TX_HOLD_BUF_SIZE;
+			ulSizeInBytes = 0;
+		}
+		else
+		{
+			ulSize = TX_HOLD_BUF_SIZE - Ctx->nTxHoldBufWrite;
+			memcpy(Ctx->pendingBuf+Ctx->nTxHoldBufWrite, pUserData, ulSize);
+			pUserData += ulSize;
+			memcpy(Ctx->pendingBuf, pUserData, ulSizeInBytes - ulSize);
+			Ctx->nTxHoldBufWrite = ulSizeInBytes - ulSize;
+			ulSizeInBytes = 0;
+		}
+	}
+
+	if(!(pIocData = DtsAllocIoctlData(Ctx)))
+		return BC_STS_INSUFF_RES;
+
+	while (Ctx->nTxHoldBufWrite != Ctx->nTxHoldBufRead)
+	{
+		bForceDeliver = bFlushing;
+		if (Ctx->nTxHoldBufWrite >= Ctx->nTxHoldBufRead)
+		{
+			ulSize = Ctx->nTxHoldBufWrite - Ctx->nTxHoldBufRead;
+		}
+		else
+		{
+			bForceDeliver = true;
+			ulSize = TX_HOLD_BUF_SIZE - Ctx->nTxHoldBufRead;
+		}
+
+		if ((!bForceDeliver) && (ulSize < TX_BUF_THRESHOLD) && (Ctx->nTxHoldBufCounter < TX_BUF_DELIVER_THRESHOLD))
+		{
+			Ctx->nTxHoldBufCounter ++;
+			break;
+		}
+		Ctx->nTxHoldBufCounter = 0;
+		if (DtsDrvCmd(Ctx, BCM_IOC_GET_DRV_STAT, 0, pIocData, FALSE) == BC_STS_SUCCESS)
+		{
+			if (pIocData->u.drvStat.DrvcpbEmptySize & 0x80000000)
+			{
+				//Aborting Tx
+				Ctx->nTxHoldBufWrite = Ctx->nTxHoldBufRead = 0;
+				DtsRelIoctlData(Ctx,pIocData);
+				return BC_STS_IO_USER_ABORT;
+			}
+			if (pIocData->u.drvStat.DrvcpbEmptySize == 0)
+			{
+				bc_sleep_ms(5);
+				break;
+			}
+			if (pIocData->u.drvStat.DrvcpbEmptySize < ulSize)
+				ulSize = pIocData->u.drvStat.DrvcpbEmptySize;
+
+			if(!bForceDeliver)
+				ulSize = (ulSize >> 2) << 2;
+
+			if (ulSize)
+			{
+
+				sts = DtsTxDmaText(hDevice, Ctx->pendingBuf+Ctx->nTxHoldBufRead,ulSize, &DramOff, encrypted);
+				if(sts == BC_STS_SUCCESS)
+				{
+					Ctx->nTxHoldBufRead = ( Ctx->nTxHoldBufRead + ulSize ) % TX_HOLD_BUF_SIZE;
+					if(Ctx->nTxHoldBufRead == Ctx->nTxHoldBufWrite)
+						Ctx->nTxHoldBufWrite = Ctx->nTxHoldBufRead = 0;
+					DtsUpdateInStats(Ctx,ulSize);
+				}
+			}
+		}
+	}
+	DtsRelIoctlData(Ctx,pIocData);
+
+	if (ulSizeInBytes > 0)
+		return BC_STS_BUSY;
+	if (bFlushing && (Ctx->nTxHoldBufWrite != Ctx->nTxHoldBufRead))
+		return BC_STS_BUSY;
+	return BC_STS_SUCCESS;
+#else
+	if (ulSizeInBytes > 0 && pUserData)
+	{
+		if (ulSizeInBytes > TX_HOLD_BUF_SIZE)
+		{
+			if (Ctx->nPendBufInd)
+			{
+				sts = DtsTxDmaText(hDevice,Ctx->pendingBuf,Ctx->nPendBufInd,&DramOff, encrypted);
+				if (sts != BC_STS_SUCCESS)
+					return sts;
+				DtsUpdateInStats(Ctx,Ctx->nPendBufInd);
+				Ctx->nPendBufInd = 0;
+			}
+			sts = DtsTxDmaText(hDevice,pUserData,ulSizeInBytes,&DramOff, encrypted);
+			if(sts == BC_STS_SUCCESS)
+				DtsUpdateInStats(Ctx,ulSizeInBytes);
+			return sts;
+		}
+		else if ((Ctx->nPendBufInd + ulSizeInBytes) < TX_HOLD_BUF_SIZE)
+		{
+			memcpy(Ctx->pendingBuf+Ctx->nPendBufInd, pUserData, ulSizeInBytes);
+			Ctx->nPendBufInd += ulSizeInBytes;
+			return BC_STS_SUCCESS;
+		}
+	}
+	pData = Ctx->pendingBuf;
+	ulSize = Ctx->nPendBufInd;
+
+	if (ulSize == 0)
+		return BC_STS_SUCCESS;
+
+	sts = DtsTxDmaText(hDevice,pData,ulSize,&DramOff, encrypted);
+	if(sts == BC_STS_SUCCESS)
+		DtsUpdateInStats(Ctx,ulSize);
+
+	if (ulSizeInBytes && pUserData)
+		memcpy(Ctx->pendingBuf, pUserData, ulSizeInBytes);
+
+	Ctx->nPendBufInd = ulSizeInBytes;
+	return sts;
+
+#endif
+}
+
+DRVIFLIB_API BC_STATUS
+DtsSendDataDirect( HANDLE  hDevice ,
+				 uint8_t *pUserData,
+				 uint32_t ulSizeInBytes,
+				 uint64_t timeStamp,
+				 BOOL encrypted
+			    )
+{
+	uint32_t	DramOff;
+	BC_STATUS	sts = BC_STS_SUCCESS;
+	uint32_t     CpbSize=0;
+	uint32_t		CpbFullness=0;
+	DTS_LIB_CONTEXT		*Ctx = NULL;
+	uint32_t base, end, readp, writep;
+	int		FifoSize;
+
+	BC_DTS_STATS *pDtsStat = DtsGetgStats( );
+
+	DTS_GET_CTX(hDevice,Ctx);
+
+	if (pUserData == NULL || ulSizeInBytes == 0)
+		return BC_STS_INV_ARG;
+
+	if(Ctx->VidParams.VideoAlgo == BC_VID_ALGO_VC1MP)
+		encrypted|=0x2;
+
+	if (!(Ctx->FixFlags & DTS_SKIP_TX_CHK_CPB) && (Ctx->DevId == BC_PCI_DEVID_LINK))
+	{
+
+		if(encrypted&0x2){
+			DtsDevRegisterRead(hDevice, REG_Dec_TsAudCDB2Base, &base);
+			DtsDevRegisterRead(hDevice, REG_Dec_TsAudCDB2End,	&end);
+			DtsDevRegisterRead(hDevice, REG_Dec_TsAudCDB2Wrptr, &writep);
+			DtsDevRegisterRead(hDevice, REG_Dec_TsAudCDB2Rdptr, &readp);
+		}
+		else if(encrypted&0x1){
+			DtsDevRegisterRead(hDevice, REG_Dec_TsUser0Base, &base);
+			DtsDevRegisterRead(hDevice, REG_Dec_TsUser0End, &end);
+			DtsDevRegisterRead(hDevice, REG_Dec_TsUser0Wrptr, &writep);
+			DtsDevRegisterRead(hDevice, REG_Dec_TsUser0Rdptr, &readp);
+		}else{
+			DtsDevRegisterRead(hDevice, REG_DecCA_RegCinBase, &base);
+			DtsDevRegisterRead(hDevice, REG_DecCA_RegCinEnd, &end);
+			DtsDevRegisterRead(hDevice, REG_DecCA_RegCinWrPtr, &writep);
+			DtsDevRegisterRead(hDevice, REG_DecCA_RegCinRdPtr, &readp);
+		}
+
+		CpbSize = end - base;
+
+		if(writep >= readp) {
+			CpbFullness = writep - readp;
+		} else {
+			CpbFullness = (end - base) - (readp - writep);
+		}
+
+		FifoSize = CpbSize - CpbFullness;
+
+		if(FifoSize < BC_INFIFO_THRESHOLD) {
+			//DebugLog_Trace(LDIL_DBG, "Bsy0:Base:0x%08x End:0x%08x Wr:0x%08x Rd:0x%08x FifoSz:0x%08x\n",
+			//						base,end, writep, readp, FifoSize);
+			pDtsStat->TxFifoBsyCnt++;
+			return BC_STS_BUSY;
+		}
+
+		if((signed int)ulSizeInBytes > (FifoSize - BC_INFIFO_THRESHOLD)) {
+			//DebugLog_Trace(LDIL_DBG, "Bsy1:Base:0x%08x End:0x%08x Wr:0x%08x Rd:0x%08x FifoSz:0x%08x XfrReq:0x%08x\n",
+			//					base,end, writep, readp, FifoSize, ulSizeInBytes);
+			pDtsStat->TxFifoBsyCnt++;
+			return BC_STS_BUSY;
+		}
+	}
+	sts = DtsTxDmaText(hDevice, pUserData, ulSizeInBytes, &DramOff, encrypted);
+
+	if(sts == BC_STS_SUCCESS)
+	{
+		DtsUpdateInStats(Ctx,ulSizeInBytes);
+	}
+	return sts;
+}
+
+DRVIFLIB_INT_API BC_STATUS
+DtsSendData( HANDLE  hDevice ,
+				 uint8_t *pUserData,
+				 uint32_t ulSizeInBytes,
+				 uint64_t timeStamp,
+				 BOOL encrypted
+			    )
+{
+	//unused BC_STATUS	sts = BC_STS_SUCCESS;
+	DTS_LIB_CONTEXT		*Ctx = NULL;
+
+	DTS_GET_CTX(hDevice,Ctx);
+
+	if ((Ctx->DevId == BC_PCI_DEVID_LINK) || (Ctx->FixFlags&DTS_DIAG_TEST_MODE))
+	{
+		return DtsSendDataDirect(hDevice, pUserData, ulSizeInBytes, timeStamp, encrypted);
+	}
+	else if (Ctx->SingleThreadedAppMode)
+	{
+		return DtsSendDataFPMode(hDevice, pUserData, ulSizeInBytes, timeStamp, encrypted);
+	}
+	else
+	{
+		return DtsSendDataBuffer(hDevice, pUserData, ulSizeInBytes, timeStamp, encrypted);
+	}
+}
+
+DRVIFLIB_API BC_STATUS
+DtsSendSPESPkt(HANDLE  hDevice ,
+			   uint64_t timeStamp,
+			   BOOL encrypted
+			   )
+{
+	BC_STATUS	sts = BC_STS_SUCCESS;
+	DTS_LIB_CONTEXT		*Ctx = NULL;
+
+	DTS_INPUT_MDATA		*im = NULL;
+	//unused uint8_t *temp=NULL;
+	uint32_t ulSize = 0;
+	uint8_t* pSPESPkt = NULL;
+	uint8_t	i = 0;
+
+	DTS_GET_CTX(hDevice,Ctx);
+	while (i <20)
+	{
+		sts = DtsPrepareMdata(Ctx, timeStamp, &im, &pSPESPkt, &ulSize);
+		if (sts == BC_STS_SUCCESS)
+			break;
+		i++;
+		bc_sleep_ms(2000);
+	}
+	if (sts == BC_STS_SUCCESS)
+	{
+		if(Ctx->VidParams.VideoAlgo == BC_VID_ALGO_VC1MP)
+		{
+			pSPESPkt = (uint8_t*)DtsAlignedMalloc(32+sizeof(BC_PES_HDR_FORMAT), 4);
+			if(pSPESPkt==NULL){
+				DebugLog_Trace(LDIL_DBG, "DtsProcInput: Failed to alloc mem for  ASFHdr for SPES:%x\n", sts);
+				return BC_STS_INSUFF_RES;
+			}
+
+			sts =DtsPrepareMdataASFHdr(Ctx, im, pSPESPkt);
+
+			if(sts != BC_STS_SUCCESS){
+                DtsAlignedFree(pSPESPkt);
+				DebugLog_Trace(LDIL_DBG, "DtsProcInput: Failed to Prepare ASFHdr for SPES:%x\n", sts);
+                return sts;
+			}
+			ulSize = 32+sizeof(BC_PES_HDR_FORMAT);
+		}
+		sts = DtsSendData(hDevice, pSPESPkt, ulSize, 0, encrypted);
+        DtsAlignedFree(pSPESPkt);
+
+		if(sts != BC_STS_SUCCESS){
+			DebugLog_Trace(LDIL_DBG, "DtsProcInput: Failed to send Spes hdr:%x\n", sts);
+			DtsFreeMdata(Ctx,im,TRUE);
+			return sts;
+		}
+
+		sts = DtsInsertMdata(Ctx,im);
+
+		if(sts != BC_STS_SUCCESS){
+			DebugLog_Trace(LDIL_DBG, "DtsProcInput: DtsInsertMdata failed\n");
+		}
+	}
+	return sts;
+}
+
+DRVIFLIB_API BC_STATUS
+DtsAlignSendData( HANDLE  hDevice ,
+				 uint8_t *pUserData,
+				 uint32_t ulSizeInBytes,
+				 uint64_t timeStamp,
+				 BOOL encrypted
+			    )
+{
+	BC_STATUS	sts = BC_STS_SUCCESS;
+	DTS_LIB_CONTEXT		*Ctx = NULL;
+	uint8_t	oddBytes = 0;
+	//unused uint32_t lRestSize =0;
+	//unused uint8_t *pRestBuff = NULL;
+
+	uint8_t* alignBuf;
+	//unused DTS_INPUT_MDATA		*im = NULL;
+	//unused uint8_t *temp=NULL;
+	//unused uint32_t ulSize = 0;
+
+	DTS_GET_CTX(hDevice,Ctx);
+
+	alignBuf = Ctx->alignBuf;
+
+	LONG ulRestBytes = ulSizeInBytes;
+	uint32_t ulDeliverBytes = 0;
+	uint32_t ulPktLength;
+	uint32_t ulPktHeaderSz;
+	uint32_t ulUsedDataBytes = 0;
+
+	uint8_t* pDeliverBuf = NULL;
+	uint8_t* pRestDataPt = pUserData;
+	uint32_t bAddPTS = 1;
+	uint8_t bPrivData = Ctx->PESConvParams.m_bPESPrivData;
+	uint8_t bExtData = Ctx->PESConvParams.m_bPESExtField;
+	uint8_t bStuffing = Ctx->PESConvParams.m_bStuffing;
+
+	uint8_t* pPrivData = Ctx->PESConvParams.m_pPESPrivData;
+	uint8_t* pExtData = Ctx->PESConvParams.m_pPESExtField;
+	uint32_t nExtDataLen = Ctx->PESConvParams.m_nPESExtLen;
+	uint32_t	nStuffingBytes = Ctx->PESConvParams.m_nStuffingBytes;
+
+	//SoftRave (VC-1 S/M and Divx) EOS Timing Marker
+	uint8_t bSoftRaveEOS = Ctx->PESConvParams.m_bSoftRaveEOS;
+
+	uint8_t j = 0;
+	uint8_t k = 0;
+
+	//SoftRave (VC-1 S/M and Divx) EOS Timing Marker
+	if ((timeStamp ||
+		(Ctx->VidParams.MediaSubType == BC_MSUBTYPE_WMV3) ||
+		(Ctx->VidParams.MediaSubType == BC_MSUBTYPE_DIVX))
+		&& (bSoftRaveEOS == false))
+	{
+		bAddPTS = 1;
+	}
+	else
+	{
+		bAddPTS = 0;
+	}
+
+	while (Ctx->State == BC_DEC_STATE_START && ulRestBytes )
+	{
+		sts = BC_STS_SUCCESS;
+
+		pDeliverBuf = pRestDataPt;
+
+		if (Ctx->State != BC_DEC_STATE_START && Ctx->State != BC_DEC_STATE_PAUSE)
+			break;
+
+		/* Copy the non-DWORD aligned buffer first */
+		oddBytes = (uint8_t)((DWORD)pDeliverBuf % 4);
+
+		if (Ctx->VidParams.StreamType == BC_STREAM_TYPE_ES)
+		{
+			// SPES Mode
+			ulDeliverBytes = ulRestBytes;
+			if (timeStamp)
+			{
+				sts = DtsSendSPESPkt(hDevice, timeStamp, encrypted);
+			}
+			timeStamp = 0;
+
+			if(oddBytes)
+			{
+				if (ulRestBytes > ALIGN_BUF_SIZE)
+					ulDeliverBytes = ALIGN_BUF_SIZE - oddBytes;
+				else
+					ulDeliverBytes = ulRestBytes;
+
+				memcpy(alignBuf, pDeliverBuf, ulDeliverBytes);
+				pDeliverBuf = alignBuf;
+			}
+			ulUsedDataBytes = ulDeliverBytes;
+		}
+		else if (Ctx->VidParams.StreamType == BC_STREAM_TYPE_PES)
+		{
+			if (Ctx->DevId == BC_PCI_DEVID_LINK && timeStamp)
+			{
+				sts = DtsSendSPESPkt(hDevice, timeStamp, encrypted);
+				timeStamp = 0;
+				bAddPTS =0;
+			}
+
+			if (bAddPTS)
+				ulPktHeaderSz = 5;
+			else
+				ulPktHeaderSz = 0;
+			if (bPrivData || bExtData)
+			     ulPktHeaderSz += 1;
+
+			if (bPrivData)
+				ulPktHeaderSz += 16;
+
+			if (bExtData)
+				ulPktHeaderSz += nExtDataLen + 1;
+
+			if (bStuffing)
+				ulPktHeaderSz += nStuffingBytes;
+			ulPktLength = ulRestBytes + 3 + ulPktHeaderSz;
+
+			if (ulPktLength > MAX_RE_PES_BOUND)
+			{
+				ulPktLength = MAX_RE_PES_BOUND;
+			}
+			ulUsedDataBytes = ulPktLength - ulPktHeaderSz - 3;
+			ulDeliverBytes = ulPktLength + 6;
+
+
+			memcpy(alignBuf,(uint8_t*)b_pes_header, 9);
+			*((uint16_t*)(alignBuf + 4)) = WORD_SWAP((uint16_t)ulPktLength);
+			*(alignBuf + 8) = (uint8_t)ulPktHeaderSz;
+
+			j = 9;
+			if (bAddPTS)
+			{
+				*(alignBuf + 7) = 0x80;
+				PTS2MakerBit5Bytes(alignBuf + j, timeStamp);
+				j += 5;
+			}
+
+			if (bPrivData || bExtData)
+			{
+				*(alignBuf + 7) |= 0x01;
+				*(alignBuf + j) = 0x00;
+				if (bPrivData)
+					*(alignBuf + j) |= 0x80;
+				if (bExtData)
+					*(alignBuf + j) |= 0x01;
+				j++;
+			}
+
+			if (bPrivData)
+			{
+				memcpy(alignBuf + j, pPrivData, 16);
+				j += 16;
+			}
+			if (bExtData)
+			{
+				*(alignBuf + j) = 0x80 | nExtDataLen;
+				j++;
+				memcpy(alignBuf + j, pExtData, nExtDataLen);
+				j += nExtDataLen;
+			}
+
+			if (bStuffing)
+			{
+				for (k = 0; k < nStuffingBytes; k ++, j++)
+				{
+					*(alignBuf + j) = 0xFF;
+				}
+			}
+			memcpy(alignBuf + j, pDeliverBuf, ulUsedDataBytes);
+			pDeliverBuf = alignBuf;
+
+		}
+
+		if (ulDeliverBytes)
+		{
+			sts = DtsSendData(hDevice,pDeliverBuf ,ulDeliverBytes, 0, encrypted);
+
+			if(sts == BC_STS_BUSY )
+			{
+				if (Ctx->State == BC_DEC_STATE_PAUSE)
+				{
+					return sts;
+				}
+				bc_sleep_ms(2000);
+			}
+			else if(sts == BC_STS_SUCCESS)
+			{
+				ulRestBytes -= ulUsedDataBytes;
+				pRestDataPt += ulUsedDataBytes;
+				bAddPTS = 0;
+				timeStamp = 0;
+				bPrivData = 0;
+				bExtData = 0;
+				pPrivData = NULL;
+				pExtData = NULL;
+				nExtDataLen = 0;
+				bStuffing = 0;
+				nStuffingBytes = 0;
+			}else if(sts == BC_STS_IO_USER_ABORT){
+				return BC_STS_SUCCESS;
+			} else
+				break; // On any other error condition
+		}
+	}
+	return sts;
+}
 
 DRVIFLIB_API BC_STATUS 
 DtsProcInput( HANDLE  hDevice ,
@@ -1317,6 +2277,331 @@ DtsProcInput( HANDLE  hDevice ,
 				 uint32_t ulSizeInBytes,
 				 uint64_t timeStamp,
 				 BOOL encrypted)
+{
+	BC_STATUS	sts = BC_STS_SUCCESS;
+	DTS_LIB_CONTEXT		*Ctx = NULL;
+
+	uint8_t	*pSpsPpsBuf;
+	uint32_t ulSpsPpsSize;
+	uint32_t Offset;
+
+	DTS_GET_CTX(hDevice,Ctx);
+
+	Ctx->FlushIssued = FALSE;
+	Ctx->bEOS = FALSE;
+
+#ifdef _CHECK_PI_
+	WCHAR pi[512];
+	static unsigned int pinum=1;
+	wsprintf(pi, L"PI%d sz %ld TS %ld\n", pinum++, ulSizeInBytes, timeStamp);
+	OutputDebugString(pi);
+#endif
+
+	if (Ctx->DevId == BC_PCI_DEVID_FLEA && timeStamp != 0xFFFFFFFFFFFFFFFFLL)
+	{
+		timeStamp /= 10000;
+	}
+	Ctx->bEOS = false;
+	if((Ctx->VidParams.MediaSubType == BC_MSUBTYPE_WVC1) || (Ctx->VidParams.MediaSubType == BC_MSUBTYPE_WMV3) || (Ctx->VidParams.MediaSubType == BC_MSUBTYPE_WMVA))
+		DtsCheckKeyFrame(hDevice, pUserData);
+	if (Ctx->PESConvParams.m_bAddSpsPps)
+	{
+		pSpsPpsBuf = Ctx->PESConvParams.m_pSpsPpsBuf;
+		ulSpsPpsSize = Ctx->PESConvParams.m_iSpsPpsLen;
+
+		if  (pSpsPpsBuf != NULL && ulSpsPpsSize != 0)
+		{
+			if ((sts = DtsAlignSendData(hDevice, pSpsPpsBuf, ulSpsPpsSize, 0, 0)) != BC_STS_SUCCESS)
+				return sts;
+		}
+		Ctx->PESConvParams.m_bAddSpsPps = false;
+	}
+
+	if ((sts = DtsAddStartCode(hDevice, &pUserData, &ulSizeInBytes, &timeStamp)) != BC_STS_SUCCESS)
+	{
+		if (sts == BC_STS_IO_XFR_ERROR)
+			return BC_STS_SUCCESS;
+		return BC_STS_ERROR;
+	}
+	if (Ctx->VidParams.StreamType == BC_STREAM_TYPE_PES || timeStamp == 0)
+		return DtsAlignSendData(hDevice, pUserData, ulSizeInBytes, timeStamp, encrypted);
+	else
+	{
+		if(DtsFindStartCode(hDevice, pUserData, ulSizeInBytes, &Offset) != BC_STS_SUCCESS)
+		{
+			timeStamp = 0;
+			Offset = 0;
+		}
+		if(Offset == 0)
+		{
+			return DtsAlignSendData(hDevice, pUserData, ulSizeInBytes, timeStamp, encrypted);
+		}
+		else
+		{
+			if ((sts=DtsAlignSendData(hDevice, pUserData, Offset, 0, encrypted)) != BC_STS_SUCCESS)
+				return sts;
+			if(ulSizeInBytes > Offset)
+				return DtsAlignSendData(hDevice, pUserData+Offset, ulSizeInBytes-Offset, timeStamp, encrypted);
+		}
+	}
+	return BC_STS_ERROR;
+}
+
+DRVIFLIB_API BC_STATUS
+DtsGetColorPrimaries(HANDLE  hDevice, uint32_t *colorPrimaries)
+{
+	return BC_STS_NOT_IMPL;
+}
+
+DRVIFLIB_API BC_STATUS
+DtsSendEOS(HANDLE  hDevice, uint32_t Op)
+{
+	BC_STATUS			sts = BC_STS_SUCCESS;
+	DTS_LIB_CONTEXT		*Ctx = NULL;
+
+	DTS_GET_CTX(hDevice,Ctx);
+
+	uint8_t	*pEOS;
+	uint32_t nEOSLen;
+	uint32_t	nTag;
+	__attribute__((aligned(4))) uint8_t	ExtData[2] = {0x00, 0x00};
+	//unused __attribute__((aligned(4))) uint8_t	Plunge[200];
+
+	//unused uint8_t	*alignBuf = Ctx->alignBuf;
+
+	Ctx->PESConvParams.m_bPESExtField = false;
+	Ctx->PESConvParams.m_bPESPrivData = false;
+
+	Ctx->PESConvParams.m_pPESExtField = NULL;
+	Ctx->PESConvParams.m_pPESPrivData = NULL;
+
+	//SoftRave (VC-1 S/M and Divx) EOS Timing Marker
+	if ((Ctx->VidParams.MediaSubType == BC_MSUBTYPE_WMV3) ||
+		(Ctx->VidParams.MediaSubType == BC_MSUBTYPE_DIVX))
+	{
+		Ctx->PESConvParams.m_bSoftRaveEOS = true;
+	}
+	else
+	{
+		Ctx->PESConvParams.m_bSoftRaveEOS = false;
+	}
+
+	if ((Ctx->VidParams.MediaSubType == BC_MSUBTYPE_WVC1) ||
+		(Ctx->VidParams.MediaSubType == BC_MSUBTYPE_WMV3) ||
+		(Ctx->VidParams.MediaSubType == BC_MSUBTYPE_WMVA) ||
+		(Ctx->VidParams.MediaSubType == BC_MSUBTYPE_VC1)
+		)
+	{
+		Ctx->PESConvParams.m_bPESExtField = true;
+		Ctx->PESConvParams.m_nPESExtLen = 2;
+		Ctx->PESConvParams.m_pPESExtField = ExtData;
+	}
+
+	if (Ctx->VidParams.MediaSubType == BC_MSUBTYPE_MPEG1VIDEO ||
+		Ctx->VidParams.MediaSubType == BC_MSUBTYPE_MPEG2VIDEO)
+	{
+		pEOS = eos_mpeg;
+		nEOSLen = 4;
+	}
+	else if (Ctx->VidParams.MediaSubType == BC_MSUBTYPE_DIVX)
+	{
+		pEOS = eos_divx;
+		nEOSLen = 8;
+	}
+	else if (Ctx->DevId == BC_PCI_DEVID_LINK && Ctx->VidParams.MediaSubType == BC_MSUBTYPE_WMV3)
+	{
+		pEOS = eos_vc1_spmp_link;
+		nEOSLen = 32;
+	}
+	else
+	{
+		pEOS = eos_avc_vc1;
+		nEOSLen = 8;
+	}
+
+	sts = DtsAlignSendData(hDevice, pEOS, nEOSLen, 0, 0);
+
+	/* Only send timing marker if this is FLEA */
+	/* LINK Support LAST_PICTURE and does not need timing marker */
+	if (Op == 0 && Ctx->DevId == BC_PCI_DEVID_FLEA)
+	{
+		Ctx->PESConvParams.m_bPESPrivData = true;
+		Ctx->PESConvParams.m_pPESPrivData = btp_video_done_es_private;
+		if (Ctx->PESConvParams.m_bPESExtField == true)
+		{
+			Ctx->PESConvParams.m_bStuffing = false;
+			Ctx->PESConvParams.m_nStuffingBytes = 0;
+		}
+		else
+		{
+			Ctx->PESConvParams.m_bStuffing = true;
+			Ctx->PESConvParams.m_nStuffingBytes = 3;
+		}
+
+		nTag = 0xffff0000 | (0xffff & 0x0001);
+		btp_video_done_es[0]   = 0x00;
+		btp_video_done_es[13]   = (nTag >> 24) & 0xff;
+		btp_video_done_es[14]   = (nTag >> 16) & 0xff;
+		btp_video_done_es[15]   = (nTag >> 8)  & 0xff;
+		btp_video_done_es[16]   = nTag & 0xff;
+
+		sts = DtsAlignSendData(hDevice, btp_video_done_es, sizeof(btp_video_done_es), 0, 0);
+		Ctx->PESConvParams.m_bPESPrivData = false;
+		Ctx->PESConvParams.m_pPESPrivData = NULL;
+		Ctx->PESConvParams.m_bStuffing = false;
+		Ctx->PESConvParams.m_nStuffingBytes = 0;
+
+		sts = DtsAlignSendData(hDevice, pEOS, nEOSLen, 0, 0);
+		sts = DtsAlignSendData(hDevice, pEOS, nEOSLen, 0, 0);
+	}
+#if 0
+	/* NAREN the following code is only needed in I-Frame Only mode trick modes */
+	/* This code is needed for all codecs */
+	/* In I-frame only mode, if the the source filter ever gives a partial I-Frame in the input */
+	/* then this code will push that partial I-Frame aside for the decoder to continue correctly */
+	/* Needed mainly for error handling */
+	/* Uncomment and condition this with I-Frame only mode when we do enable I-Frame only trick modes */
+	Ctx->PESConvParams.m_bPESExtField = false;
+	Ctx->PESConvParams.m_pPESExtField = NULL;
+	//Send N-Marker
+	if ((Ctx->VidParams.MediaSubType == BC_MSUBTYPE_WVC1) ||
+		(Ctx->VidParams.MediaSubType == BC_MSUBTYPE_WMV3) ||
+		(Ctx->VidParams.MediaSubType == BC_MSUBTYPE_VC1))
+	{
+		Ctx->PESConvParams.m_bPESExtField = true;
+		Ctx->PESConvParams.m_nPESExtLen = 2;
+		Ctx->PESConvParams.m_pPESExtField = ExtData;
+	}
+
+	memcpy(Plunge, btp_video_plunge_es, sizeof(btp_video_plunge_es));
+	Plunge[4] = 0x0a;
+	sts = DtsAlignSendData(hDevice, Plunge, sizeof(btp_video_plunge_es), 0, 0);
+
+	Plunge[4] = 0x09;
+    Plunge[37]   = 0;
+    Plunge[38]   = 0;
+    Plunge[39]   = 0;
+    Plunge[40]   = 1;
+	sts = DtsAlignSendData(hDevice, Plunge, sizeof(btp_video_plunge_es), 0, 0);
+#endif
+
+	//Reset
+	Ctx->PESConvParams.m_bPESExtField = false;
+	Ctx->PESConvParams.m_pPESExtField = NULL;
+	Ctx->PESConvParams.m_bPESPrivData = false;
+	Ctx->PESConvParams.m_pPESPrivData = NULL;
+	Ctx->PESConvParams.m_bStuffing = false;
+	Ctx->PESConvParams.m_nStuffingBytes = 0;
+	//SoftRave (VC-1 S/M and Divx) EOS Timing Marker
+	Ctx->PESConvParams.m_bSoftRaveEOS = false;
+
+	return sts;
+}
+
+DRVIFLIB_API BC_STATUS
+DtsFlushInput( HANDLE  hDevice, uint32_t Op)
+{
+	BC_STATUS			sts = BC_STS_SUCCESS;
+	DTS_LIB_CONTEXT		*Ctx = NULL;
+
+#ifdef _CHECK_FLUSH_
+	WCHAR fl[512];
+	wsprintf(fl, L"Fl#%d\n", Op);
+	OutputDebugString(fl);
+#endif
+
+	DTS_GET_CTX(hDevice,Ctx);
+	if(Op == 0 || Op == 5) // DRAIN
+	{
+		Ctx->PESConvParams.m_bAddSpsPps = true;
+#ifdef TX_CIRCULAR_BUFFER
+		if ((Ctx->InSampleCount == 0) && (Ctx->nTxHoldBufRead == Ctx->nTxHoldBufWrite))
+			return BC_STS_SUCCESS;
+#else
+		if ((Ctx->InSampleCount == 0) && (Ctx->nPendBufInd == 0))
+			return BC_STS_SUCCESS;
+#endif
+		DtsSendEOS(hDevice, Op);
+#ifdef TX_CIRCULAR_BUFFER
+		while (Ctx->State == BC_DEC_STATE_START && Ctx->nTxHoldBufRead != Ctx->nTxHoldBufWrite)
+		{
+			if ((sts = DtsSendData(hDevice, 0, 0, 0, 0))== BC_STS_SUCCESS)
+				break;
+		}
+		Ctx->nTxHoldBufRead = Ctx->nTxHoldBufWrite = 0;
+#else
+		if (Ctx->nPendBufInd)
+			DtsSendData(hDevice, 0, 0, 0, 0);
+		Ctx->nPendBufInd = 0;
+#endif
+		if (Ctx->SingleThreadedAppMode && Ctx->nPendFPBufInd)
+		{
+			DtsSendData(hDevice, 0, 0, 0, 0);
+			Ctx->FPDrain = TRUE;
+		}
+		Ctx->FlushIssued = TRUE;
+		if (!Ctx->SingleThreadedAppMode)
+			bc_sleep_ms(50000);
+	}
+	else
+	{
+#ifdef TX_CIRCULAR_BUFFER
+		Ctx->nTxHoldBufRead = Ctx->nTxHoldBufWrite = 0;
+		Ctx->nTxHoldBufCounter = 0;
+#else
+		Ctx->nPendBufInd = 0;
+#endif
+		if (Ctx->InSampleCount == 0)
+			return BC_STS_SUCCESS;
+		Ctx->nPendFPBufInd = 0;
+		Ctx->FPDrain = FALSE;
+		bc_sleep_ms(30000); // For the cancel to take place in case we are looping
+		sts = DtsCancelTxRequest(hDevice, Op);
+		if((Op == 3) || (sts != BC_STS_SUCCESS))
+		{
+			return sts;
+		}
+		DtsClrPendMdataList(Ctx);
+	}
+
+	if(Op == 4)
+		sts = DtsFWDecFlushChannel(hDevice,2);
+	else if (Op != 0 && Op != 5)
+		sts = DtsFWDecFlushChannel(hDevice,Op);
+
+	if(sts != BC_STS_SUCCESS)
+		return sts;
+
+	/* Issue a flush to the driver RX every time we flush the decoder */
+	if(Op != 0 && Op != 5) {
+		sts = DtsFlushRxCapture(hDevice,true);
+		if(sts != BC_STS_SUCCESS)
+			return sts;
+	}
+
+	Ctx->LastPicNum = -1;
+	Ctx->LastSessNum = -1;
+	Ctx->eosCnt = 0;
+	Ctx->bEOS = FALSE;
+	Ctx->InSampleCount = 0;
+
+	// Clear the saved cpb base and end for SingleThreadedAppMode
+	if(Ctx->SingleThreadedAppMode) {
+		Ctx->cpbBase = 0;
+		Ctx->cpbEnd = 0;
+	}
+	Ctx->PESConvParams.m_lStartCodeDataSize = 0;
+
+	return BC_STS_SUCCESS;
+}
+
+DRVIFLIB_API BC_STATUS
+OldDtsProcInput( HANDLE  hDevice ,
+				uint8_t *pUserData,
+				uint32_t ulSizeInBytes,
+				uint64_t timeStamp,
+				BOOL encrypted)
+
 {
 	uint32_t					DramOff;
 	BC_STATUS			sts = BC_STS_SUCCESS;
@@ -1343,14 +2628,14 @@ DtsProcInput( HANDLE  hDevice ,
 		}
 	}
 
-	if(timeStamp && BDPktflag){
-		sts = DtsPrepareMdata(Ctx,timeStamp,&im);
+	if (timeStamp && BDPktflag){
+		sts = OldDtsPrepareMdata(Ctx, timeStamp, &im);
 		if(sts != BC_STS_SUCCESS){
 			DebugLog_Trace(LDIL_ERR,"DtsProcInput: Failed to Prepare Spes hdr:%x\n",sts);
 			return sts;
 		}
 
-        uint8_t *temp=NULL;
+		uint8_t *temp=NULL;
 		uint32_t sz=0;
 		uint8_t AsfHdr[32+sizeof(BC_PES_HDR_FORMAT) + 4];
 
@@ -1398,7 +2683,7 @@ DtsProcInput( HANDLE  hDevice ,
 }
 
 DRVIFLIB_API BC_STATUS 
-DtsFlushInput( HANDLE  hDevice ,
+OldDtsFlushInput( HANDLE  hDevice ,
 				 uint32_t Op )
 {
 	BC_STATUS			sts = BC_STS_SUCCESS;
@@ -1692,10 +2977,7 @@ DRVIFLIB_API BC_STATUS
 }
 
 DRVIFLIB_API BC_STATUS 
-	DtsSet422Mode(
-    HANDLE  hDevice,
-	uint8_t	Mode422
-    )
+DtsSet422Mode(HANDLE hDevice, uint8_t Mode422)
 {
 	BC_STATUS	sts = BC_STS_SUCCESS;
 	DTS_LIB_CONTEXT		*Ctx = NULL;
@@ -1707,7 +2989,7 @@ DRVIFLIB_API BC_STATUS
 		return sts;
 	}
 
-	Ctx->b422Mode = Mode422;
+	Ctx->b422Mode = (BC_OUTPUT_FORMAT)Mode422;
 
 	sts = DtsSetLinkIn422Mode(hDevice);
 

@@ -1140,7 +1140,7 @@ BC_STATUS DtsInitInterface(int hDevice,HANDLE *RetCtx, uint32_t mode)
 	Ctx->DevHandle  = hDevice;
 	Ctx->OpMode		= mode;
 	Ctx->CfgFlags	= BC_DTS_DEF_CFG;
-	Ctx->b422Mode	= 0;
+	Ctx->b422Mode	= (BC_OUTPUT_FORMAT)0;
 
 	/* Set Pixel height & width */
 	if(Ctx->CfgFlags & BC_PIX_WID_1080){
@@ -1500,10 +1500,49 @@ BC_STATUS DtsFetchTimeStampMdata(DTS_LIB_CONTEXT *Ctx, uint16_t snum, uint64_t *
 // Name: DtsPrepareMdata
 // Description: Insert Meta Data..
 //------------------------------------------------------------------------ 
-BC_STATUS DtsPrepareMdata(DTS_LIB_CONTEXT *Ctx, uint64_t timeStamp, DTS_INPUT_MDATA **mData)
+BC_STATUS DtsPrepareMdata(DTS_LIB_CONTEXT *Ctx, uint64_t timeStamp,
+			  DTS_INPUT_MDATA **mData, uint8_t** ppData,
+			  uint32_t *pSize)
 {
 	DTS_INPUT_MDATA		*temp=NULL;
 
+	if (!mData || !Ctx)
+		return BC_STS_INV_ARG;
+
+	/* Alloc clears all fields */
+	if( (temp = DtsAllocMdata(Ctx)) == NULL)
+	{
+		return BC_STS_BUSY;
+	}
+	/* Store all app data */
+	DtsMdataSetIntTag(Ctx,temp);
+	temp->appTimeStamp = timeStamp;
+
+	/* Fill spes data.. */
+	temp->Spes.StartCode[0] = 0;
+	temp->Spes.StartCode[1] = 0;
+	temp->Spes.StartCode[2] = 01;
+	temp->Spes.StartCode[3] = 0xBD;
+	temp->Spes.PacketLen = 0x07;
+	temp->Spes.StartCodeEnd = 0x40;
+	temp->Spes.Command = 0x0A;
+
+	//DebugLog_Trace(TEXT("Inserting entry for[%x] (%02x%02x) %x \n"),
+	//				Ctx->InMdataTag, temp->Spes.SeqNum[1],temp->Spes.SeqNum[0], temp->IntTag);
+
+	*mData = temp;
+	*ppData = (uint8_t*)(&temp->Spes);
+	*pSize = sizeof(temp->Spes);
+	return BC_STS_SUCCESS;
+}
+
+//------------------------------------------------------------------------
+// Name: DtsPrepareMdata
+// Description: Insert Meta Data..
+//------------------------------------------------------------------------
+BC_STATUS OldDtsPrepareMdata(DTS_LIB_CONTEXT *Ctx, uint64_t timeStamp, DTS_INPUT_MDATA **mData)
+{
+	DTS_INPUT_MDATA		*temp=NULL;
 	if( !mData || !Ctx)
 		return BC_STS_INV_ARG;
 
@@ -1739,7 +1778,8 @@ void DtsTestMdata(DTS_LIB_CONTEXT	*gCtx)
 	uint32_t					i;
 	BC_STATUS			sts = BC_STS_SUCCESS;
 	DTS_INPUT_MDATA		*im = NULL;
-
+	uint8_t			*temp;
+	uint32_t		ulSize;
 
 	//sts = DtsCreateMdataPool(gCtx);
 	//if(sts != BC_STS_SUCCESS){
@@ -1753,7 +1793,7 @@ void DtsTestMdata(DTS_LIB_CONTEXT	*gCtx)
 	//for(i=0x11; i < 0x21; i++){
 	//gCtx->InMdataTag = 0;
 	for(i=0; i < 64; i++){
-		sts = DtsPrepareMdata(gCtx,i, &im);
+		sts = DtsPrepareMdata(gCtx,i, &im, &temp, &ulSize);
 		if(sts != BC_STS_SUCCESS){
 			DtsFreeMdata(gCtx,im,TRUE);
 			DebugLog_Trace(LDIL_DBG,"DtsPrepareMdata Failed:%x\n",sts);

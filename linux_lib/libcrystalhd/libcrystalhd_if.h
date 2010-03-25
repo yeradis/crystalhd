@@ -377,6 +377,32 @@ DtsSetVideoParams(
     );
 
 /*****************************************************************************
+ *
+ * Function name:
+ *
+ *     DtsSetInputFormat
+ *
+ * Description:
+ *
+ *     Sets input video's various parameters that would be used by a subsequent call
+ *     to DtsStartDecoder.
+ *
+ *     DtsSetInputFormat must always be called before DtsStartDecoder for the
+ *     decoder to start processing input data. The device must have been
+ *     previously opened for this call to succeed.
+ *
+ * Parameters:
+ *     hDevice         Handle to device. This is obtained via a prior call to DtsDeviceOpen.
+ *     pInputFormat Pointer to the BC_INPUT_FORMAT data.
+ *
+ * Return:
+ *
+ *     BC_STS_SUCCESS will be returned on successful completion.
+ *****************************************************************************/
+DRVIFLIB_API BC_STATUS
+DtsSetInputFormat(HANDLE hDevice, BC_INPUT_FORMAT *pInputFormat);
+
+/*****************************************************************************
 
 Function name:
 
