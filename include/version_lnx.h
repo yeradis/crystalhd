@@ -70,7 +70,7 @@
 /*======================= Device Interface Library ========================*/
 #define DIL_MAJOR_VERSION	BRCM_MAJOR_VERSION
 #define DIL_MINOR_VERSION	9
-#define DIL_REVISION		25
+#define DIL_REVISION		26
 
 #define DIL_RC_FILE_VERSION	STRINGIFY_VERSION(DIL_MAJOR_VERSION,DIL_MINOR_VERSION,DIL_REVISION)
 
