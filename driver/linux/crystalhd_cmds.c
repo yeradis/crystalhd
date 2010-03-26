@@ -712,7 +712,8 @@ static BC_STATUS bc_cproc_get_stats(struct crystalhd_cmd *ctx,
 	if (ctx->state & BC_LINK_PAUSED)
 		stats->DrvPauseTime = 1;
 
-	crystalhd_hw_check_input_full(ctx->adp, 0, &stats->DrvcpbEmptySize, false, flags);
+	crystalhd_hw_check_input_full(ctx->adp, 0, &stats->DrvcpbEmptySize,
+				      false, flags);
 
 	/* status peek ahead to retreive the next decoded frame timestamp */
 	if (stats->drvRLL && (stats->DrvNextMDataPLD & BC_BIT(31))) {
