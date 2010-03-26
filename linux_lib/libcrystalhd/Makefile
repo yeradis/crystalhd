@@ -1,9 +1,9 @@
 #
-#  Broadcom "BCM970012" Crystal HD device interface library.
+#  Broadcom "BCM970012/BCM970015" Crystal HD device interface library.
 #
 #
 BCLIB_MINOR=0
-BCLIB_MAJOR=1
+BCLIB_MAJOR=2
 BCLIB_NAME=libcrystalhd.so
 BCLIB_SL=$(BCLIB_NAME).$(BCLIB_MAJOR)
 BCLIB=$(BCLIB_NAME).$(BCLIB_MAJOR).$(BCLIB_MINOR)
