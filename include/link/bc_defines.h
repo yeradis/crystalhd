@@ -27,7 +27,7 @@
 //The AES and DCI H/W engines are big endian and hence the DATA needs to be
 //byte swapped when loading the data registers in this block
 #define rotr32_1(x,n)   (((x) >> n) | ((x) << (32 - n)))
-#define bswap_32_1(x) (rotr32_1((x), 24) & 0x00ff00ff | rotr32_1((x), 8) & 0xff00ff00)
+#define bswap_32_1(x) ((rotr32_1((x), 24) & 0x00ff00ff) | (rotr32_1((x), 8) & 0xff00ff00))
 
 #define DCI_INITIATE_FW_DOWNLOAD	(0x1) //bit 0
 #define DCI_DOWNLOAD_READY		(0x1<<4) //bit 4
