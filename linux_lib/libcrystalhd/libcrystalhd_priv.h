@@ -31,7 +31,6 @@
 
 #include "bc_dts_glob_lnx.h"
 #include "libcrystalhd_parser.h"
-#include "7411d.h"
 #include <semaphore.h>
 
 #ifdef __cplusplus
@@ -64,6 +63,10 @@ enum _crystalhd_ldil_globals {
 	RX_START_DELIVERY_THRESHOLD = 0,
 	PAUSE_DECODER_THRESHOLD = 12,
 	RESUME_DECODER_THRESHOLD = 5,
+    FLEA_RT_PD_THRESHOLD = 14,
+    FLEA_RT_PU_THRESHOLD = 3,
+	HARDWARE_INIT_RETRY_CNT = 10,
+	HARDWARE_INIT_RETRY_LINK_CNT = 1,
 };
 
 enum _BC_PCI_DEV_IDS {
@@ -87,25 +90,30 @@ enum _DtsRunState {
 
 /* Bit fields */
 enum _BCMemTypeFlags {
-        BC_MEM_DEC_YUVBUFF             = 0x1,
+        BC_MEM_DEC_YUVBUFF  = 0x1,
 	BC_MEM_USER_MODE_ALLOC	= 0x80000000,
+};
+
+enum _STCapParams{
+	NO_PARAM				= 0,
+	ST_CAP_IMMIDIATE		= 0x01, 
 };
 
 /* Application specific run-time configurations */
 enum _DtsAppSpecificCfgFlags {
 	BC_MPOOL_FLAGS_DEF	= 0x000,
 	BC_MPOOL_INCL_YUV_BUFFS	= 0x001,	/* Include YUV Buffs allocation */
-//	BC_DEC_EN_DUART		= 0x002,	/* Enable DUART for FW log */
+	BC_DEC_EN_DUART		= 0x002,	/* Enable DUART for FW log */
 	BC_DEC_INIT_MEM		= 0x004,	/* Initialize Entire DRAM takes about a min */
 	BC_DEC_VCLK_74MHZ	= 0x008,	/* Enable Vidoe clock to 75 MHZ */
 	BC_EN_DIAG_MODE		= 0x010,	/* Enable Diag Mode application */
 	BC_PIX_WID_1080		= 0x020,	/* FIX_ME: deprecate this after PIB work */
-//	BC_ADDBUFF_MOVE		= 0x040,	/* FIX_ME: Deleteme after testing.. */
+	BC_ADDBUFF_MOVE		= 0x040,	/* FIX_ME: Deleteme after testing.. */
 	BC_DEC_VCLK_77MHZ	= 0x080		/* Enable Vidoe clock to 77 MHZ */
 
 };
 
-#define BC_DTS_DEF_CFG		(BC_MPOOL_INCL_YUV_BUFFS | BC_EN_DIAG_MODE |  BC_DEC_VCLK_74MHZ)
+#define BC_DTS_DEF_CFG		(BC_MPOOL_INCL_YUV_BUFFS | BC_EN_DIAG_MODE | BC_DEC_VCLK_74MHZ | BC_ADDBUFF_MOVE)
 
 /* !!!!Note!!!!
  * Don't forget to change this value
@@ -114,12 +122,8 @@ enum _DtsAppSpecificCfgFlags {
 #define BC_MAX_FW_FNAME_SIZE	32
 #define MAX_PATH		256
 
-#define TSHEXFILE		"stream.hex"
-#define DECOHEXFILE		"vdec_outer.hex"
-#define DECIHEXFILE		"vdec_inner.hex"
-#define FWBINFILE		"bcmDecFw.bin"
-#define FWBINFILE_LNK		"bcm70012fw.bin"
-#define FWBIN_FILE_PLAY_LNK	"bcmFilePlayFw.bin"
+#define FWBINFILE_70012	"bcm70012fw.bin"
+#define FWBINFILE_70015	"bcm70015fw.bin"
 
 #define BC_DTS_DEF_OPTIONS	0x0D
 #define BC_DTS_DEF_OPTIONS_LINK	0xB0000005
@@ -186,9 +190,9 @@ typedef struct _BC_PES_HDR_FORMAT{
 typedef struct _DTS_INPUT_MDATA{
 	struct _DTS_INPUT_MDATA	*flink;
 	struct _DTS_INPUT_MDATA	*blink;
-	uint32_t		IntTag;
-	uint32_t		Reserved;
-	uint64_t		appTimeStamp;
+	uint32_t			IntTag;
+	uint32_t			Reserved;
+	uint64_t			appTimeStamp;
 	BC_SEQ_HDR_FORMAT	Spes;
 }DTS_INPUT_MDATA;
 
@@ -237,83 +241,86 @@ typedef struct _DTS_LIB_CONTEXT{
 	BC_IOCTL_DATA	*pOutData;		/* Current Active Proc Out Buffer */
 
 	/* Place Holder for FW file paths */
-	char				StreamFile[MAX_PATH+1];
-	char				VidInner[MAX_PATH+1];
-	char				VidOuter[MAX_PATH+1];
+	char			StreamFile[MAX_PATH+1];
+	char			VidInner[MAX_PATH+1];
+	char			VidOuter[MAX_PATH+1];
 
-	uint32_t				InMdataTag;				/* InMetaData Tag for TimeStamp */
+	uint32_t		InMdataTag;				/* InMetaData Tag for TimeStamp */
 	void			*MdataPoolPtr;			/* allocated memory PoolPointer */
 
 	struct _DTS_INPUT_MDATA	*MDFreeHead;	/* MetaData Free List Head */
 
 	struct _DTS_INPUT_MDATA	*MDPendHead;	/* MetaData Pending List Head */
 	struct _DTS_INPUT_MDATA	*MDPendTail;	/* MetaData Pending List Tail */
-	uint32_t			MDPendCount;
+
+	//Reserve the Last Fetch Tag
+	uint32_t		MDLastFetchTag;
 
 	/* End Of Stream detection */
 	BOOL			FlushIssued;			/* Flag to start EOS detection */
-	uint32_t				eosCnt;					/* Last picture repetition count */
-	uint32_t				LastPicNum;				/* Last picture number */
-	uint32_t				LastSessNum;			/* Last session number */
-	uint8_t 				PullDownFlag;
+	uint32_t		eosCnt;					/* Last picture repetition count */
+	uint32_t		LastPicNum;				/* Last picture number */
+	uint32_t		LastSessNum;			/* Last session number */
+	uint8_t 		PullDownFlag;
 	BOOL			bEOS;
 
 	/* Statistics Related */
-	uint32_t				prevPicNum;				/* Previous received frame */
-	uint32_t				CapState;				/* 0 = Not started, 1 = Interlaced, 2 = progressive */
-	uint32_t				PibIntToggle;			/* Toggle flag to detect PIB miss in Interlaced mode.*/
-	uint32_t				prevFrameRate;			/* Previous frame rate */
+	uint32_t		prevPicNum;				/* Previous received frame */
+	uint32_t		CapState;				/* 0 = Not started, 1 = Interlaced, 2 = progressive */
+	uint32_t		PibIntToggle;			/* Toggle flag to detect PIB miss in Interlaced mode.*/
+	uint32_t		prevFrameRate;			/* Previous frame rate */
 
 	BC_REG_CONFIG	RegCfg;					/* Registry Configurable options.*/
 
-	char				FwBinFile[MAX_PATH+1];	/* Firmware Bin file place holder */
+	char			FwBinFile[MAX_PATH+1];	/* Firmware Bin file place holder */
 
-	BC_OUTPUT_FORMAT			b422Mode;	/* 422 Mode Identifier for Link */
-	uint32_t				picWidth;
-	uint32_t				picHeight;
+	BC_OUTPUT_FORMAT b422Mode;				/* 422 Mode Identifier for Link */
+	uint32_t		picWidth;
+	uint32_t		picHeight;
 
-	char				DilPath[MAX_PATH+1];	/* DIL runtime Location.. */
-	uint8_t				SingleThreadedAppMode;	/* flag to indicate that we are running in single threaded mode */
-	uint32_t				cpbBase;	/* Only used in single threaded mode to save base and end to reduce number of HW reads */
-	uint32_t				cpbEnd;
-	PES_CONVERT_PARAMS PESConvParams;
-	BC_HW_CAPS			capInfo;
-	uint16_t				InSampleCount;
-	uint8_t				bMapOutBufDone;
+	char			DilPath[MAX_PATH+1];	/* DIL runtime Location.. */
+
+	uint8_t			SingleThreadedAppMode;	/* flag to indicate that we are running in single threaded mode */
+	uint32_t		cpbBase;				/* Only used in single threaded mode to save base and end to reduce number of HW reads */
+	uint32_t		cpbEnd;					
+	PES_CONVERT_PARAMS PESConvParams;	
+	BC_HW_CAPS		capInfo;
+	uint16_t		InSampleCount;
+	uint8_t			bMapOutBufDone;
 #ifdef TX_CIRCULAR_BUFFER
-	uint32_t				nTxHoldBufRead;
-	uint32_t				nTxHoldBufWrite;
-	uint16_t				nTxHoldBufCounter;
+	uint32_t		nTxHoldBufRead;
+	uint32_t		nTxHoldBufWrite;
+	uint16_t		nTxHoldBufCounter;
 #else
-	uint32_t				nPendBufInd;
+	uint32_t		nPendBufInd;
 #endif
-	uint32_t				nPendFPBufInd;
-	uint8_t				FPDrain; // FP has initiated drain operation
+	uint32_t		nPendFPBufInd;
+	uint8_t			FPDrain; // FP has initiated drain operation
 
 	BC_PIC_INFO_BLOCK	FormatInfo;
 
 	__attribute__((aligned(4))) uint8_t		alignBuf[ALIGN_BUF_SIZE];
 	__attribute__((aligned(4))) uint8_t		pendingBuf[TX_HOLD_BUF_SIZE];
 	__attribute__((aligned(4))) uint8_t		FPpendingBuf[FP_TX_BUF_SIZE];
-	uint8_t				bScaling;
+	uint8_t			bScaling;
 
 	/* Power management and dynamic clock frequency changes related */
-	uint8_t				totalPicsCounted;
-	uint8_t				rptPicsCounted;
-	uint8_t				nrptPicsCounted;
-	uint8_t				numTimesClockChanged;
-	uint8_t				minClk;
-	uint8_t				maxClk;
-	uint8_t				curClk;
+	uint8_t			totalPicsCounted;
+	uint8_t			rptPicsCounted;
+	uint8_t			nrptPicsCounted;
+	uint8_t			numTimesClockChanged;
+	uint8_t			minClk;
+	uint8_t			maxClk;
+	uint8_t			curClk;
 
 }DTS_LIB_CONTEXT;
 
 /* Helper macro to get lib context from user handle */
-#define DTS_GET_CTX(_uh, _c)			\
-{						\
-	if( !(_c = DtsGetContext(_uh)) ){	\
-		return BC_STS_INV_ARG;		\
-	}					\
+#define DTS_GET_CTX(_uh, _c)											\
+{																		\
+	if( !(_c = DtsGetContext(_uh)) ){									\
+		return BC_STS_INV_ARG;											\
+	}																	\
 }
 
 
@@ -335,7 +342,7 @@ void DtsRelIoctlData(DTS_LIB_CONTEXT *Ctx, BC_IOCTL_DATA *pIoData);
 BC_IOCTL_DATA *DtsAllocIoctlData(DTS_LIB_CONTEXT *Ctx);
 BC_STATUS DtsAllocMemPools(DTS_LIB_CONTEXT *Ctx);
 void DtsReleaseMemPools(DTS_LIB_CONTEXT *Ctx);
-BC_STATUS DtsAddOutBuff(DTS_LIB_CONTEXT *Ctx, PVOID buff, uint32_t flags);
+BC_STATUS DtsAddOutBuff(DTS_LIB_CONTEXT *Ctx, PVOID buff, uint32_t BuffSz, uint32_t flags);
 BC_STATUS DtsRelRxBuff(DTS_LIB_CONTEXT *Ctx, BC_DEC_YUV_BUFFS *buff,BOOL SkipAddBuff);
 BC_STATUS DtsFetchOutInterruptible(DTS_LIB_CONTEXT *Ctx, BC_DTS_PROC_OUT *DecOut, uint32_t dwTimeout);
 BC_STATUS DtsCancelFetchOutInt(DTS_LIB_CONTEXT *Ctx);
@@ -354,7 +361,6 @@ BC_STATUS DtsFetchMdata(DTS_LIB_CONTEXT *Ctx, uint16_t snum, BC_DTS_PROC_OUT *po
 BC_STATUS DtsFetchTimeStampMdata(DTS_LIB_CONTEXT *Ctx, uint16_t snum, uint64_t *TimeStamp);
 BC_STATUS DtsPrepareMdataASFHdr(DTS_LIB_CONTEXT *Ctx, DTS_INPUT_MDATA *mData, uint8_t* buf);
 BC_STATUS DtsPrepareMdata(DTS_LIB_CONTEXT *Ctx, uint64_t timeStamp, DTS_INPUT_MDATA **mData, uint8_t** pDataBuf, uint32_t *pSize);
-BC_STATUS OldDtsPrepareMdata(DTS_LIB_CONTEXT *Ctx, uint64_t timeStamp, DTS_INPUT_MDATA **mData);
 BC_STATUS DtsNotifyOperatingMode(HANDLE hDevice, uint32_t Mode);
 /* Internal helper function */
 uint32_t DtsGetWidthfromResolution(DTS_LIB_CONTEXT *Ctx, uint32_t Resolution);
@@ -363,15 +369,15 @@ uint32_t DtsGetWidthfromResolution(DTS_LIB_CONTEXT *Ctx, uint32_t Resolution);
 BC_STATUS
 DtsAddBuffsWithFmtChInfo(DTS_LIB_CONTEXT	*Ctx);
 
-BC_STATUS
+BC_STATUS 
 DtsAllocNewRxBuffs(DTS_LIB_CONTEXT		*Ctx,
 					uint32_t				BuffSz,
 					uint32_t				BuffCnt);
 
-BC_STATUS
+BC_STATUS 
 DtsFreeRxBuffs(DTS_LIB_CONTEXT		*Ctx);
 
-void
+void 
 DtsGetMaxSize(DTS_LIB_CONTEXT *Ctx, U32 *Sz);
 
 BC_STATUS
@@ -385,6 +391,7 @@ DtsWaitForFlushDone(DTS_LIB_CONTEXT *Ctx,
 #endif
 
 #endif
+
 /*====================== Performance Counter Routines ============================*/
 void DtsUpdateInStats(DTS_LIB_CONTEXT	*Ctx, uint32_t	size);
 void DtsUpdateOutStats(DTS_LIB_CONTEXT	*Ctx, BC_DTS_PROC_OUT *pOut);
@@ -392,6 +399,9 @@ void DtsUpdateOutStats(DTS_LIB_CONTEXT	*Ctx, BC_DTS_PROC_OUT *pOut);
 /*====================== Debug Routines ========================================*/
 void DtsTestMdata(DTS_LIB_CONTEXT	*gCtx);
 BOOL DtsDbgCheckPointers(DTS_LIB_CONTEXT *Ctx,BC_IOCTL_DATA *pIo);
+
+BOOL DtsCheckRptPic(DTS_LIB_CONTEXT *Ctx, BC_DTS_PROC_OUT *pOut);
+BC_STATUS DtsUpdateVidParams(DTS_LIB_CONTEXT *Ctx, BC_DTS_PROC_OUT *pOut);
 
 /*============== Global shared area usage ======================*/
 

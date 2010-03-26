@@ -49,10 +49,10 @@ DtsFWActivateDecoder(
 	HANDLE hDevice
     );
 
-DRVIFLIB_INT_API BC_STATUS
+DRVIFLIB_INT_API BC_STATUS 
 DtsFWSetSingleField(
-	HANDLE  hDevice,
-	BOOL bSingleField
+    HANDLE  hDevice,
+	BOOL bSingleField 
     );
 
 DRVIFLIB_INT_API BC_STATUS

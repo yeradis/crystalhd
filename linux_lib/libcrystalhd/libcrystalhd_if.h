@@ -44,10 +44,10 @@ extern "C" {
 
 
     The Device Interface Library (DIL) allows application level code, such
-as a DirectShow filter, to access the Broadcom CrystalHD decoder driver to
+as a DirectShow filter, to access the Broadcom CrystalHD decoder driver to 
 provide hardware decoding for MPEG-2, H.264 (AVC) and VC-1 streams.
 
-    In the Microsoft DirectShow system, the overall system graph would look
+    In the Microsoft DirectShow system, the overall system graph would look 
 like the following:
 
 +--------+  +---------------+  +---------------+  +--------------------+
@@ -57,7 +57,7 @@ like the following:
                     |  +-------------------------+  +----------------+
                     +->| Broadcom decoder filter |->| Video Renderer |
                        +-------------------------+  +----------------+
-                                  |    |
+                                  |    |  
                             +----------------+
                             |  Broadcom DIL  |
                             +----------------+
@@ -85,21 +85,21 @@ A minimal implementation would be:
 
     // Acquire handle for device.
     DtsDeviceOpen(&hBRCMhandle, 0);
-
+     
     // Elemental stream.
     DtsOpenDecoder(hBRCMhandle, 0);
-
+    
     // H.264, Enable FGT SEI, do not parse metadata, no forced progressive out
     DtsSetVideoParams(hBRCMhandle,0,1,0,0,0);
 
     // Tell decoder to wait for input from host. (PC)
-    DtsStartDecoder(hBRCMhandle);
+    DtsStartDecoder(hBRCMhandle);       
 
     // Input buffer address, input buffer size, no timestamp, Unencrypted
     DtsProcInput(hBRCMhandle,input_buffer,sizeof(input_buffer),0,0);
 
     // Tell PC to wait for data from decoder.
-    DtsStartCapture(hBRCMhandle);
+    DtsStartCapture(hBRCMhandle);       
 
     // 16ms timeout, pass pointer to PIB then get the decoded picture.
     DtsProcOutput(hBRCMhandle,16,&sPIB);
@@ -458,30 +458,34 @@ DtsSetVideoParams(
     );
 
 /*****************************************************************************
- *
- * Function name:
- *
- *     DtsSetInputFormat
- *
- * Description:
- *
- *     Sets input video's various parameters that would be used by a subsequent call
- *     to DtsStartDecoder.
- *
- *     DtsSetInputFormat must always be called before DtsStartDecoder for the
- *     decoder to start processing input data. The device must have been
- *     previously opened for this call to succeed.
- *
- * Parameters:
- *     hDevice         Handle to device. This is obtained via a prior call to DtsDeviceOpen.
- *     pInputFormat Pointer to the BC_INPUT_FORMAT data.
- *
- * Return:
- *
- *     BC_STS_SUCCESS will be returned on successful completion.
- *****************************************************************************/
-DRVIFLIB_API BC_STATUS
-DtsSetInputFormat(HANDLE hDevice, BC_INPUT_FORMAT *pInputFormat);
+
+Function name:
+
+    DtsSetInputFormat
+    
+Description:
+
+    Sets input video's various parameters that would be used by a subsequent call
+    to DtsStartDecoder.
+
+    DtsSetInputFormat must always be called before DtsStartDecoder for the
+    decoder to start processing input data. The device must have been
+    previously opened for this call to succeed.
+
+Parameters:
+    hDevice         Handle to device. This is obtained via a prior call to DtsDeviceOpen.
+    pInputFormat Pointer to the BC_INPUT_FORMAT data.
+
+Return:
+
+    BC_STS_SUCCESS will be returned on successful completion.
+
+*****************************************************************************/
+DRVIFLIB_API BC_STATUS 
+DtsSetInputFormat(
+    HANDLE  			hDevice,
+    BC_INPUT_FORMAT   *pInputFormat
+    );
 
 /*****************************************************************************
 
@@ -659,7 +663,7 @@ Return:
 *****************************************************************************/
 DRVIFLIB_API BC_STATUS
 DtsResumeDecoder(
-    HANDLE hDevice
+    HANDLE  hDevice
     );
 
 /*****************************************************************************
@@ -667,7 +671,7 @@ DtsResumeDecoder(
 Function name:
 
     DtsSetVideoPID
-
+    
 Description:
 
     Sets the video PID in the input Transport Stream that the decoder
@@ -686,7 +690,7 @@ Return:
     BC_STS_SUCCESS will be returned on successful completion.
 
 *****************************************************************************/
-DRVIFLIB_API BC_STATUS
+DRVIFLIB_API BC_STATUS 
 DtsSetVideoPID(
     HANDLE    hDevice,
     uint32_t  pid
@@ -698,7 +702,7 @@ DtsSetVideoPID(
 Function name:
 
     StartCaptureImmidiate
-
+    
 Description:
 
     Instruct the driver to start capturing decoded frames for output.
@@ -717,11 +721,12 @@ Return:
     BC_STS_SUCCESS will be returned on successful completion.
 
 *****************************************************************************/
-DRVIFLIB_API BC_STATUS
+DRVIFLIB_API BC_STATUS 
 DtsStartCaptureImmidiate(
     HANDLE    hDevice,
     uint32_t  Reserved
     );
+
 
 /*****************************************************************************
 
@@ -762,7 +767,7 @@ Description:
 
     ***This function is deprecated and is for temporary use only.***
 
-    Flush the driverís queue of pictures and stops the capture process. These
+    Flush the driver√≠s queue of pictures and stops the capture process. These
     functions will be replaced with automatic Stop (End of Sequence) detection.
 
     The device must have been previously opened for this call to succeed.
@@ -932,7 +937,7 @@ Parameters:
                 that is available in the buffer. If timestamp is present
                 (i.e. non-zero), then this will be reflected in the output
                 sample (picture) produced from the contents of this buffer.
-                Timestamp should be in units of 100 ns.
+				Timestamp should be in units of 100 ns.
     Encrypted   Flag to indicate that the data transfer is not in the clear
                 and that the decoder needs to decrypt before it can decode
                 the data.  Note that due to complexity, it is preferred that
@@ -1013,8 +1018,8 @@ Parameters:
                     2   Flushes all the decoder buffers, input, decoded and
                         to be decoded.
                     3   Cancels the pending TX Request from the DIL/driver
-                    4   Flushes all the decoder buffers, input, decoded and
-		        to be decoded data. Also flushes the drivers buffers
+					4	Flushes all the decoder buffers, input, decoded and
+						to be decoded data. Also flushes the drivers buffers
 
 Return:
 
@@ -1083,7 +1088,11 @@ Parameters:
 
     hDevice         Handle to device. This is obtained via a prior call to
                     DtsDeviceOpen.
-    rate			2x/ 1x
+    rate            Inverse of speed x 10000.
+                    Examples:
+                        1/2x playback speed = 20000
+                        1x   playback speed = 10000
+                        2x   playback speed = 5000
 
 Return:
 
@@ -1224,8 +1233,8 @@ DtsIs422Supported(
 
 Function name:
 
-     DtsSetColorSpace
-
+     DtsSetColorSpace    
+    
 Description:
 
     This function sets the output sample's color space.
@@ -1251,7 +1260,7 @@ Return:
     BC_STS_SUCCESS will be returned on successful completion.
 
 *****************************************************************************/
-DRVIFLIB_API BC_STATUS
+DRVIFLIB_API BC_STATUS 
 DtsSetColorSpace(
     HANDLE  hDevice,
     BC_OUTPUT_FORMAT      Mode422
@@ -1400,7 +1409,7 @@ Description:
 Parameters:
 
     hDevice         Handle to device. This is obtained via a prior call to
-                    DtsDeviceOpen.
+                    DtsDeviceOpen.   
 
     pCapsBuffer   Pointer to BC_HW_CAPS to receive HW Output capabilities.
 
@@ -1409,7 +1418,7 @@ Return:
     BC_STS_SUCCESS will be returned on successful completion.
 
 *****************************************************************************/
-DRVIFLIB_API BC_STATUS
+DRVIFLIB_API BC_STATUS 
 DtsGetCapabilities (
 	HANDLE  hDevice,
 	PBC_HW_CAPS	pCapsBuffer
@@ -1428,7 +1437,7 @@ Description:
 Parameters:
 
     hDevice         Handle to device. This is obtained via a prior call to
-                    DtsDeviceOpen.
+                    DtsDeviceOpen.   
 
     pScaleParams   Pointer to BC_SCALING_PARAMS to set hardware scaling parameters.
 
@@ -1437,7 +1446,7 @@ Return:
     BC_STS_SUCCESS will be returned on successful completion.
 
 *****************************************************************************/
-DRVIFLIB_API BC_STATUS
+DRVIFLIB_API BC_STATUS 
 DtsSetScaleParams (
 	HANDLE  hDevice,
 	PBC_SCALING_PARAMS pScaleParams
@@ -1455,7 +1464,7 @@ Description:
 Parameters:
 
     hDevice     Handle to device. This is obtained via a prior call to
-                    DtsDeviceOpen.
+                    DtsDeviceOpen.   
 
     bEOS   Pointer to uint8_t to indicate if EOS of not
 
@@ -1464,7 +1473,7 @@ Return:
     BC_STS_SUCCESS will be returned on successful completion.
 
 *****************************************************************************/
-DRVIFLIB_API BC_STATUS
+DRVIFLIB_API BC_STATUS 
 DtsIsEndOfStream(
     HANDLE  hDevice,
     uint8_t*	bEOS
@@ -1482,24 +1491,22 @@ Description:
 Parameters:
 
     hDevice     Handle to device. This is obtained via a prior call to
-                    DtsDeviceOpen.
+                    DtsDeviceOpen.   
 
     bCrystalInfo   Pointer to structure to fill in with information
 
 	device = 0 for BCM70012, 1 for BCM70015
-
+	
 Return:
 
     BC_STS_SUCCESS will be returned on successful completion.
 
 *****************************************************************************/
-DRVIFLIB_API BC_STATUS
+DRVIFLIB_API BC_STATUS 
 DtsCrystalHDVersion(
     HANDLE  hDevice,
     PBC_INFO_CRYSTAL bCrystalInfo
 );
-
-
 
 #ifdef __cplusplus
 }

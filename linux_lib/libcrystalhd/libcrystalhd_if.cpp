@@ -38,286 +38,275 @@
 #include "libcrystalhd_fwcmds.h"
 #include "libcrystalhd_fwload_if.h"
 
+
 #if (!__STDC_WANT_SECURE_LIB__)
 inline bool memcpy_s(void *dest, size_t sizeInBytes, void *src, size_t count)
 {
-	bool status = false;
-	if (count > sizeInBytes) {
-		DebugLog_Trace(LDIL_DBG,"memcpy_s: buffer overflow\n");
-	} else {
-		memcpy(dest, src, count);
-		status = true;
-	}
-
-	return(status);
+  bool status = false;
+  if (count > sizeInBytes) {
+    DebugLog_Trace(LDIL_DBG,"memcpy_s: buffer overflow\n");
+  } else {
+    memcpy(dest, src, count);
+    status = true;
+  }
+  return(status);
 }
 
 inline bool memmove_s(void *dest, size_t sizeInBytes, void *src, size_t count)
 {
-	bool status = false;
-	if (count > sizeInBytes) {
-		DebugLog_Trace(LDIL_DBG,"memmove_s: buffer overflow\n");
-	} else {
-		memmove(dest, src, count);
-		status = true;
-	}
-
-	return(status);
+  bool status = false;
+  if (count > sizeInBytes) {
+    DebugLog_Trace(LDIL_DBG,"memmove_s: buffer overflow\n");
+  } else {
+    memmove(dest, src, count);
+    status = true;
+  }
+  return(status);
 }
 #endif
 
 // Full TS packet of EOS
 static __attribute__((aligned(4))) uint8_t eos_mpeg[184] =
 {
-	0x00, 0x00, 0x01, 0xb7,
-	0x00, 0x00, 0x01, 0xb7,
-	0x00, 0x00, 0x01, 0xb7,
-	0x00, 0x00, 0x01, 0xb7,
-	0x00, 0x00, 0x01, 0xb7,
-	0x00, 0x00, 0x01, 0xb7,
-	0x00, 0x00, 0x01, 0xb7,
-	0x00, 0x00, 0x01, 0xb7,
-	0x00, 0x00, 0x01, 0xb7,
-	0x00, 0x00, 0x01, 0xb7,
-	0x00, 0x00, 0x01, 0xb7,
-	0x00, 0x00, 0x01, 0xb7,
-	0x00, 0x00, 0x01, 0xb7,
-	0x00, 0x00, 0x01, 0xb7,
-	0x00, 0x00, 0x01, 0xb7,
-	0x00, 0x00, 0x01, 0xb7,
-	0x00, 0x00, 0x01, 0xb7,
-	0x00, 0x00, 0x01, 0xb7,
-	0x00, 0x00, 0x01, 0xb7,
-	0x00, 0x00, 0x01, 0xb7,
-	0x00, 0x00, 0x01, 0xb7,
-	0x00, 0x00, 0x01, 0xb7,
-	0x00, 0x00, 0x01, 0xb7,
-	0x00, 0x00, 0x01, 0xb7,
-	0x00, 0x00, 0x01, 0xb7,
-	0x00, 0x00, 0x01, 0xb7,
-	0x00, 0x00, 0x01, 0xb7,
-	0x00, 0x00, 0x01, 0xb7,
-	0x00, 0x00, 0x01, 0xb7,
-	0x00, 0x00, 0x01, 0xb7,
-	0x00, 0x00, 0x01, 0xb7,
-	0x00, 0x00, 0x01, 0xb7,
-	0x00, 0x00, 0x01, 0xb7,
-	0x00, 0x00, 0x01, 0xb7,
-	0x00, 0x00, 0x01, 0xb7,
-	0x00, 0x00, 0x01, 0xb7,
-	0x00, 0x00, 0x01, 0xb7,
-	0x00, 0x00, 0x01, 0xb7,
-	0x00, 0x00, 0x01, 0xb7,
-	0x00, 0x00, 0x01, 0xb7,
-	0x00, 0x00, 0x01, 0xb7,
-	0x00, 0x00, 0x01, 0xb7,
-	0x00, 0x00, 0x01, 0xb7,
-	0x00, 0x00, 0x01, 0xb7,
-	0x00, 0x00, 0x01, 0xb7,
-	0x00, 0x00, 0x01, 0xb7
+    0x00, 0x00, 0x01, 0xb7,
+    0x00, 0x00, 0x01, 0xb7,
+    0x00, 0x00, 0x01, 0xb7,
+    0x00, 0x00, 0x01, 0xb7,
+    0x00, 0x00, 0x01, 0xb7,
+    0x00, 0x00, 0x01, 0xb7,
+    0x00, 0x00, 0x01, 0xb7,
+    0x00, 0x00, 0x01, 0xb7,
+    0x00, 0x00, 0x01, 0xb7,
+    0x00, 0x00, 0x01, 0xb7,
+    0x00, 0x00, 0x01, 0xb7,
+    0x00, 0x00, 0x01, 0xb7,
+    0x00, 0x00, 0x01, 0xb7,
+    0x00, 0x00, 0x01, 0xb7,
+    0x00, 0x00, 0x01, 0xb7,
+    0x00, 0x00, 0x01, 0xb7,
+    0x00, 0x00, 0x01, 0xb7,
+    0x00, 0x00, 0x01, 0xb7,
+    0x00, 0x00, 0x01, 0xb7,
+    0x00, 0x00, 0x01, 0xb7,
+    0x00, 0x00, 0x01, 0xb7,
+    0x00, 0x00, 0x01, 0xb7,
+    0x00, 0x00, 0x01, 0xb7,
+    0x00, 0x00, 0x01, 0xb7,
+    0x00, 0x00, 0x01, 0xb7,
+    0x00, 0x00, 0x01, 0xb7,
+    0x00, 0x00, 0x01, 0xb7,
+    0x00, 0x00, 0x01, 0xb7,
+    0x00, 0x00, 0x01, 0xb7,
+    0x00, 0x00, 0x01, 0xb7,
+    0x00, 0x00, 0x01, 0xb7,
+    0x00, 0x00, 0x01, 0xb7,
+    0x00, 0x00, 0x01, 0xb7,
+    0x00, 0x00, 0x01, 0xb7,
+    0x00, 0x00, 0x01, 0xb7,
+    0x00, 0x00, 0x01, 0xb7,
+    0x00, 0x00, 0x01, 0xb7,
+    0x00, 0x00, 0x01, 0xb7,
+    0x00, 0x00, 0x01, 0xb7,
+    0x00, 0x00, 0x01, 0xb7,
+    0x00, 0x00, 0x01, 0xb7,
+    0x00, 0x00, 0x01, 0xb7,
+    0x00, 0x00, 0x01, 0xb7,
+    0x00, 0x00, 0x01, 0xb7,
+    0x00, 0x00, 0x01, 0xb7,
+    0x00, 0x00, 0x01, 0xb7
 };
-
 static __attribute__((aligned(4))) uint8_t eos_avc_vc1[184] =
 {
-	0x00, 0x00, 0x01, 0x0a,
-	0x00, 0x00, 0x01, 0x0a,
-	0x00, 0x00, 0x01, 0x0a,
-	0x00, 0x00, 0x01, 0x0a,
-	0x00, 0x00, 0x01, 0x0a,
-	0x00, 0x00, 0x01, 0x0a,
-	0x00, 0x00, 0x01, 0x0a,
-	0x00, 0x00, 0x01, 0x0a,
-	0x00, 0x00, 0x01, 0x0a,
-	0x00, 0x00, 0x01, 0x0a,
-	0x00, 0x00, 0x01, 0x0a,
-	0x00, 0x00, 0x01, 0x0a,
-	0x00, 0x00, 0x01, 0x0a,
-	0x00, 0x00, 0x01, 0x0a,
-	0x00, 0x00, 0x01, 0x0a,
-	0x00, 0x00, 0x01, 0x0a,
-	0x00, 0x00, 0x01, 0x0a,
-	0x00, 0x00, 0x01, 0x0a,
-	0x00, 0x00, 0x01, 0x0a,
-	0x00, 0x00, 0x01, 0x0a,
-	0x00, 0x00, 0x01, 0x0a,
-	0x00, 0x00, 0x01, 0x0a,
-	0x00, 0x00, 0x01, 0x0a,
-	0x00, 0x00, 0x01, 0x0a,
-	0x00, 0x00, 0x01, 0x0a,
-	0x00, 0x00, 0x01, 0x0a,
-	0x00, 0x00, 0x01, 0x0a,
-	0x00, 0x00, 0x01, 0x0a,
-	0x00, 0x00, 0x01, 0x0a,
-	0x00, 0x00, 0x01, 0x0a,
-	0x00, 0x00, 0x01, 0x0a,
-	0x00, 0x00, 0x01, 0x0a,
-	0x00, 0x00, 0x01, 0x0a,
-	0x00, 0x00, 0x01, 0x0a,
-	0x00, 0x00, 0x01, 0x0a,
-	0x00, 0x00, 0x01, 0x0a,
-	0x00, 0x00, 0x01, 0x0a,
-	0x00, 0x00, 0x01, 0x0a,
-	0x00, 0x00, 0x01, 0x0a,
-	0x00, 0x00, 0x01, 0x0a,
-	0x00, 0x00, 0x01, 0x0a,
-	0x00, 0x00, 0x01, 0x0a,
-	0x00, 0x00, 0x01, 0x0a,
-	0x00, 0x00, 0x01, 0x0a,
-	0x00, 0x00, 0x01, 0x0a,
-	0x00, 0x00, 0x01, 0x0a
+    0x00, 0x00, 0x01, 0x0a,
+    0x00, 0x00, 0x01, 0x0a,
+    0x00, 0x00, 0x01, 0x0a,
+    0x00, 0x00, 0x01, 0x0a,
+    0x00, 0x00, 0x01, 0x0a,
+    0x00, 0x00, 0x01, 0x0a,
+    0x00, 0x00, 0x01, 0x0a,
+    0x00, 0x00, 0x01, 0x0a,
+    0x00, 0x00, 0x01, 0x0a,
+    0x00, 0x00, 0x01, 0x0a,
+    0x00, 0x00, 0x01, 0x0a,
+    0x00, 0x00, 0x01, 0x0a,
+    0x00, 0x00, 0x01, 0x0a,
+    0x00, 0x00, 0x01, 0x0a,
+    0x00, 0x00, 0x01, 0x0a,
+    0x00, 0x00, 0x01, 0x0a,
+    0x00, 0x00, 0x01, 0x0a,
+    0x00, 0x00, 0x01, 0x0a,
+    0x00, 0x00, 0x01, 0x0a,
+    0x00, 0x00, 0x01, 0x0a,
+    0x00, 0x00, 0x01, 0x0a,
+    0x00, 0x00, 0x01, 0x0a,
+    0x00, 0x00, 0x01, 0x0a,
+    0x00, 0x00, 0x01, 0x0a,
+    0x00, 0x00, 0x01, 0x0a,
+    0x00, 0x00, 0x01, 0x0a,
+    0x00, 0x00, 0x01, 0x0a,
+    0x00, 0x00, 0x01, 0x0a,
+    0x00, 0x00, 0x01, 0x0a,
+    0x00, 0x00, 0x01, 0x0a,
+    0x00, 0x00, 0x01, 0x0a,
+    0x00, 0x00, 0x01, 0x0a,
+    0x00, 0x00, 0x01, 0x0a,
+    0x00, 0x00, 0x01, 0x0a,
+    0x00, 0x00, 0x01, 0x0a,
+    0x00, 0x00, 0x01, 0x0a,
+    0x00, 0x00, 0x01, 0x0a,
+    0x00, 0x00, 0x01, 0x0a,
+    0x00, 0x00, 0x01, 0x0a,
+    0x00, 0x00, 0x01, 0x0a,
+    0x00, 0x00, 0x01, 0x0a,
+    0x00, 0x00, 0x01, 0x0a,
+    0x00, 0x00, 0x01, 0x0a,
+    0x00, 0x00, 0x01, 0x0a,
+    0x00, 0x00, 0x01, 0x0a,
+    0x00, 0x00, 0x01, 0x0a
 };
-
 static __attribute__((aligned(4))) uint8_t eos_vc1_spmp_link[32] =
 {
-	0x5a, 0x5a, 0x5a, 0x5a,
-	0x00, 0x00, 0x00, 0x20,
-	0x00, 0x00, 0x00, 0x05,
-	0x5a, 0x5a, 0x5a, 0x5a,
-	0x0d, 0x00, 0x00, 0x01,
-	0x0a, 0xe0, 0x55, 0x00,
-	0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00
+    0x5a, 0x5a, 0x5a, 0x5a,
+    0x00, 0x00, 0x00, 0x20,
+    0x00, 0x00, 0x00, 0x05,
+    0x5a, 0x5a, 0x5a, 0x5a,
+    0x0d, 0x00, 0x00, 0x01,
+    0x0a, 0xe0, 0x55, 0x00,
+    0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00
 };
 
 
 static __attribute__((aligned(4))) uint8_t eos_divx[184] =
 {
-	0x00, 0x00, 0x01, 0xb1,
-	0x00, 0x00, 0x01, 0xb1,
-	0x00, 0x00, 0x01, 0xb1,
-	0x00, 0x00, 0x01, 0xb1,
-	0x00, 0x00, 0x01, 0xb1,
-	0x00, 0x00, 0x01, 0xb1,
-	0x00, 0x00, 0x01, 0xb1,
-	0x00, 0x00, 0x01, 0xb1,
-	0x00, 0x00, 0x01, 0xb1,
-	0x00, 0x00, 0x01, 0xb1,
-	0x00, 0x00, 0x01, 0xb1,
-	0x00, 0x00, 0x01, 0xb1,
-	0x00, 0x00, 0x01, 0xb1,
-	0x00, 0x00, 0x01, 0xb1,
-	0x00, 0x00, 0x01, 0xb1,
-	0x00, 0x00, 0x01, 0xb1,
-	0x00, 0x00, 0x01, 0xb1,
-	0x00, 0x00, 0x01, 0xb1,
-	0x00, 0x00, 0x01, 0xb1,
-	0x00, 0x00, 0x01, 0xb1,
-	0x00, 0x00, 0x01, 0xb1,
-	0x00, 0x00, 0x01, 0xb1,
-	0x00, 0x00, 0x01, 0xb1,
-	0x00, 0x00, 0x01, 0xb1,
-	0x00, 0x00, 0x01, 0xb1,
-	0x00, 0x00, 0x01, 0xb1,
-	0x00, 0x00, 0x01, 0xb1,
-	0x00, 0x00, 0x01, 0xb1,
-	0x00, 0x00, 0x01, 0xb1,
-	0x00, 0x00, 0x01, 0xb1,
-	0x00, 0x00, 0x01, 0xb1,
-	0x00, 0x00, 0x01, 0xb1,
-	0x00, 0x00, 0x01, 0xb1,
-	0x00, 0x00, 0x01, 0xb1,
-	0x00, 0x00, 0x01, 0xb1,
-	0x00, 0x00, 0x01, 0xb1,
-	0x00, 0x00, 0x01, 0xb1,
-	0x00, 0x00, 0x01, 0xb1,
-	0x00, 0x00, 0x01, 0xb1,
-	0x00, 0x00, 0x01, 0xb1,
-	0x00, 0x00, 0x01, 0xb1,
-	0x00, 0x00, 0x01, 0xb1,
-	0x00, 0x00, 0x01, 0xb1,
-	0x00, 0x00, 0x01, 0xb1,
-	0x00, 0x00, 0x01, 0xb1,
-	0x00, 0x00, 0x01, 0xb1
+    0x00, 0x00, 0x01, 0xb1,
+    0x00, 0x00, 0x01, 0xb1,
+    0x00, 0x00, 0x01, 0xb1,
+    0x00, 0x00, 0x01, 0xb1,
+    0x00, 0x00, 0x01, 0xb1,
+    0x00, 0x00, 0x01, 0xb1,
+    0x00, 0x00, 0x01, 0xb1,
+    0x00, 0x00, 0x01, 0xb1,
+    0x00, 0x00, 0x01, 0xb1,
+    0x00, 0x00, 0x01, 0xb1,
+    0x00, 0x00, 0x01, 0xb1,
+    0x00, 0x00, 0x01, 0xb1,
+    0x00, 0x00, 0x01, 0xb1,
+    0x00, 0x00, 0x01, 0xb1,
+    0x00, 0x00, 0x01, 0xb1,
+    0x00, 0x00, 0x01, 0xb1,
+    0x00, 0x00, 0x01, 0xb1,
+    0x00, 0x00, 0x01, 0xb1,
+    0x00, 0x00, 0x01, 0xb1,
+    0x00, 0x00, 0x01, 0xb1,
+    0x00, 0x00, 0x01, 0xb1,
+    0x00, 0x00, 0x01, 0xb1,
+    0x00, 0x00, 0x01, 0xb1,
+    0x00, 0x00, 0x01, 0xb1,
+    0x00, 0x00, 0x01, 0xb1,
+    0x00, 0x00, 0x01, 0xb1,
+    0x00, 0x00, 0x01, 0xb1,
+    0x00, 0x00, 0x01, 0xb1,
+    0x00, 0x00, 0x01, 0xb1,
+    0x00, 0x00, 0x01, 0xb1,
+    0x00, 0x00, 0x01, 0xb1,
+    0x00, 0x00, 0x01, 0xb1,
+    0x00, 0x00, 0x01, 0xb1,
+    0x00, 0x00, 0x01, 0xb1,
+    0x00, 0x00, 0x01, 0xb1,
+    0x00, 0x00, 0x01, 0xb1,
+    0x00, 0x00, 0x01, 0xb1,
+    0x00, 0x00, 0x01, 0xb1,
+    0x00, 0x00, 0x01, 0xb1,
+    0x00, 0x00, 0x01, 0xb1,
+    0x00, 0x00, 0x01, 0xb1,
+    0x00, 0x00, 0x01, 0xb1,
+    0x00, 0x00, 0x01, 0xb1,
+    0x00, 0x00, 0x01, 0xb1,
+    0x00, 0x00, 0x01, 0xb1,
+    0x00, 0x00, 0x01, 0xb1
 };
 
 static __attribute__((aligned(4))) uint8_t btp_video_done_es_private[] =
 {
-	/* 0x81, 0x01, 0x14, 0x80,*/
-	0x42, 0x52, 0x43, 0x4D, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
-	/*, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00,*/
+    /* 0x81, 0x01, 0x14, 0x80,*/
+    0x42, 0x52, 0x43, 0x4D, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+    /*, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00,*/
 };
-
 static __attribute__((aligned(4))) uint8_t btp_video_done_es[] =
 {
-					    /*0x81, 0x01, 0x14, 0x80, 0x42, 0x52, 0x43, 0x4D, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF,*/ 0x00, 0x00, 0x00,
-	0x00, 0x0C, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xAA, 0xBB, 0xCC, 0xDD, 0xFF, 0xFF,
-	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	0x00, 0xBC, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
+                                        /*0x81, 0x01, 0x14, 0x80, 0x42, 0x52, 0x43, 0x4D, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF,*/ 0x00, 0x00, 0x00,
+    0x00, 0x0C, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xAA, 0xBB, 0xCC, 0xDD, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0xBC, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
 };
 
 #if 0
 static __attribute__((aligned(4))) uint8_t btp_video_plunge_es[] =
 {
-					    /*0x81, 0x01, 0x14, 0x80, 0x42, 0x52, 0x43, 0x4D, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF,*/ 0x00, 0x00, 0x00,
-	0x00, 0x0A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xAA, 0xBB, 0xCC, 0xDD, 0xFF, 0xFF,
-	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	0x00, 0xBC, 0xAA, 0xBB, 0xCC, 0xDD, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
+                                        /*0x81, 0x01, 0x14, 0x80, 0x42, 0x52, 0x43, 0x4D, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF,*/ 0x00, 0x00, 0x00,
+    0x00, 0x0A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xAA, 0xBB, 0xCC, 0xDD, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0xBC, 0xAA, 0xBB, 0xCC, 0xDD, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
 };
 #endif
 
 static uint32_t g_nDeviceID = BC_PCI_DEVID_INVALID;
-
 static BC_STATUS DtsSetupHardware(HANDLE hDevice, BOOL IgnClkChk)
 {
 	BC_STATUS sts = BC_STS_SUCCESS;
 	DTS_LIB_CONTEXT *Ctx;
 
 	DTS_GET_CTX(hDevice,Ctx);
-
-	if (!IgnClkChk) {
-		if (Ctx->DevId == BC_PCI_DEVID_LINK || Ctx->DevId == BC_PCI_DEVID_FLEA) {
-			if((DtsGetOPMode() & 0x08) && (DtsGetHwInitSts() != BC_DIL_HWINIT_IN_PROGRESS))
-			{
+	
+	if( !IgnClkChk){
+		if(Ctx->DevId == BC_PCI_DEVID_LINK || Ctx->DevId == BC_PCI_DEVID_FLEA){
+			if((DtsGetOPMode() & 0x08) && (DtsGetHwInitSts() != BC_DIL_HWINIT_IN_PROGRESS)){
 				return BC_STS_SUCCESS;
-			}
-		} else {
-			/* Check if the video clock is present. If so, do not init the HW again
-			 * FIXME: This is a HW bug */
+			}		
+		}else{
+			// Check if the video clock is present. If so, do not init the HW again
+			// FIX_ME. This is a HW bug
 			if(DtsIsVideoClockSet(hDevice)){
 				return BC_STS_SUCCESS;
 			}
 		}
 	}
 
-	if(Ctx->DevId == BC_PCI_DEVID_LINK)
-	{
-		DebugLog_Trace(LDIL_ERR,"DtsSetupHardware: DtsPushAuthFwToLink\n");
-		sts = DtsPushAuthFwToLink(hDevice,NULL);
-	}
+    if (Ctx->DevId == BC_PCI_DEVID_LINK)
+        sts = DtsPushAuthFwToLink(hDevice,NULL);
 
 	if(sts != BC_STS_SUCCESS){
 		return sts;
 	}
-
+	
 	/* Initialize Firmware interface */
 	sts = DtsFWInitialize(hDevice,0);
 	if(sts != BC_STS_SUCCESS ){
 		return sts;
 	}
-
 	return sts;
 }
 
 static BC_STATUS DtsReleaseChannel(HANDLE  hDevice,uint32_t ChannelID, BOOL Stop)
 {
 	BC_STATUS	sts = BC_STS_SUCCESS;
-
 	if(Stop){
 		sts = DtsFWStopVideo(hDevice, ChannelID, TRUE);
 		if(sts != BC_STS_SUCCESS){
@@ -340,21 +329,20 @@ static BC_STATUS DtsRecoverableDecOpen(HANDLE  hDevice,uint32_t StreamType)
 	DTS_LIB_CONTEXT		*Ctx = NULL;
 
 	DTS_GET_CTX(hDevice,Ctx);
-
+	
 	if (Ctx->DevId == BC_PCI_DEVID_FLEA)
 	{
 		sts = DtsFWOpenChannel(hDevice, StreamType, 0);
 		if(sts == BC_STS_SUCCESS)
 		{
 			/*For Multiapplication support this will change.*/
-			if(Ctx->OpenRsp.channelId != 0)
+			if(Ctx->OpenRsp.channelId != 0)	
 				sts = BC_STS_FW_CMD_ERR;
 		}
 		return sts;
 	}
 
 	while(retry--){
-
 		sts = DtsFWOpenChannel(hDevice, StreamType, 0);
 		if(sts == BC_STS_SUCCESS){
 			if(Ctx->OpenRsp.channelId == 0){
@@ -384,7 +372,6 @@ static BC_STATUS DtsRecoverableDecOpen(HANDLE  hDevice,uint32_t StreamType)
 				break;
 		}
 	}
-
 	return sts;
 }
 
@@ -419,27 +406,20 @@ DtsDeviceOpen(
 	mode &= 0xFF;
 
 	switch (clkSet) {
-	case 6:
-		clkSet = 200;
-		break;
-	case 5:
-		clkSet = 180;
-		break;
-	case 4:
-		clkSet = 165;
-		break;
-	case 3:
-		clkSet = 150;
-		break;
-	case 2:
-		clkSet = 125;
-		break;
-	case 1:
-		clkSet = 105;
-		break;
-	default:
-		clkSet = 165;
-		break;
+		case 6: clkSet = 200;
+				break;
+		case 5: clkSet = 180;
+				break;
+		case 4: clkSet = 165;
+				break;
+		case 3: clkSet = 150;
+				break;
+		case 2: clkSet = 125;
+				break;
+		case 1: clkSet = 105;
+				break;
+		default: clkSet = 165;
+				break;
 	}
 
 	DebugLog_Trace(LDIL_DBG,"DtsDeviceOpen: Opening HW in mode %x\n", mode);
@@ -473,7 +453,6 @@ DtsDeviceOpen(
 #else
 	globMode = DtsGetOPMode();
 #endif
-
 	if(((globMode & 0x3) && (mode != DTS_MONITOR_MODE)) ||
 	   ((globMode & 0x4) && (mode == DTS_MONITOR_MODE)) ||
 	   ((globMode & 0x8) && (mode == DTS_HWINIT_MODE))){
@@ -510,18 +489,17 @@ DtsDeviceOpen(
 		DebugLog_Trace(LDIL_ERR,"DtsDeviceOpen: Interface Init Failed:%x\n",Sts);
 		return Sts;
 	}
-
 	if( (Sts = DtsGetHwType(*hDevice,&DeviceID,&VendorID,&RevID))!=BC_STS_SUCCESS){
 		DebugLog_Trace(LDIL_DBG,"Get Hardware Type Failed\n");
 		return Sts;
 	}
 	g_nDeviceID = DeviceID;
-
+	
 	/* NAREN Program clock */
 	if(DeviceID == BC_PCI_DEVID_LINK)
 		DtsSetCoreClock(*hDevice, clkSet);
 
-	/*
+	/* 
 	 * We have to specify the mode to the driver.
 	 * So the driver can cleanup only in case of 
 	 * playback/Diag mode application close.
@@ -530,7 +508,6 @@ DtsDeviceOpen(
 		DebugLog_Trace(LDIL_DBG,"Get drv ver failed\n");
 		return Sts;
 	}
-
 	/* If driver minor version is more than 13, enable DTS_SKIP_TX_CHK_CPB feature */
 	if (FixFlags & DTS_SKIP_TX_CHK_CPB) {
 		if (((drvVer >> 16) & 0xFF) > 13) 
@@ -538,17 +515,16 @@ DtsDeviceOpen(
 	}
 
 	if (FixFlags & DTS_ADAPTIVE_OUTPUT_PER) {
-		if(DtsGetContext(*hDevice)->DevId == BC_PCI_DEVID_FLEA)
-			Sts = DtsGetFWVersion(*hDevice, &fwVer, &decVer, &hwVer, (char*)FWBINFILE_70015, 0);
-		else
-			Sts = DtsGetFWVersion(*hDevice, &fwVer, &decVer, &hwVer, (char*)FWBINFILE_70012, 0);
-
-		if (Sts == BC_STS_SUCCESS) {
+        if(DtsGetContext(*hDevice)->DevId == BC_PCI_DEVID_FLEA)
+            Sts = DtsGetFWVersion(*hDevice, &fwVer, &decVer, &hwVer, (char*)FWBINFILE_70015, 0);
+        else
+            Sts = DtsGetFWVersion(*hDevice, &fwVer, &decVer, &hwVer, (char*)FWBINFILE_70012, 0);
+        if(Sts == BC_STS_SUCCESS) {
 			if (fwVer >= ((14 << 16) | (8 << 8) | (1)))		// 2.14.8.1 (ignore 2)
 				FixFlags |= DTS_ADAPTIVE_OUTPUT_PER;
 			else
 				FixFlags &= (~DTS_ADAPTIVE_OUTPUT_PER);
-		}
+        }
 	}
 
 	/* only enable dropping of repeated pictures for Adobe mode and MFT mode */
@@ -559,11 +535,10 @@ DtsDeviceOpen(
 
 	/* If driver minor version is newer (for major == 2), send the fullMode */
 	if (((drvVer >> 24) & 0xFF) == 2) {
-		if (((drvVer >> 16) & 0xFF) > 10)
-			drvMode = FixFlags;
-		else
-			drvMode = mode;
-	} else
+		if (((drvVer >> 16) & 0xFF) > 10) drvMode = FixFlags;
+		else drvMode = mode;
+	}
+	else
 		drvMode = FixFlags;
 
 	if( (Sts = DtsNotifyOperatingMode(*hDevice,drvMode)) != BC_STS_SUCCESS){
@@ -593,44 +568,44 @@ DtsDeviceOpen(
 	}
 
 	DtsSetOPMode(globMode);
-
+ 
 	if (DeviceID == BC_PCI_DEVID_LINK || DeviceID == BC_PCI_DEVID_FLEA)
 		nTry = HARDWARE_INIT_RETRY_LINK_CNT;
 	else
 		nTry = HARDWARE_INIT_RETRY_CNT;
 
 	if((mode == DTS_PLAYBACK_MODE)||(mode == DTS_HWINIT_MODE))
-	{
+	{	
 		while(nTry--)
 		{
-			Sts =	DtsSetupHardware(*hDevice, FALSE);
+			Sts = 	DtsSetupHardware(*hDevice, FALSE);	
 			if(Sts == BC_STS_SUCCESS)
-			{
+			{	
 				DebugLog_Trace(LDIL_DBG,"DtsSetupHardware: Success\n");
 				break;
 			}
-			else
-			{
+			else 
+			{	
 				DebugLog_Trace(LDIL_DBG,"DtsSetupHardware: Failed\n");
-				bc_sleep_ms(100);
+				bc_sleep_ms(100);				
 			}
 		}
 		if(Sts != BC_STS_SUCCESS )
 		{
 			DtsReleaseInterface(DtsGetContext(*hDevice));
-		}
+		}		
 	}
-
+	
 	if(mode == DTS_HWINIT_MODE){
 		DtsSetHwInitSts(0);
 	}
 
-	// Clear all stats before we start play back
+	// Clear all stats before we start play back 
 	if(mode == DTS_PLAYBACK_MODE) {
 		DebugLog_Trace(LDIL_DBG,"trying to clear all stats\n");
 		DtsRstDrvStat(*hDevice);
 	}
-
+	
 	//DtsDevRegisterWr( hDevice,UartSelectA, 3);
 
 	DebugLog_Trace(LDIL_DBG,"Done with Open\n");
@@ -651,7 +626,6 @@ DtsDeviceClose(
 	if(Ctx->State != BC_DEC_STATE_INVALID){
 		DebugLog_Trace(LDIL_DBG,"DtsDeviceClose: closing decoder ....\n");
 		DtsCloseDecoder(hDevice);
-
 	}
 
 	DtsCancelFetchOutInt(Ctx);
@@ -663,7 +637,7 @@ DtsDeviceClose(
 	{
 		DtsFlushRxCapture(hDevice,false); // Make sure that all buffers and DMA engines are freed up
 	}
-
+	
 	if(Ctx->OpMode == DTS_PLAYBACK_MODE){
 		globMode &= (~0x1);
 	} else if(Ctx->OpMode == DTS_DIAG_MODE){
@@ -676,8 +650,9 @@ DtsDeviceClose(
 		globMode = 0;
 	}
 	DtsSetOPMode(globMode);
-
+	DtsReleasePESConverter(hDevice);
 	return DtsReleaseInterface(Ctx);
+	
 }
 
 DRVIFLIB_API BC_STATUS 
@@ -718,10 +693,10 @@ DtsGetVersion(
 
 DRVIFLIB_API BC_STATUS 
 DtsGetFWVersionFromFile(
-    HANDLE  hDevice,
-    uint32_t     *StreamVer,
-	uint32_t		*DecVer,
-	char	*fname
+    HANDLE    hDevice,
+    uint32_t  *StreamVer,
+	uint32_t  *DecVer,
+	char      *fname
 	)
 {
 	BC_STATUS sts = BC_STS_SUCCESS;
@@ -737,7 +712,6 @@ DtsGetFWVersionFromFile(
 	DTS_GET_CTX(hDevice,Ctx);	
 	
 	sts = DtsGetDILPath(hDevice, fwfile, sizeof(fwfile));
-
 	if(sts != BC_STS_SUCCESS){
 		return sts;
 	}
@@ -745,11 +719,14 @@ DtsGetFWVersionFromFile(
 	if(fname){
 		strncat(fwfile,(const char*)fname,sizeof(fwfile));
 	}else{
-		if(Ctx->DevId == BC_PCI_DEVID_FLEA)
-			strncat(fwfile,FWBINFILE_70015,sizeof(FWBINFILE_70015));
-		else
-			strncat(fwfile,FWBINFILE_70012,sizeof(FWBINFILE_70012));
+        if(Ctx->DevId == BC_PCI_DEVID_FLEA)
+            strncat(fwfile,FWBINFILE_70015,sizeof(FWBINFILE_70015));
+        else
+            strncat(fwfile,FWBINFILE_70012,sizeof(FWBINFILE_70012));
 	}
+	
+
+
 
 	if(!StreamVer){
 		DebugLog_Trace(LDIL_DBG,"\nDtsGetFWVersionFromFile: Null Pointer argument");
@@ -760,25 +737,26 @@ DtsGetFWVersionFromFile(
 	
  	
 
+
+
+
+
 	if(fhnd == NULL ){
 		DebugLog_Trace(LDIL_DBG,"DtsGetFWVersionFromFile:Failed to Open file Err\n");
 		return BC_STS_INSUFF_RES;
 	}
 	
-
 	buf=(uint8_t *)malloc(MAX_BIN_FILE_SZ);
 	if(buf==NULL) {
 		DebugLog_Trace(LDIL_DBG,"DtsGetFWVersionFromFile:Failed to allocate memory\n");
 		return BC_STS_INSUFF_RES;
 	}
-
 	/* Read the FW bin file */
 	err = fread(buf, sizeof(uint8_t), MAX_BIN_FILE_SZ, fhnd);
 	if(!err)
 		 {
 			sizeRead = err;
 	}
-
 	if((err==0)&&(errno!=0)) 
 	{ 
 		DebugLog_Trace(LDIL_DBG,"DtsGetFWVersionFromFile:Failed to read bin file %d\n",errno);
@@ -786,10 +764,11 @@ DtsGetFWVersionFromFile(
 		if(buf)free(buf);
 
 		fclose(fhnd);
+
 		return BC_STS_ERROR;
 	}
-
-	/* There is 16k hole in the FW binary. Hnece start searching from 16k in the bin file */
+	
+	//There is 16k hole in the FW binary. Hnece start searching from 16k in the bin file	
 	uint8_t *pSearchStr = &buf[0x4000];
 	*StreamVer =0;
 	for(uint32_t i=0; i <(sizeRead-0x4000);i++){
@@ -802,7 +781,6 @@ DtsGetFWVersionFromFile(
 		}
 		pSearchStr++;
 	}
-
 	if(buf)
 		free(buf);
 	if(fhnd)
@@ -812,6 +790,7 @@ DtsGetFWVersionFromFile(
 	else
 		return BC_STS_SUCCESS;
 
+	
 }
 
 DRVIFLIB_API BC_STATUS 
@@ -862,9 +841,12 @@ DtsGetFWVersion(
 
 
 DRVIFLIB_API BC_STATUS 
-DtsOpenDecoder(HANDLE  hDevice, uint32_t StreamType)
+DtsOpenDecoder(
+    HANDLE    hDevice,
+    uint32_t  StreamType)
 {
 	BC_STATUS sts = BC_STS_SUCCESS;
+
 	DTS_LIB_CONTEXT	*Ctx = NULL;
 
 	DTS_GET_CTX(hDevice,Ctx);
@@ -882,11 +864,11 @@ DtsOpenDecoder(HANDLE  hDevice, uint32_t StreamType)
 	Ctx->CapState = 0;
 	Ctx->picWidth = 0;
 	Ctx->picHeight = 0;
-	if (Ctx->SingleThreadedAppMode) {
+	if(Ctx->SingleThreadedAppMode) {
 		Ctx->cpbBase = 0;
 		Ctx->cpbEnd = 0;
 	}
-
+	
 	sts = DtsSetVideoClock(hDevice,0);
 	if (sts != BC_STS_SUCCESS)
 	{
@@ -910,7 +892,8 @@ DtsOpenDecoder(HANDLE  hDevice, uint32_t StreamType)
 		StreamType = BC_STREAM_TYPE_PES;
 
 	sts = DtsRecoverableDecOpen(hDevice,StreamType);
-	if(sts != BC_STS_SUCCESS ) {
+	if(sts != BC_STS_SUCCESS )
+	{
 		DebugLog_Trace(LDIL_DBG,"Dts Recoverable Open Failed:%x\n",sts);
 		return sts;
 	}
@@ -949,7 +932,7 @@ DtsStartDecoder(
 		DebugLog_Trace(LDIL_DBG,"DtsStartDecoder: Decoder is not opened\n");
 		return BC_STS_DEC_NOT_OPEN;
 	}
-
+		
 	if( Ctx->State == BC_DEC_STATE_START)
 	{
 		DebugLog_Trace(LDIL_DBG,"DtsStartDecoder: Decoder Not in correct State\n");
@@ -971,17 +954,18 @@ DtsStartDecoder(
 		return sts;
 	}
 
-	sts = DtsFWStartVideo(hDevice, Ctx->VidParams.VideoAlgo,
-			      Ctx->VidParams.FGTEnable,
-			      Ctx->VidParams.MetaDataEnable,
-			      Ctx->VidParams.Progressive,
-			      Ctx->VidParams.OptFlags);
-	if(sts != BC_STS_SUCCESS )
+
+	sts = DtsFWStartVideo(hDevice,
+							Ctx->VidParams.VideoAlgo,
+							Ctx->VidParams.FGTEnable,
+							Ctx->VidParams.MetaDataEnable,
+							Ctx->VidParams.Progressive,
+							Ctx->VidParams.OptFlags);
 	{
 		DebugLog_Trace(LDIL_DBG,"DtsFWStartVideo: Failed [%x]\n",sts);
 		return sts;
-	}
-
+	}	
+	
 	Ctx->State = BC_DEC_STATE_START;
 
 	return sts;
@@ -1033,6 +1017,8 @@ DtsCloseDecoder(
 	/* Close the Input dump File */
 	DumpInputSampleToFile(NULL,0);
 
+	
+
 	return sts;
 }
 
@@ -1054,20 +1040,22 @@ DtsSetVideoParams(
 	Ctx->VidParams.FGTEnable = FGTEnable;
 	Ctx->VidParams.MetaDataEnable = MetaDataEnable;
 	Ctx->VidParams.Progressive = Progressive;
-	/* Ctx->VidParams.Reserved = rsrv; */
-	/* Ctx->VidParams.FrameRate = FrameRate; */
+	//Ctx->VidParams.Reserved = rsrv;
+	//Ctx->VidParams.FrameRate = FrameRate;
 	Ctx->VidParams.OptFlags = OptFlags;
-	/* SingleThreadedAppMode is bit 7 of OptFlags */
-	if (OptFlags & 0x80)
+	// SingleThreadedAppMode is bit 7 of OptFlags
+	if(OptFlags & 0x80)
 		Ctx->SingleThreadedAppMode = 1;
 	else
 		Ctx->SingleThreadedAppMode = 0;
-
 	return BC_STS_SUCCESS;
 }
 
-DRVIFLIB_API BC_STATUS
-DtsSetInputFormat(HANDLE hDevice, BC_INPUT_FORMAT *pInputFormat )
+DRVIFLIB_API BC_STATUS 
+DtsSetInputFormat(
+    HANDLE hDevice,
+    BC_INPUT_FORMAT *pInputFormat
+    )
 {
 	DTS_LIB_CONTEXT *Ctx = NULL;
 	uint32_t videoAlgo = BC_VID_ALGO_H264;
@@ -1081,9 +1069,10 @@ DtsSetInputFormat(HANDLE hDevice, BC_INPUT_FORMAT *pInputFormat )
 		Ctx->VidParams.StartCodeSz = pInputFormat->startCodeSz;
 	else
 		Ctx->VidParams.StartCodeSz = BRCM_START_CODE_SIZE;
-
-	if (pInputFormat->metaDataSz) {
-		if (Ctx->VidParams.pMetaData)
+	
+	if (pInputFormat->metaDataSz)
+	{
+		if(Ctx->VidParams.pMetaData)
 			delete Ctx->VidParams.pMetaData;
 		Ctx->VidParams.pMetaData = new uint8_t[pInputFormat->metaDataSz];
 		memcpy(Ctx->VidParams.pMetaData, pInputFormat->pMetaData, pInputFormat->metaDataSz);
@@ -1092,25 +1081,35 @@ DtsSetInputFormat(HANDLE hDevice, BC_INPUT_FORMAT *pInputFormat )
 	}
 
 	if(Ctx->VidParams.MediaSubType == BC_MSUBTYPE_H264 || Ctx->VidParams.MediaSubType== BC_MSUBTYPE_AVC1)
+	{
 		videoAlgo = BC_VID_ALGO_H264;
+	}
 	else if (Ctx->VidParams.MediaSubType==BC_MSUBTYPE_DIVX)
+	{
 		videoAlgo = BC_VID_ALGO_DIVX;
+	}
 	else if(Ctx->VidParams.MediaSubType == BC_MSUBTYPE_MPEG2VIDEO )
+	{
 		videoAlgo = BC_VID_ALGO_MPEG2;
-	else if(Ctx->VidParams.MediaSubType == BC_MSUBTYPE_WVC1 || Ctx->VidParams.MediaSubType == BC_MSUBTYPE_WMVA ||Ctx->VidParams.MediaSubType == BC_MSUBTYPE_VC1)
+	}
+	else if(Ctx->VidParams.MediaSubType == BC_MSUBTYPE_WVC1 || Ctx->VidParams.MediaSubType == BC_MSUBTYPE_WMVA ||Ctx->VidParams.MediaSubType == BC_MSUBTYPE_VC1) 
+	{
 		videoAlgo = BC_VID_ALGO_VC1;
+	}
 	else  if (Ctx->VidParams.MediaSubType == BC_MSUBTYPE_WMV3)
+	{
 		videoAlgo = BC_VID_ALGO_VC1MP;	// Main Profile
+	}
 
 	if (Ctx->DevId == BC_PCI_DEVID_FLEA || Ctx->VidParams.MediaSubType == BC_MSUBTYPE_WMV3)
 		Ctx->VidParams.StreamType = BC_STREAM_TYPE_PES;
-	else
+	else 
 		Ctx->VidParams.StreamType = BC_STREAM_TYPE_ES;
-
+	
 	DtsSetVideoParams(hDevice, videoAlgo, pInputFormat->FGTEnable, pInputFormat->MetaDataEnable, pInputFormat->Progressive, pInputFormat->OptFlags);
 	DtsSetPESConverter(hDevice);
 
-	//	if (Ctx->DevId == BC_PCI_DEVID_FLEA && !Ctx->SingleThreadedAppMode)
+//	if (Ctx->DevId == BC_PCI_DEVID_FLEA && !Ctx->SingleThreadedAppMode)
 	// Always enable scaling to work around FP performance problem with YUY2
 	if (Ctx->DevId == BC_PCI_DEVID_FLEA)
 		Ctx->bScaling = pInputFormat->bEnableScaling;
@@ -1148,14 +1147,14 @@ DtsGetVideoParams(
 
 }
 
-DRVIFLIB_API BC_STATUS
+DRVIFLIB_API BC_STATUS 
 DtsFormatChange(
-	HANDLE  hDevice,
+    HANDLE  hDevice,
 	uint32_t videoAlg,
 	BOOL	FGTEnable,
 	BOOL	MetaDataEnable,
 	BOOL	Progressive,
-	uint32_t rsrv
+    uint32_t rsrv
 	)
 {
 	return BC_STS_NOT_IMPL;
@@ -1167,11 +1166,10 @@ DtsStopDecoder(
 	)
 {
 	BC_STATUS	sts = BC_STS_SUCCESS;
+
 	DTS_LIB_CONTEXT		*Ctx = NULL;
 	DTS_GET_CTX(hDevice,Ctx);
 
-	if(Ctx->DevId == BC_PCI_DEVID_FLEA)
-		return BC_STS_SUCCESS; // PAUSE and RESUME do nothing for FLEA
 
 	if( (Ctx->State != BC_DEC_STATE_START) && (Ctx->State != BC_DEC_STATE_PAUSE) ) {
 		DebugLog_Trace(LDIL_DBG,"DtsStopDecoder: Decoder Not Started\n");
@@ -1197,22 +1195,22 @@ DRVIFLIB_API BC_STATUS
     )
 {
 	BC_STATUS	sts = BC_STS_SUCCESS;
-
 	DTS_LIB_CONTEXT		*Ctx = NULL;
 	DTS_GET_CTX(hDevice,Ctx);
+
+	if(Ctx->DevId == BC_PCI_DEVID_FLEA)
+		return BC_STS_SUCCESS; // PAUSE and RESUME do nothing for FLEA
 
 	if( Ctx->State != BC_DEC_STATE_START ) {
 		DebugLog_Trace(LDIL_DBG,"DtsPauseDecoder: Decoder Not Started\n");
 		return BC_STS_ERR_USAGE;
 	}
-
 	sts = DtsFWPauseVideo(hDevice,eC011_PAUSE_MODE_ON);	
 	if(sts != BC_STS_SUCCESS )
 	{
 		DebugLog_Trace(LDIL_DBG,"DtsPauseDecoder: Failed\n");
 		return sts;
 	}
-
 	Ctx->State = BC_DEC_STATE_PAUSE;
 
 
@@ -1232,8 +1230,8 @@ DRVIFLIB_API BC_STATUS
 	if( Ctx->State == BC_DEC_STATE_START || Ctx->DevId == BC_PCI_DEVID_FLEA) {
 		return BC_STS_SUCCESS;
 	}
-
-	if( Ctx->State != BC_DEC_STATE_PAUSE ) {
+	
+	if( Ctx->State != BC_DEC_STATE_PAUSE ) {		
 		return BC_STS_ERR_USAGE;
 	}
 
@@ -1252,7 +1250,8 @@ DRVIFLIB_API BC_STATUS
 	return sts;
 }
 
-VIFLIB_API BC_STATUS
+
+DRVIFLIB_API BC_STATUS 
 DtsSetVideoPID(
     HANDLE hDevice,
 	uint32_t pid
@@ -1262,7 +1261,7 @@ DtsSetVideoPID(
 }
 
 
-DRVIFLIB_API BC_STATUS
+DRVIFLIB_API BC_STATUS 
 DtsStartCaptureImmidiate(HANDLE		hDevice,
 						 uint32_t   Reserved)
 {
@@ -1297,14 +1296,14 @@ DtsStartCaptureImmidiate(HANDLE		hDevice,
 	if(Ctx->DevId == BC_PCI_DEVID_FLEA)
 	{
 		pIocData->u.RxCap.PauseThsh = Ctx->MpoolCnt - 2;
-		pIocData->u.RxCap.ResumeThsh = 	FLEA_RT_PU_THRESHOLD;
+		pIocData->u.RxCap.ResumeThsh = 	FLEA_RT_PU_THRESHOLD; 
 	}
 
 	if( (sts=DtsDrvCmd(Ctx,BCM_IOC_START_RX_CAP,0,pIocData,FALSE)) != BC_STS_SUCCESS){
 		DebugLog_Trace(LDIL_DBG,"DtsStartCapture: Failed: %d\n",sts);
 	}
 
-	DtsRelIoctlData(Ctx,pIocData);
+	DtsRelIoctlData(Ctx,pIocData);	
 
 	return sts;
 }
@@ -1375,9 +1374,10 @@ DtsFlushRxCapture(
 	if(bDiscardOnly == false)
 	{
 		Ctx->bMapOutBufDone = false;
-	}
+    }
 
 	//ResetEvent(Ctx->CancelProcOut);
+
 	return Sts;
 }
 
@@ -1395,19 +1395,19 @@ DRVIFLIB_API BC_STATUS
 DtsProcOutput(
     HANDLE  hDevice,
 	uint32_t milliSecWait,
-	BC_DTS_PROC_OUT *pOut
-)
-
+	BC_DTS_PROC_OUT *pOut)
 {
-
 	BC_STATUS	stRel,sts = BC_STS_SUCCESS;
 	BC_DTS_PROC_OUT OutBuffs;
 	uint32_t	width=0, savFlags=0;
-
+	
 	DTS_LIB_CONTEXT		*Ctx = NULL;
-
+	
+	
+	
+	
 	DTS_GET_CTX(hDevice,Ctx);
-
+	
 	if(!pOut){
 		DebugLog_Trace(LDIL_DBG,"DtsProcOutput: Invalid Arg!!\n");
 		return BC_STS_INV_ARG;
@@ -1444,7 +1444,7 @@ DtsProcOutput(
 						Ctx->eosCnt = BC_EOS_PIC_COUNT;
 					else
 						Ctx->eosCnt ++;
-
+						
 					if(Ctx->eosCnt >= BC_EOS_PIC_COUNT)
 					{
 						/* Mark this picture as end of stream..*/
@@ -1452,9 +1452,10 @@ DtsProcOutput(
 						Ctx->bEOS = TRUE;
 						Ctx->FlushIssued = FALSE;
 						DebugLog_Trace(LDIL_DBG,"DtsProcOutput: Last Picture Set\n");
-					}
+					}					
 				}
-				sts = BC_STS_NO_DATA;
+				
+				sts = BC_STS_NO_DATA;			
 			}
 			return sts;
 		}
@@ -1464,6 +1465,7 @@ DtsProcOutput(
 		/* Copying the discontinuity count */
 		if(OutBuffs.discCnt)
 			pOut->discCnt = OutBuffs.discCnt;
+
 
 		if(pOut->PoutFlags & BC_POUT_FLAGS_FMT_CHANGE){
 			if(pOut->PoutFlags & BC_POUT_FLAGS_PIB_VALID){
@@ -1475,7 +1477,8 @@ DtsProcOutput(
 			DtsUpdateVidParams(Ctx, pOut);
 
 			DtsRelRxBuff(Ctx,&Ctx->pOutData->u.RxBuffs,TRUE);
-
+			
+		
 			return BC_STS_FMT_CHANGE;
 		}
 
@@ -1503,8 +1506,7 @@ DtsProcOutput(
 			Ctx->FlushIssued = FALSE;
 			DebugLog_Trace(LDIL_DBG,"DtsProcOutput: Last Picture Set\n");
 		}
-
-		if (pOut->DropFrames)
+		if(pOut->DropFrames)
 		{
 			/* We need to release the buffers even if we fail to copy..*/
 			stRel = DtsRelRxBuff(Ctx,&Ctx->pOutData->u.RxBuffs,FALSE);
@@ -1513,7 +1515,7 @@ DtsProcOutput(
 			{
 				DebugLog_Trace(LDIL_DBG,"DtsProcOutput: Failed to copy out buffs.. %x\n", sts);
 				return sts;
-			}
+			}			
 			pOut->DropFrames--;
 			DebugLog_Trace(LDIL_DBG,"DtsProcOutput: Drop count.. %d\n", pOut->DropFrames);
 
@@ -1530,9 +1532,10 @@ DtsProcOutput(
 		else
 			break;
 
-	/* this can't be right, DropFrames is a uint8_t so it will always be greater than or equal to zero. */
-	/* } while((pOut->DropFrames >= 0)); */
+	// this can't be right, DropFrames is a uint8_t so it will always be greater than or equal to zero.
+  //} while((pOut->DropFrames >= 0));
 	} while((pOut->DropFrames > 0));
+
 
 	if(pOut->AppCallBack && pOut->hnd && (OutBuffs.PoutFlags & BC_POUT_FLAGS_PIB_VALID))
 	{
@@ -1561,6 +1564,9 @@ DtsProcOutput(
 		pOut->PicInfo = OutBuffs.PicInfo;
 	}
 
+	/* Update Counters */
+	DtsUpdateOutStats(Ctx,pOut);
+	
 	/* Update Counters */
 	DtsUpdateOutStats(Ctx,pOut);
 
@@ -1729,11 +1735,11 @@ DtsReleaseOutputBuffs(
 
 // NAREN this function is used to send data buffered to the HW
 // This is initially for FP since it needs buffering to avoid stalling the CPU
-// and excessive polling from the single thread plugin due to the HW returning 0 size
+// and excessive polling from the single thread plugin due to the HW returning 0 size 
 // buffers when it is absorbing data
 // FP tries to send bursts of data to return from hide or minimized operation to full visible
 // operation and this will allow bigger bursts
-DRVIFLIB_API BC_STATUS
+DRVIFLIB_API BC_STATUS 
 DtsSendDataFPMode( HANDLE  hDevice ,
 				 uint8_t *pUserData,
 				 uint32_t ulSizeInBytes,
@@ -1749,7 +1755,7 @@ DtsSendDataFPMode( HANDLE  hDevice ,
 	//unused uint32_t i_cnt=0, p_cnt=0;
 
 	//unused BC_DTS_STATS *pDtsStat = DtsGetgStats();
-
+	
 	DTS_GET_CTX(hDevice,Ctx);
 
 	// Not really needed for FP since it only used H.264. But leave it just in case
@@ -1767,7 +1773,7 @@ DtsSendDataFPMode( HANDLE  hDevice ,
 	Ctx->SingleThreadedAppMode &= 0x7;
 	if(sts != BC_STS_SUCCESS)
 		return sts;
-
+	
 	/* If we are aborting TX then clear the buffer and return */
 	if(pStat.cpbEmptySize & 0x80000000)
 	{
@@ -1781,7 +1787,7 @@ DtsSendDataFPMode( HANDLE  hDevice ,
 		// first make sure the HW can deal with the data
 		if(pStat.cpbEmptySize == 0)
 			return BC_STS_SUCCESS;
-
+		
 		if(Ctx->nPendFPBufInd <= pStat.cpbEmptySize)
 			TransferSz = Ctx->nPendFPBufInd;
 		else
@@ -1822,7 +1828,7 @@ DtsSendDataFPMode( HANDLE  hDevice ,
 			DtsUpdateInStats(Ctx,ulSizeInBytes);
 		return sts;
 	}
-
+	
 	// We were unable to send all the data. So buffer the rest.
 	// Do a poor man's queue here. Ugly, so fix this if it is a performance problem
 	// First add to the buffer
@@ -1833,7 +1839,7 @@ DtsSendDataFPMode( HANDLE  hDevice ,
 		TransferSz = Ctx->nPendFPBufInd;
 	else
 		TransferSz = pStat.cpbEmptySize;
-
+	
 	sts = DtsTxDmaText(hDevice, Ctx->FPpendingBuf, TransferSz, &DramOff, encrypted);
 	if(sts == BC_STS_SUCCESS)
 		DtsUpdateInStats(Ctx, TransferSz);
@@ -1850,7 +1856,7 @@ DtsSendDataFPMode( HANDLE  hDevice ,
 
 }
 
-DRVIFLIB_API BC_STATUS
+DRVIFLIB_API BC_STATUS 
 DtsSendDataBuffer( HANDLE  hDevice ,
 				 uint8_t *pUserData,
 				 uint32_t ulSizeInBytes,
@@ -1864,13 +1870,13 @@ DtsSendDataBuffer( HANDLE  hDevice ,
 	BC_IOCTL_DATA		*pIocData = NULL;
 	uint8_t bForceDeliver = false;
 	uint8_t bFlushing = false;
-
+	
 	//unused uint8_t* pData;
 	uint32_t	ulSize;
 
 	uint32_t ulTxBufAvailSize;
 	//unused BC_DTS_STATS *pDtsStat = DtsGetgStats( );
-
+	
 	DTS_GET_CTX(hDevice,Ctx);
 
 	if(Ctx->VidParams.VideoAlgo == BC_VID_ALGO_VC1MP)
@@ -1885,7 +1891,7 @@ DtsSendDataBuffer( HANDLE  hDevice ,
 	if (Ctx->nTxHoldBufWrite >= Ctx->nTxHoldBufRead)
 	{
 		ulTxBufAvailSize = TX_HOLD_BUF_SIZE - (Ctx->nTxHoldBufWrite - Ctx->nTxHoldBufRead);
-	}
+	}	
 	else
 	{
 		ulTxBufAvailSize = Ctx->nTxHoldBufRead - Ctx->nTxHoldBufWrite;
@@ -1894,14 +1900,14 @@ DtsSendDataBuffer( HANDLE  hDevice ,
 	{
 		if ((TX_HOLD_BUF_SIZE - Ctx->nTxHoldBufWrite) >= ulSizeInBytes)
 		{
-			memcpy(Ctx->pendingBuf+Ctx->nTxHoldBufWrite, pUserData, ulSizeInBytes);
+			memcpy(Ctx->pendingBuf+Ctx->nTxHoldBufWrite, pUserData, ulSizeInBytes); 
 			Ctx->nTxHoldBufWrite = (Ctx->nTxHoldBufWrite + ulSizeInBytes) % TX_HOLD_BUF_SIZE;
 			ulSizeInBytes = 0;
 		}
 		else
 		{
 			ulSize = TX_HOLD_BUF_SIZE - Ctx->nTxHoldBufWrite;
-			memcpy(Ctx->pendingBuf+Ctx->nTxHoldBufWrite, pUserData, ulSize);
+			memcpy(Ctx->pendingBuf+Ctx->nTxHoldBufWrite, pUserData, ulSize); 
 			pUserData += ulSize;
 			memcpy(Ctx->pendingBuf, pUserData, ulSizeInBytes - ulSize);
 			Ctx->nTxHoldBufWrite = ulSizeInBytes - ulSize;
@@ -1935,7 +1941,7 @@ DtsSendDataBuffer( HANDLE  hDevice ,
 		{
 			if (pIocData->u.drvStat.DrvcpbEmptySize & 0x80000000)
 			{
-				//Aborting Tx
+				//Aborting Tx 
 				Ctx->nTxHoldBufWrite = Ctx->nTxHoldBufRead = 0;
 				DtsRelIoctlData(Ctx,pIocData);
 				return BC_STS_IO_USER_ABORT;
@@ -1947,9 +1953,9 @@ DtsSendDataBuffer( HANDLE  hDevice ,
 			}
 			if (pIocData->u.drvStat.DrvcpbEmptySize < ulSize)
 				ulSize = pIocData->u.drvStat.DrvcpbEmptySize;
-
+			
 			if(!bForceDeliver)
-				ulSize = (ulSize >> 2) << 2;
+				ulSize = (ulSize >> 2) << 2;			
 
 			if (ulSize)
 			{
@@ -2009,14 +2015,14 @@ DtsSendDataBuffer( HANDLE  hDevice ,
 
 	if (ulSizeInBytes && pUserData)
 		memcpy(Ctx->pendingBuf, pUserData, ulSizeInBytes);
-
+		
 	Ctx->nPendBufInd = ulSizeInBytes;
 	return sts;
-
-#endif
+	
+#endif	
 }
 
-DRVIFLIB_API BC_STATUS
+DRVIFLIB_API BC_STATUS 
 DtsSendDataDirect( HANDLE  hDevice ,
 				 uint8_t *pUserData,
 				 uint32_t ulSizeInBytes,
@@ -2033,7 +2039,7 @@ DtsSendDataDirect( HANDLE  hDevice ,
 	int		FifoSize;
 
 	BC_DTS_STATS *pDtsStat = DtsGetgStats( );
-
+	
 	DTS_GET_CTX(hDevice,Ctx);
 
 	if (pUserData == NULL || ulSizeInBytes == 0)
@@ -2042,9 +2048,9 @@ DtsSendDataDirect( HANDLE  hDevice ,
 	if(Ctx->VidParams.VideoAlgo == BC_VID_ALGO_VC1MP)
 		encrypted|=0x2;
 
-	if (!(Ctx->FixFlags & DTS_SKIP_TX_CHK_CPB) && (Ctx->DevId == BC_PCI_DEVID_LINK))
+	if (!(Ctx->FixFlags & DTS_SKIP_TX_CHK_CPB) && (Ctx->DevId == BC_PCI_DEVID_LINK)) 
 	{
-
+		
 		if(encrypted&0x2){
 			DtsDevRegisterRead(hDevice, REG_Dec_TsAudCDB2Base, &base);
 			DtsDevRegisterRead(hDevice, REG_Dec_TsAudCDB2End,	&end);
@@ -2062,7 +2068,7 @@ DtsSendDataDirect( HANDLE  hDevice ,
 			DtsDevRegisterRead(hDevice, REG_DecCA_RegCinWrPtr, &writep);
 			DtsDevRegisterRead(hDevice, REG_DecCA_RegCinRdPtr, &readp);
 		}
-
+	
 		CpbSize = end - base;
 
 		if(writep >= readp) {
@@ -2070,17 +2076,17 @@ DtsSendDataDirect( HANDLE  hDevice ,
 		} else {
 			CpbFullness = (end - base) - (readp - writep);
 		}
-
+		
 		FifoSize = CpbSize - CpbFullness;
 
-		if(FifoSize < BC_INFIFO_THRESHOLD) {
+		if(FifoSize < BC_INFIFO_THRESHOLD) {	
 			//DebugLog_Trace(LDIL_DBG, "Bsy0:Base:0x%08x End:0x%08x Wr:0x%08x Rd:0x%08x FifoSz:0x%08x\n",
 			//						base,end, writep, readp, FifoSize);
 			pDtsStat->TxFifoBsyCnt++;
 			return BC_STS_BUSY;
 		}
 
-		if((signed int)ulSizeInBytes > (FifoSize - BC_INFIFO_THRESHOLD)) {
+		if((signed int)ulSizeInBytes > (FifoSize - BC_INFIFO_THRESHOLD)) {		
 			//DebugLog_Trace(LDIL_DBG, "Bsy1:Base:0x%08x End:0x%08x Wr:0x%08x Rd:0x%08x FifoSz:0x%08x XfrReq:0x%08x\n",
 			//					base,end, writep, readp, FifoSize, ulSizeInBytes);
 			pDtsStat->TxFifoBsyCnt++;
@@ -2093,10 +2099,10 @@ DtsSendDataDirect( HANDLE  hDevice ,
 	{
 		DtsUpdateInStats(Ctx,ulSizeInBytes);
 	}
-	return sts;
+	return sts;	
 }
-
-DRVIFLIB_INT_API BC_STATUS
+	
+DRVIFLIB_INT_API BC_STATUS 
 DtsSendData( HANDLE  hDevice ,
 				 uint8_t *pUserData,
 				 uint32_t ulSizeInBytes,
@@ -2123,7 +2129,7 @@ DtsSendData( HANDLE  hDevice ,
 	}
 }
 
-DRVIFLIB_API BC_STATUS
+DRVIFLIB_API BC_STATUS 
 DtsSendSPESPkt(HANDLE  hDevice ,
 			   uint64_t timeStamp,
 			   BOOL encrypted
@@ -2134,7 +2140,7 @@ DtsSendSPESPkt(HANDLE  hDevice ,
 
 	DTS_INPUT_MDATA		*im = NULL;
 	//unused uint8_t *temp=NULL;
-	uint32_t ulSize = 0;
+	uint32_t ulSize = 0;	
 	uint8_t* pSPESPkt = NULL;
 	uint8_t	i = 0;
 
@@ -2145,7 +2151,7 @@ DtsSendSPESPkt(HANDLE  hDevice ,
 		if (sts == BC_STS_SUCCESS)
 			break;
 		i++;
-		bc_sleep_ms(2);
+		bc_sleep_ms(2);			
 	}
 	if (sts == BC_STS_SUCCESS)
 	{
@@ -2158,12 +2164,12 @@ DtsSendSPESPkt(HANDLE  hDevice ,
 			}
 
 			sts =DtsPrepareMdataASFHdr(Ctx, im, pSPESPkt);
-
+		
 			if(sts != BC_STS_SUCCESS){
                 DtsAlignedFree(pSPESPkt);
 				DebugLog_Trace(LDIL_DBG, "DtsProcInput: Failed to Prepare ASFHdr for SPES:%x\n", sts);
                 return sts;
-			}
+			}				
 			ulSize = 32+sizeof(BC_PES_HDR_FORMAT);
 		}
 		sts = DtsSendData(hDevice, pSPESPkt, ulSize, 0, encrypted);
@@ -2174,17 +2180,17 @@ DtsSendSPESPkt(HANDLE  hDevice ,
 			DtsFreeMdata(Ctx,im,TRUE);
 			return sts;
 		}
-
+	
 		sts = DtsInsertMdata(Ctx,im);
-
+	
 		if(sts != BC_STS_SUCCESS){
 			DebugLog_Trace(LDIL_DBG, "DtsProcInput: DtsInsertMdata failed\n");
-		}
+		}		
 	}
 	return sts;
 }
 
-DRVIFLIB_API BC_STATUS
+DRVIFLIB_API BC_STATUS 
 DtsAlignSendData( HANDLE  hDevice ,
 				 uint8_t *pUserData,
 				 uint32_t ulSizeInBytes,
@@ -2201,14 +2207,14 @@ DtsAlignSendData( HANDLE  hDevice ,
 	uint8_t* alignBuf;
 	//unused DTS_INPUT_MDATA		*im = NULL;
 	//unused uint8_t *temp=NULL;
-	//unused uint32_t ulSize = 0;
+	//unused uint32_t ulSize = 0;	
 
 	DTS_GET_CTX(hDevice,Ctx);
 
 	alignBuf = Ctx->alignBuf;
 
 	LONG ulRestBytes = ulSizeInBytes;
-	uint32_t ulDeliverBytes = 0;
+	uint32_t ulDeliverBytes = 0;	
 	uint32_t ulPktLength;
 	uint32_t ulPktHeaderSz;
 	uint32_t ulUsedDataBytes = 0;
@@ -2230,7 +2236,7 @@ DtsAlignSendData( HANDLE  hDevice ,
 
 	uint8_t j = 0;
 	uint8_t k = 0;
-
+	
 	//SoftRave (VC-1 S/M and Divx) EOS Timing Marker
 	if ((timeStamp ||
 		(Ctx->VidParams.MediaSubType == BC_MSUBTYPE_WMV3) ||
@@ -2249,7 +2255,7 @@ DtsAlignSendData( HANDLE  hDevice ,
 		sts = BC_STS_SUCCESS;
 
 		pDeliverBuf = pRestDataPt;
-
+		
 		if (Ctx->State != BC_DEC_STATE_START && Ctx->State != BC_DEC_STATE_PAUSE)
 			break;
 
@@ -2258,16 +2264,16 @@ DtsAlignSendData( HANDLE  hDevice ,
 
 		if (Ctx->VidParams.StreamType == BC_STREAM_TYPE_ES)
 		{
-			// SPES Mode
+			// SPES Mode 
 			ulDeliverBytes = ulRestBytes;
 			if (timeStamp)
 			{
 				sts = DtsSendSPESPkt(hDevice, timeStamp, encrypted);
 			}
-			timeStamp = 0;
-
-			if(oddBytes)
-			{
+			timeStamp = 0;				
+			
+			if(oddBytes) 
+			{	
 				if (ulRestBytes > ALIGN_BUF_SIZE)
 					ulDeliverBytes = ALIGN_BUF_SIZE - oddBytes;
 				else
@@ -2275,7 +2281,7 @@ DtsAlignSendData( HANDLE  hDevice ,
 
 				memcpy(alignBuf, pDeliverBuf, ulDeliverBytes);
 				pDeliverBuf = alignBuf;
-			}
+			}			
 			ulUsedDataBytes = ulDeliverBytes;
 		}
 		else if (Ctx->VidParams.StreamType == BC_STREAM_TYPE_PES)
@@ -2293,11 +2299,11 @@ DtsAlignSendData( HANDLE  hDevice ,
 				ulPktHeaderSz = 0;
 			if (bPrivData || bExtData)
 			     ulPktHeaderSz += 1;
-
+			
 			if (bPrivData)
 				ulPktHeaderSz += 16;
-
-			if (bExtData)
+			
+			if (bExtData) 
 				ulPktHeaderSz += nExtDataLen + 1;
 
 			if (bStuffing)
@@ -2311,7 +2317,7 @@ DtsAlignSendData( HANDLE  hDevice ,
 			ulUsedDataBytes = ulPktLength - ulPktHeaderSz - 3;
 			ulDeliverBytes = ulPktLength + 6;
 
-
+			
 			memcpy(alignBuf,(uint8_t*)b_pes_header, 9);
 			*((uint16_t*)(alignBuf + 4)) = WORD_SWAP((uint16_t)ulPktLength);
 			*(alignBuf + 8) = (uint8_t)ulPktHeaderSz;
@@ -2324,28 +2330,28 @@ DtsAlignSendData( HANDLE  hDevice ,
 				j += 5;
 			}
 
-			if (bPrivData || bExtData)
+			if (bPrivData || bExtData) 
 			{
 				*(alignBuf + 7) |= 0x01;
-				*(alignBuf + j) = 0x00;
+			    *(alignBuf + j) = 0x00;
 				if (bPrivData)
-					*(alignBuf + j) |= 0x80;
+					*(alignBuf + j) |= 0x80;				
 				if (bExtData)
-					*(alignBuf + j) |= 0x01;
+					*(alignBuf + j) |= 0x01;				
 				j++;
 			}
 
-			if (bPrivData)
+			if (bPrivData) 
 			{
-				memcpy(alignBuf + j, pPrivData, 16);
+				memcpy(alignBuf + j, pPrivData, 16);     
 				j += 16;
 			}
-			if (bExtData)
+			if (bExtData) 
 			{
 				*(alignBuf + j) = 0x80 | nExtDataLen;
 				j++;
 				memcpy(alignBuf + j, pExtData, nExtDataLen);
-				j += nExtDataLen;
+				j += nExtDataLen;	
 			}
 
 			if (bStuffing)
@@ -2357,7 +2363,7 @@ DtsAlignSendData( HANDLE  hDevice ,
 			}
 			memcpy(alignBuf + j, pDeliverBuf, ulUsedDataBytes);
 			pDeliverBuf = alignBuf;
-
+			
 		}
 
 		if (ulDeliverBytes)
@@ -2399,7 +2405,8 @@ DtsProcInput( HANDLE  hDevice ,
 				 uint8_t *pUserData,
 				 uint32_t ulSizeInBytes,
 				 uint64_t timeStamp,
-				 BOOL encrypted)
+				 BOOL  encrypted
+			    )
 {
 	BC_STATUS	sts = BC_STS_SUCCESS;
 	DTS_LIB_CONTEXT		*Ctx = NULL;
@@ -2430,8 +2437,8 @@ DtsProcInput( HANDLE  hDevice ,
 	if (Ctx->PESConvParams.m_bAddSpsPps)
 	{
 		pSpsPpsBuf = Ctx->PESConvParams.m_pSpsPpsBuf;
-		ulSpsPpsSize = Ctx->PESConvParams.m_iSpsPpsLen;
-
+		ulSpsPpsSize = Ctx->PESConvParams.m_iSpsPpsLen;	
+	
 		if  (pSpsPpsBuf != NULL && ulSpsPpsSize != 0)
 		{
 			if ((sts = DtsAlignSendData(hDevice, pSpsPpsBuf, ulSpsPpsSize, 0, 0)) != BC_STS_SUCCESS)
@@ -2439,7 +2446,7 @@ DtsProcInput( HANDLE  hDevice ,
 		}
 		Ctx->PESConvParams.m_bAddSpsPps = false;
 	}
-
+	
 	if ((sts = DtsAddStartCode(hDevice, &pUserData, &ulSizeInBytes, &timeStamp)) != BC_STS_SUCCESS)
 	{
 		if (sts == BC_STS_IO_XFR_ERROR)
@@ -2453,7 +2460,7 @@ DtsProcInput( HANDLE  hDevice ,
 		if(DtsFindStartCode(hDevice, pUserData, ulSizeInBytes, &Offset) != BC_STS_SUCCESS)
 		{
 			timeStamp = 0;
-			Offset = 0;
+			Offset = 0;				
 		}
 		if(Offset == 0)
 		{
@@ -2471,13 +2478,16 @@ DtsProcInput( HANDLE  hDevice ,
 }
 
 DRVIFLIB_API BC_STATUS
-DtsGetColorPrimaries(HANDLE  hDevice, uint32_t *colorPrimaries)
+DtsGetColorPrimaries( HANDLE  hDevice ,
+				 uint32_t *colorPrimaries
+				 )
 {
 	return BC_STS_NOT_IMPL;
 }
 
-DRVIFLIB_API BC_STATUS
-DtsSendEOS(HANDLE  hDevice, uint32_t Op)
+DRVIFLIB_API BC_STATUS 
+DtsSendEOS( HANDLE  hDevice,uint32_t Op
+			  )
 {
 	BC_STATUS			sts = BC_STS_SUCCESS;
 	DTS_LIB_CONTEXT		*Ctx = NULL;
@@ -2497,7 +2507,7 @@ DtsSendEOS(HANDLE  hDevice, uint32_t Op)
 
 	Ctx->PESConvParams.m_pPESExtField = NULL;
 	Ctx->PESConvParams.m_pPESPrivData = NULL;
-
+	
 	//SoftRave (VC-1 S/M and Divx) EOS Timing Marker
 	if ((Ctx->VidParams.MediaSubType == BC_MSUBTYPE_WMV3) ||
 		(Ctx->VidParams.MediaSubType == BC_MSUBTYPE_DIVX))
@@ -2512,7 +2522,7 @@ DtsSendEOS(HANDLE  hDevice, uint32_t Op)
 	if ((Ctx->VidParams.MediaSubType == BC_MSUBTYPE_WVC1) ||
 		(Ctx->VidParams.MediaSubType == BC_MSUBTYPE_WMV3) ||
 		(Ctx->VidParams.MediaSubType == BC_MSUBTYPE_WMVA) ||
-		(Ctx->VidParams.MediaSubType == BC_MSUBTYPE_VC1)
+		(Ctx->VidParams.MediaSubType == BC_MSUBTYPE_VC1)  
 		)
 	{
 		Ctx->PESConvParams.m_bPESExtField = true;
@@ -2560,9 +2570,9 @@ DtsSendEOS(HANDLE  hDevice, uint32_t Op)
 			Ctx->PESConvParams.m_bStuffing = true;
 			Ctx->PESConvParams.m_nStuffingBytes = 3;
 		}
-
-		nTag = 0xffff0000 | (0xffff & 0x0001);
-		btp_video_done_es[0]   = 0x00;
+		
+		nTag = 0xffff0000 | (0xffff & 0x0001); 
+		btp_video_done_es[0]   = 0x00;    
 		btp_video_done_es[13]   = (nTag >> 24) & 0xff;
 		btp_video_done_es[14]   = (nTag >> 16) & 0xff;
 		btp_video_done_es[15]   = (nTag >> 8)  & 0xff;
@@ -2573,7 +2583,7 @@ DtsSendEOS(HANDLE  hDevice, uint32_t Op)
 		Ctx->PESConvParams.m_pPESPrivData = NULL;
 		Ctx->PESConvParams.m_bStuffing = false;
 		Ctx->PESConvParams.m_nStuffingBytes = 0;
-
+		
 		sts = DtsAlignSendData(hDevice, pEOS, nEOSLen, 0, 0);
 		sts = DtsAlignSendData(hDevice, pEOS, nEOSLen, 0, 0);
 	}
@@ -2621,8 +2631,9 @@ DtsSendEOS(HANDLE  hDevice, uint32_t Op)
 	return sts;
 }
 
-DRVIFLIB_API BC_STATUS
-DtsFlushInput( HANDLE  hDevice, uint32_t Op)
+DRVIFLIB_API BC_STATUS 
+DtsFlushInput( HANDLE  hDevice ,
+				 uint32_t Op )
 {
 	BC_STATUS			sts = BC_STS_SUCCESS;
 	DTS_LIB_CONTEXT		*Ctx = NULL;
@@ -2640,7 +2651,7 @@ DtsFlushInput( HANDLE  hDevice, uint32_t Op)
 #ifdef TX_CIRCULAR_BUFFER
 		if ((Ctx->InSampleCount == 0) && (Ctx->nTxHoldBufRead == Ctx->nTxHoldBufWrite))
 			return BC_STS_SUCCESS;
-#else
+#else		
 		if ((Ctx->InSampleCount == 0) && (Ctx->nPendBufInd == 0))
 			return BC_STS_SUCCESS;
 #endif
@@ -2657,7 +2668,7 @@ DtsFlushInput( HANDLE  hDevice, uint32_t Op)
 			DtsSendData(hDevice, 0, 0, 0, 0);
 		Ctx->nPendBufInd = 0;
 #endif
-		if (Ctx->SingleThreadedAppMode && Ctx->nPendFPBufInd)
+		if (Ctx->SingleThreadedAppMode && Ctx->nPendFPBufInd) 
 		{
 			DtsSendData(hDevice, 0, 0, 0, 0);
 			Ctx->FPDrain = TRUE;
@@ -2707,7 +2718,7 @@ DtsFlushInput( HANDLE  hDevice, uint32_t Op)
 	Ctx->eosCnt = 0;
 	Ctx->bEOS = FALSE;
 	Ctx->InSampleCount = 0;
-
+	
 	// Clear the saved cpb base and end for SingleThreadedAppMode
 	if(Ctx->SingleThreadedAppMode) {
 		Ctx->cpbBase = 0;
@@ -2797,7 +2808,7 @@ DtsSetRateChange(HANDLE  hDevice ,
 				//I-Frame Only for Fast Forward and All Speed Backward
 				DebugLog_Trace(LDIL_DBG,"DtsSetRateChange: Set Very Fast Speed for I-Frame Only\n");
 				mode = eC011_SKIP_PIC_I_DECODE;
-				HostTrickModeEnable = 1;		
+				HostTrickModeEnable = 1;			
 			}
 		}
 		else
@@ -2807,13 +2818,13 @@ DtsSetRateChange(HANDLE  hDevice ,
 			{
 				DebugLog_Trace(LDIL_DBG,"DtsSetRateChange: Set Normal Speed\n");
 				mode = eC011_SKIP_PIC_IPB_DECODE;
-				HostTrickModeEnable = 0;
+				HostTrickModeEnable = 0;			
 				if(fRate > 1 && fRate < 2)
 				{
 					//Nav is giving I instead of IBP for 1.4x or 1.6x
 					DebugLog_Trace(LDIL_DBG,"DtsSetRateChange: Set 1.x I only\n");
 					mode = eC011_SKIP_PIC_I_DECODE;
-					HostTrickModeEnable = 1;
+					HostTrickModeEnable = 1;		
 				}
 			}
 			else
@@ -2821,7 +2832,7 @@ DtsSetRateChange(HANDLE  hDevice ,
 				//I-Frame Only for Fast Forward and All Speed Backward
 				DebugLog_Trace(LDIL_DBG,"DtsSetRateChange: Set Very Fast Speed for I-Frame Only\n");
 				mode = eC011_SKIP_PIC_I_DECODE;
-				HostTrickModeEnable = 1;
+				HostTrickModeEnable = 1;			
 			}
 		}
 
@@ -2866,7 +2877,7 @@ DtsSetFFRate(HANDLE  hDevice ,
 	//For Rate Change
 	uint32_t mode = 0;
 	uint32_t HostTrickModeEnable = 0;
-
+	
 
 	//Change Rate Value for Version 1.1
 	//Rate: Specifies the new rate x 10000
@@ -2904,7 +2915,7 @@ DtsSetFFRate(HANDLE  hDevice ,
 		{
 			//Normal Mode
 			DebugLog_Trace(LDIL_DBG,"DtsSetFFRate: Set Normal Speed\n");
-
+			
 			HostTrickModeEnable = 0;
 		}
 		else
@@ -2912,7 +2923,7 @@ DtsSetFFRate(HANDLE  hDevice ,
 			//Fast Forward
 			DebugLog_Trace(LDIL_DBG,"DtsSetFFRate: Set Fast Forward\n");
 
-			HostTrickModeEnable = 1;
+			HostTrickModeEnable = 1;			
 		}
 
 		sts = DtsFWSetHostTrickMode(hDevice, HostTrickModeEnable);
@@ -2936,7 +2947,6 @@ DtsSetFFRate(HANDLE  hDevice ,
 			return sts;
 		}
 	}
-
 
 	return BC_STS_SUCCESS;
 }
@@ -3035,7 +3045,7 @@ DRVIFLIB_API BC_STATUS
 }
 
 DRVIFLIB_API BC_STATUS 
-DtsSet422Mode(HANDLE hDevice, uint8_t Mode422)
+DtsSet422Mode(HANDLE hDevice, uint8_t	Mode422)
 {
 	BC_STATUS	sts = BC_STS_SUCCESS;
 	DTS_LIB_CONTEXT		*Ctx = NULL;
@@ -3054,7 +3064,7 @@ DtsSet422Mode(HANDLE hDevice, uint8_t Mode422)
 	return sts;
 }
 
-DRVIFLIB_API BC_STATUS
+DRVIFLIB_API BC_STATUS 
 DtsIsEndOfStream(
     HANDLE  hDevice,
     uint8_t*	bEOS
@@ -3066,10 +3076,10 @@ DtsIsEndOfStream(
 
 	*bEOS = Ctx->bEOS;
 
-	return sts;
+	return sts;	
 }
 
-DRVIFLIB_API BC_STATUS
+DRVIFLIB_API BC_STATUS 
 DtsSetColorSpace(
 	HANDLE  hDevice,
 	BC_OUTPUT_FORMAT	Mode422
@@ -3085,7 +3095,7 @@ DtsSetColorSpace(
 	{
 		Ctx->b422Mode = Mode422;
 		sts = DtsSetLinkIn422Mode(hDevice);
-	}
+	} 
 	else if (Ctx->DevId == BC_PCI_DEVID_FLEA)
 	{
 		Ctx->b422Mode = Mode422;
@@ -3150,8 +3160,8 @@ DtsGetDriverStatus( HANDLE  hDevice,
 {
     BC_DTS_STATS temp;
     BC_STATUS ret;
-    DTS_LIB_CONTEXT *Ctx = NULL;
 
+    DTS_LIB_CONTEXT *Ctx = NULL;
     DTS_GET_CTX(hDevice,Ctx);
 
     uint64_t NextTimeStamp = 0;
@@ -3177,8 +3187,9 @@ DtsGetDriverStatus( HANDLE  hDevice,
 	{
 		Ctx->bEOS = true;
 	}
-	/* return the timestamp of the next picture to be returned by ProcOutput */
-	if((pStatus->ReadyListCount > 0) && Ctx->SingleThreadedAppMode) {
+
+    // return the timestamp of the next picture to be returned by ProcOutput
+    if((pStatus->ReadyListCount > 0) && Ctx->SingleThreadedAppMode) {
 		if(Ctx->DevId == BC_PCI_DEVID_FLEA)
 		{
 			if(temp.DrvNextMDataPLD == 0xFFFFFFFF){
@@ -3247,31 +3258,31 @@ DRVIFLIB_API BC_STATUS DtsGetCapabilities (HANDLE  hDevice, PBC_HW_CAPS	pCapsBuf
 		pCapsBuffer->ColorCaps.OutFmt[1] = OUTPUT_MODE422_YUY2;
 		pCapsBuffer->ColorCaps.OutFmt[2] = OUTPUT_MODE422_UYVY;
 		pCapsBuffer->Reserved1 = NULL;
-
+		
 		//Decoder Capability
 		pCapsBuffer->DecCaps = BC_DEC_FLAGS_H264 | BC_DEC_FLAGS_MPEG2 | BC_DEC_FLAGS_VC1;
 	}
 	if(g_nDeviceID == BC_PCI_DEVID_DOZER)
-	{
+	{		
 		pCapsBuffer->flags = PES_CONV_SUPPORT;
 		pCapsBuffer->ColorCaps.Count = 1;
 		pCapsBuffer->ColorCaps.OutFmt[0] = OUTPUT_MODE420;
 		pCapsBuffer->ColorCaps.OutFmt[1] = OUTPUT_MODE_INVALID;
 		pCapsBuffer->ColorCaps.OutFmt[2] = OUTPUT_MODE_INVALID;
 		pCapsBuffer->Reserved1 = NULL;
-
+		
 		//Decoder Capability
 		pCapsBuffer->DecCaps = BC_DEC_FLAGS_H264 | BC_DEC_FLAGS_MPEG2 | BC_DEC_FLAGS_VC1;
 	}
 	if(g_nDeviceID == BC_PCI_DEVID_FLEA)
-	{
+	{		
 		pCapsBuffer->flags = PES_CONV_SUPPORT;
 		pCapsBuffer->ColorCaps.Count = 1;
 		pCapsBuffer->ColorCaps.OutFmt[0] = OUTPUT_MODE422_YUY2;
 		pCapsBuffer->ColorCaps.OutFmt[1] = OUTPUT_MODE_INVALID;
 		pCapsBuffer->ColorCaps.OutFmt[2] = OUTPUT_MODE_INVALID;
 		pCapsBuffer->Reserved1 = NULL;
-
+		
 		//Decoder Capability
 		pCapsBuffer->DecCaps = BC_DEC_FLAGS_H264 | BC_DEC_FLAGS_MPEG2 | BC_DEC_FLAGS_VC1 | BC_DEC_FLAGS_M4P2;
 	}
@@ -3306,5 +3317,5 @@ DRVIFLIB_API BC_STATUS DtsCrystalHDVersion(HANDLE  hDevice, PBC_INFO_CRYSTAL bCr
 	bCrystalInfo->fwVersion.fwMajor = FW_MINOR_VERSION;
 	bCrystalInfo->fwVersion.fwMinor = FW_REVISION;
 
-	return BC_STS_SUCCESS;
+	return BC_STS_SUCCESS;	
 }

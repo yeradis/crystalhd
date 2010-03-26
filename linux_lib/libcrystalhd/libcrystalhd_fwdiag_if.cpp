@@ -55,6 +55,7 @@ DtsSendFWDiagCmd(HANDLE hDevice,BC_HOST_CMD_BLOCK_ST hostMsg)
 	}
 
 	/* Issue done */
+
 	hostMsg.done = BC_HOST_CMD_POSTED;
 	status = DtsDevMemWr(hDevice,&(hostMsg.done),4,BC_HOST_CMD_ADDR);
 	if(BC_STS_ERROR == status)

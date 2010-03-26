@@ -41,10 +41,10 @@
 extern "C" {
 #endif
 
-#define BSVS_UART_DEC_NONE	0x00
-#define BSVS_UART_DEC_OUTER	0x01
-#define BSVS_UART_DEC_INNER	0x02
-#define BSVS_UART_STREAM	0x03
+#define BSVS_UART_DEC_NONE  0x00
+#define BSVS_UART_DEC_OUTER 0x01
+#define BSVS_UART_DEC_INNER 0x02
+#define BSVS_UART_STREAM    0x03
 
 #define STREAM_VERSION_ADDR	0x001c5f00
 
@@ -58,7 +58,7 @@ DtsGetHwType(
     uint32_t *HWRev
     );
 
-DRVIFLIB_INT_API VOID
+DRVIFLIB_INT_API VOID 
 DtsHwReset(
     HANDLE hDevice
     );
@@ -69,18 +69,18 @@ DtsSetLinkIn422Mode(HANDLE hDevice);
 DRVIFLIB_INT_API BC_STATUS
 DtsSetFleaIn422Mode(HANDLE hDevice);
 
-DRVIFLIB_INT_API BC_STATUS
+DRVIFLIB_INT_API BC_STATUS 
 DtsSoftReset(
     HANDLE hDevice
     );
 
-DRVIFLIB_INT_API BC_STATUS
+DRVIFLIB_INT_API BC_STATUS 
 DtsGetConfig(
     HANDLE hDevice,
-    BC_DTS_CFG *cfg
+	BC_DTS_CFG *cfg
     );
 
-DRVIFLIB_INT_API BC_STATUS
+DRVIFLIB_INT_API BC_STATUS 
 DtsSetCoreClock(
     HANDLE   hDevice,
     uint32_t freq
@@ -100,19 +100,19 @@ DtsSetProgressive(
 
 BC_STATUS
 DtsRstVidClkDLL(
-    HANDLE hDevice
+	HANDLE hDevice
 	);
 
-DRVIFLIB_INT_API BC_STATUS
+DRVIFLIB_INT_API BC_STATUS 
 DtsSetVideoClock(
     HANDLE   hDevice,
     uint32_t freq
     );
 
-DRVIFLIB_INT_API BOOL
+DRVIFLIB_INT_API BOOL 
 DtsIsVideoClockSet(HANDLE hDevice);
 
-DRVIFLIB_INT_API BC_STATUS
+DRVIFLIB_INT_API BC_STATUS 
 DtsGetPciConfigSpace(
     HANDLE  hDevice,
     uint8_t *info
@@ -189,12 +189,12 @@ DtsTxDmaText(
 
 DRVIFLIB_INT_API BC_STATUS
 DtsGetDrvStat(
-    HANDLE hDevice,
-    BC_DTS_STATS *pDrvStat
+    HANDLE		hDevice,
+	BC_DTS_STATS *pDrvStat
     );
 
-DRVIFLIB_INT_API BC_STATUS
-DtsSendData(
+DRVIFLIB_INT_API BC_STATUS 
+DtsSendData( 
 	HANDLE  hDevice ,
 	uint8_t *pUserData,
 	uint32_t ulSizeInBytes,
@@ -202,32 +202,32 @@ DtsSendData(
 	BOOL encrypted
 );
 
-DRVIFLIB_INT_API BC_STATUS
+DRVIFLIB_INT_API BC_STATUS 
 DtsSetTemperatureMeasure(
-    HANDLE	hDevice,
-    BOOL	bTurnOn
+    HANDLE			hDevice,
+	BOOL			bTurnOn
     );
 
-DRVIFLIB_INT_API BC_STATUS
+DRVIFLIB_INT_API BC_STATUS 
 DtsGetCoreTemperature(
-    HANDLE	hDevice,
-    float	*pTemperature
+    HANDLE		hDevice,
+	float		*pTemperature
     );
 
-DRVIFLIB_INT_API BC_STATUS
+DRVIFLIB_INT_API BC_STATUS 
 DtsRstDrvStat(
-    HANDLE hDevice
+    HANDLE		hDevice
     );
 
-DRVIFLIB_INT_API BC_STATUS
+DRVIFLIB_INT_API BC_STATUS 
 DtsGetFWFiles(
-    HANDLE hDevice,
-    char   *StreamFName,
-    char   *VDecOuter,
-    char   *VDecInner
-    );
+	HANDLE hDevice,
+	char *StreamFName,
+	char *VDecOuter,
+	char *VDecInner
+	);
 
-DRVIFLIB_INT_API BC_STATUS
+DRVIFLIB_INT_API BC_STATUS 
 DtsDownloadFWBin(
     HANDLE   hDevice,
     uint8_t  *binBuff,
@@ -237,33 +237,28 @@ DtsDownloadFWBin(
 
 DRVIFLIB_INT_API BC_STATUS
 DtsCancelProcOutput(
-    HANDLE hDevice,
-    PVOID  Context
-    );
+    HANDLE  hDevice,
+	PVOID	Context);
 
-DRVIFLIB_INT_API BC_STATUS
+DRVIFLIB_INT_API BC_STATUS 
 DtsChkYUVSizes(
-    struct _DTS_LIB_CONTEXT *Ctx,
-    BC_DTS_PROC_OUT *Vout,
-    BC_DTS_PROC_OUT *Vin
-    );
+	struct _DTS_LIB_CONTEXT	*Ctx,
+	BC_DTS_PROC_OUT *Vout, 
+	BC_DTS_PROC_OUT *Vin);
 
 BC_STATUS
-DtsCopyRawDataToOutBuff(
-    struct _DTS_LIB_CONTEXT *Ctx,
-    BC_DTS_PROC_OUT *Vout,
-    BC_DTS_PROC_OUT *Vin
-    );
+DtsCopyRawDataToOutBuff(struct _DTS_LIB_CONTEXT	*Ctx, 
+						BC_DTS_PROC_OUT *Vout, 
+						BC_DTS_PROC_OUT *Vin);
 
 BC_STATUS DtsCopyNV12ToYV12(
-    struct _DTS_LIB_CONTEXT *Ctx,
-    BC_DTS_PROC_OUT *Vout,
-    BC_DTS_PROC_OUT *Vin
-    );
+	struct _DTS_LIB_CONTEXT	*Ctx,
+	BC_DTS_PROC_OUT *Vout, 
+	BC_DTS_PROC_OUT *Vin);
 
 BC_STATUS DtsCopyNV12(
 	struct _DTS_LIB_CONTEXT	*Ctx,
-	BC_DTS_PROC_OUT *Vout,
+	BC_DTS_PROC_OUT *Vout, 
 	BC_DTS_PROC_OUT *Vin);
 
 extern DRVIFLIB_INT_API BC_STATUS

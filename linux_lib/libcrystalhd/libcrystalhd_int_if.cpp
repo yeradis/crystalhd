@@ -34,16 +34,16 @@
 #include "libcrystalhd_fwcmds.h"
 
 #define SV_MAX_LINE_SZ 128
-#define PCI_GLOBAL_CONTROL PCI_GLOBAL_CONTROL
+#define PCI_GLOBAL_CONTROL MISC2_GLOBAL_CTRL
 #define PCI_INT_STS_REG MISC2_INTERNAL_STATUS
 
-/* FLEA */
-#define BCHP_PCI_GLOBAL_CONTROL 0x00502100 /* Global Control Register */
+// FLEA
+#define BCHP_MISC2_GLOBAL_CTRL 0x00502100 /* Global Control Register */
 #define BCHP_CLK_TEMP_MON_CTRL 0x00070040 /* Temperature monitor control. */
 #define BCHP_CLK_TEMP_MON_STATUS 0x00070044 /* Temperature monitor status. */
 
 
-/*===================================Externs ==========================================*/
+//===================================Externs ============================================
 DRVIFLIB_INT_API BC_STATUS 
 DtsGetHwType(
     HANDLE  hDevice,
@@ -83,13 +83,19 @@ DtsGetHwType(
 	return BC_STS_SUCCESS;
 }
 
-
-DRVIFLIB_INT_API VOID DtsHwReset(HANDLE hDevice)
+DRVIFLIB_INT_API VOID 
+DtsHwReset(
+    HANDLE hDevice
+    )
 {
+
 	return;
 }
 
-DRVIFLIB_INT_API BC_STATUS DtsSoftReset(HANDLE hDevice)
+DRVIFLIB_INT_API BC_STATUS 
+DtsSoftReset(
+    HANDLE hDevice
+    )
 {
 
 	uint32_t Val = 0;
@@ -114,7 +120,7 @@ DRVIFLIB_INT_API BC_STATUS DtsSoftReset(HANDLE hDevice)
 	{
 		// For Link, this is used to bring up 7412 and running.
 		// Since the 70012 was running in low power mode, but the 7412 was not.
-		// In flea there is no need for this. In general most of the chip will be in idle mode,
+		// In flea there is no need for this. In general most of the chip will be in idle mode, 
 		// and should not be needed to reset in order to start up.
 		// In Flea, we can never do full chip reset, because that will reset PCIe as well and
 		// probably cause a BSOD. Individual blocks will have to be reset, either by asserting true resets
@@ -140,11 +146,11 @@ DtsSetLinkIn422Mode(HANDLE hDevice)
 	 * 1 -  UYVY Mode.
 	 * 0 - YUY2 Mode.
  	 */
-	DtsFPGARegisterRead(hDevice, PCI_GLOBAL_CONTROL, &Val);
+	DtsFPGARegisterRead(hDevice,PCI_GLOBAL_CONTROL,&Val);
 
 	if (ModeSelect == OUTPUT_MODE420) {
         Val &= 0xffeeffff;
-	} else {
+	} else {	
 		Val |= BC_BIT(16);
 		if(ModeSelect == OUTPUT_MODE422_UYVY) {
 			Val |= BC_BIT(20);
@@ -153,7 +159,7 @@ DtsSetLinkIn422Mode(HANDLE hDevice)
 		}
 	}
 
-	DtsFPGARegisterWr(hDevice, PCI_GLOBAL_CONTROL, Val);
+	DtsFPGARegisterWr(hDevice,PCI_GLOBAL_CONTROL,Val);
 	return BC_STS_SUCCESS;
 }
 
@@ -171,15 +177,15 @@ DtsSetFleaIn422Mode(HANDLE hDevice)
 	if( ModeSelect != OUTPUT_MODE422_UYVY && ModeSelect != OUTPUT_MODE422_YUY2 )
 		return BC_STS_INV_ARG;
 
-	DtsDevRegisterRead(hDevice,BCHP_PCI_GLOBAL_CONTROL,&Val);
+	DtsDevRegisterRead(hDevice,BCHP_MISC2_GLOBAL_CTRL,&Val);
 
 	Val &= 0x0000007c;
-	if( ModeSelect == OUTPUT_MODE422_YUY2 )
+	if( ModeSelect == OUTPUT_MODE422_YUY2 ) 
 	{
 		Val |= BC_BIT(1);  // bit_1  0-> UYVY, 1-> YUY2
 	}
 
-	DtsDevRegisterWr(hDevice,BCHP_PCI_GLOBAL_CONTROL,Val);
+	DtsDevRegisterWr(hDevice,BCHP_MISC2_GLOBAL_CTRL,Val);
 	return BC_STS_SUCCESS;
 }
 
@@ -201,7 +207,7 @@ DtsGetConfig(
 	return BC_STS_SUCCESS;
 }
 
-DRVIFLIB_INT_API BC_STATUS
+DRVIFLIB_INT_API BC_STATUS 
 DtsSetConfig(
     HANDLE hDevice,
 	BC_DTS_CFG *cfg
@@ -220,7 +226,7 @@ DtsSetConfig(
 	return BC_STS_SUCCESS;
 }
 
-BC_STATUS
+BC_STATUS 
 DtsSetCoreClock(
     HANDLE hDevice,
 	uint32_t freq
@@ -269,10 +275,10 @@ DtsSetCoreClock(
 		return BC_STS_CLK_NOCHG;
 
 	n = freq/5;
-
+	
 	//if (n == Ctx->prev_n)
 	//	return BC_STS_CLK_NOCHG;
-
+	
 	if ((n * 27) < 560)
 		vco_mg = 0;
 	else if ((n * 27) < 900)
@@ -281,23 +287,23 @@ DtsSetCoreClock(
 		vco_mg = 2;
 	else
 		vco_mg = 3;
-
+	
 	DtsDevRegisterRead(hDevice,DecHt_PllACtl, &reg);
 
 	reg &= 0xFFFFCFC0;
 	reg |= n;
 	reg |= vco_mg << 12;
-
+	
 	refresh_reg = (7 * freq / 16);
 	DtsDevRegisterWr(hDevice,SDRAM_REF_PARAM,((1 << 12) | refresh_reg));
 
 	DtsDevRegisterWr(hDevice, DecHt_PllACtl, reg);
 	DebugLog_Trace(LDIL_DBG,"C set %d\n", freq);
 	i = 0;
-
-	while (i < 10) {
+	
+	while (i < 10) { 
 		DtsDevRegisterRead(hDevice,DecHt_PllACtl, &reg);
-
+		
 		if (reg & 0x00020000) {
 			//Ctx->prev_n = n;
 			return BC_STS_SUCCESS;
@@ -311,11 +317,11 @@ DtsSetCoreClock(
 	return BC_STS_CLK_NOCHG;
 
 #if 0
-	DtsDevRegisterWr( hDevice, DecHt_PllBCtl, clkRate);
+	DtsDevRegisterWr( hDevice, DecHt_PllBCtl, clkRate);	
 	cnt = 0;
 	do{
 		bc_sleep_ms(20);
-
+	
 		DtsDevRegisterRead( hDevice, DecHt_PllBCtl, &Val);
 		if(Val == clkRate)
 			break;
@@ -373,7 +379,7 @@ DtsSetProgressive(
 	uint32_t resv1
 	)
 {
-	uint32_t RegVal;
+	uint32_t			RegVal;
 	DTS_LIB_CONTEXT		*Ctx = NULL;
 
 	DTS_GET_CTX(hDevice,Ctx);
@@ -391,14 +397,16 @@ DtsSetProgressive(
 	return BC_STS_SUCCESS;
 }
 
-BC_STATUS DtsRstVidClkDLL(HANDLE hDevice)
+BC_STATUS 
+DtsRstVidClkDLL(
+				HANDLE hDevice)
 {
 	uint32_t RegVal,Cnt=100;
-
+	
 	DtsFPGARegisterRead(hDevice,PCI_GLOBAL_CONTROL,&RegVal);
 	RegVal |= 0x08;		//Set Bit 3 the Reset Bit
 	DtsFPGARegisterWr(hDevice,PCI_GLOBAL_CONTROL,RegVal);
-
+	
 	//
 	// Wait for the bit to go low [Unlock]
 	//
@@ -418,12 +426,12 @@ BC_STATUS DtsRstVidClkDLL(HANDLE hDevice)
 	DtsFPGARegisterRead(hDevice,PCI_GLOBAL_CONTROL,&RegVal);
 	RegVal &= 0xfffffff7;	//reset bit 3
 	DtsFPGARegisterWr(hDevice,PCI_GLOBAL_CONTROL,RegVal);
-	RegVal=0;
-	Cnt =100;
+	RegVal=0;	
+	Cnt =100;	
 	while(Cnt)
 	{
 		DtsFPGARegisterRead(hDevice,PCI_INT_STS_REG,&RegVal);
-		if(RegVal & 0x04)
+		if(RegVal & 0x04) 
 		{
 			//
 			// This means that the video clock is locked.
@@ -445,10 +453,10 @@ DtsSetVideoClock(
 	uint32_t freq
     )
 {
-	uint32_t Val = 0;
+	uint32_t Val=0;
 	uint32_t clkRate = 0;
 	DTS_LIB_CONTEXT *Ctx;
-	uint32_t DevID, VendorID, Revision;
+	uint32_t DevID,VendorID,Revision;
 
 	DTS_GET_CTX(hDevice,Ctx);
 
@@ -476,10 +484,11 @@ DtsSetVideoClock(
 		return BC_STS_INV_ARG;
 	}
 
+
 	DtsDevRegisterWr( hDevice, DecHt_PllDCtl, 0x00010000);	// Bypass PLL-D
 
 	bc_sleep_ms(50);
-
+	
 	DtsDevRegisterRead( hDevice, DecHt_PllDCtl, &Val);
 
 	if(Val != 0x00030000){
@@ -488,10 +497,10 @@ DtsSetVideoClock(
 		//return BC_STS_NO_ACCESS;
 	}
 
-	DtsDevRegisterWr( hDevice, DecHt_PllECtl, clkRate);
+	DtsDevRegisterWr( hDevice, DecHt_PllECtl, clkRate);	
 
 	bc_sleep_ms(50);
-
+	
 	DtsDevRegisterRead( hDevice, DecHt_PllECtl, &Val);
 
 	if(Val != (clkRate | 0x00020000) ){
@@ -508,8 +517,7 @@ DtsSetVideoClock(
 
 	return BC_STS_SUCCESS;
 }
-
-DRVIFLIB_INT_API BOOL
+DRVIFLIB_INT_API BOOL 
 DtsIsVideoClockSet(HANDLE hDevice)
 {
 	uint32_t RegVal=0;
@@ -534,7 +542,7 @@ DtsIsVideoClockSet(HANDLE hDevice)
 
 	if(RegVal & BC_BIT(0))
 		return TRUE;
-
+	
 	DtsFPGARegisterRead(hDevice,PCI_INT_STS_REG,&RegVal);
 
 	return (RegVal & BC_BIT(2));
@@ -1125,10 +1133,8 @@ DtsGetDrvStat(
 
 	/* DIL counters */
 	pIntDrvStat = DtsGetgStats ( );
-
 	//memcpy_s(pDrvStat, 128, pIntDrvStat, 128);
 	memcpy(pDrvStat, pIntDrvStat, 128);
-
 
 	/* Driver counters */
 	pIntDrvStat = (BC_DTS_STATS *)&pIocData->u.drvStat;
@@ -1150,6 +1156,7 @@ DtsGetDrvStat(
 	pDrvStat->DrvcpbEmptySize = pIntDrvStat->DrvcpbEmptySize;
 	pDrvStat->eosDetected = pIntDrvStat->eosDetected;
 
+
 	DtsGetCoreTemperature(hDevice, &fTemperature);
 	pDrvStat->Temperature = fTemperature;
 
@@ -1158,7 +1165,7 @@ DtsGetDrvStat(
 	return BC_STS_SUCCESS;
 }
 
-DRVIFLIB_INT_API BC_STATUS
+DRVIFLIB_INT_API BC_STATUS 
 DtsSetTemperatureMeasure(
     HANDLE			hDevice,
 	BOOL			bTurnOn
@@ -1177,24 +1184,24 @@ DtsSetTemperatureMeasure(
 
 	if( bTurnOn )
 	{
-		Val = 0x3; //
+		Val = 0x3; // 
 		sts = DtsDevRegisterWr(hDevice,BCHP_CLK_TEMP_MON_CTRL,Val);
 		bc_sleep_ms(10);
 
-		Val = 0x203; //
+		Val = 0x203; // 
 		sts = DtsDevRegisterWr(hDevice,BCHP_CLK_TEMP_MON_CTRL,Val);
 		bc_sleep_ms(10);
 	}
 	else
 	{
-		Val = 0x103; //
+		Val = 0x103; // 
 		sts = DtsDevRegisterWr(hDevice,BCHP_CLK_TEMP_MON_CTRL,Val);
 		bc_sleep_ms(10);
 	}
 	return sts;
 }
 
-DRVIFLIB_INT_API BC_STATUS
+DRVIFLIB_INT_API BC_STATUS 
 DtsGetCoreTemperature(
     HANDLE			hDevice,
 	float			*pTemperature
@@ -1218,9 +1225,10 @@ DtsGetCoreTemperature(
 	Val = Val & 0x0000ffff;
 
 	*pTemperature = 267.2 - 0.7 * (float)Val;
-
+	
 	return sts;
 }
+
 
 DRVIFLIB_INT_API BC_STATUS 
 DtsRstDrvStat(
@@ -1325,7 +1333,7 @@ DtsCopyRawDataToOutBuff(DTS_LIB_CONTEXT	*Ctx,
 		if(Vout->YBuffDoneSz < (dstWidthInPixels * dstHeightInPixels / 2))
 			return BC_STS_IO_XFR_ERROR;
 		srcWidthInPixels = Ctx->picWidth;
-		srcHeightInPixels = dtsHeightInPixels;
+		srcHeightInPixels = dstHeightInPixels;
 	} else {
 		dstWidthInPixels = Vin->PicInfo.width;
 		dstHeightInPixels = Vin->PicInfo.height;
@@ -1390,9 +1398,8 @@ BC_STATUS DtsCopyNV12ToYV12(DTS_LIB_CONTEXT	*Ctx, BC_DTS_PROC_OUT *Vout, BC_DTS_
 			DebugLog_Trace(LDIL_DBG,"DtsCopyYV12: XFER ERROR\n");
 			return BC_STS_IO_XFR_ERROR;
 		}
-
 		srcWidthInPixels = Ctx->picWidth;
-		srcHeightInPixels = dtsHeightInPixels;
+		srcHeightInPixels = dstHeightInPixels;
 
 		//copy luma
 		pDest = Vout->Ybuff;
@@ -1444,8 +1451,8 @@ BC_STATUS DtsCopyNV12ToYV12(DTS_LIB_CONTEXT	*Ctx, BC_DTS_PROC_OUT *Vout, BC_DTS_
 	
 BC_STATUS DtsCopyNV12(DTS_LIB_CONTEXT *Ctx, BC_DTS_PROC_OUT *Vout, BC_DTS_PROC_OUT *Vin)
 {
-	uint32_t y, lDestStride = 0;
-	uint8_t	*pSrc = NULL, *pDest = NULL;
+	uint32_t y,lDestStride=0;
+	uint8_t	*pSrc = NULL, *pDest=NULL;
 	uint32_t dstWidthInPixels, dstHeightInPixels;
 	uint32_t srcWidthInPixels, srcHeightInPixels;
 	
@@ -1469,7 +1476,7 @@ BC_STATUS DtsCopyNV12(DTS_LIB_CONTEXT *Ctx, BC_DTS_PROC_OUT *Vout, BC_DTS_PROC_O
 			(Vout->UVBuffDoneSz < (dstWidthInPixels * dstHeightInPixels/2 / 4)))
 			return BC_STS_IO_XFR_ERROR;
 		srcWidthInPixels = Ctx->picWidth;
-		srcHeightInPixels = dtsHeightInPixels;
+		srcHeightInPixels = dstHeightInPixels;
 	} else {
 		dstWidthInPixels = Vin->PicInfo.width;
 		dstHeightInPixels = Vin->PicInfo.height;
@@ -1513,13 +1520,13 @@ BC_STATUS DtsCopyNV12(DTS_LIB_CONTEXT *Ctx, BC_DTS_PROC_OUT *Vout, BC_DTS_PROC_O
 DRVIFLIB_INT_API BC_STATUS
 DtsPushFwBinToLink(
 	HANDLE hDevice,
-	uint32_t *Buffer,
-	uint32_t BuffSz)
+    uint32_t *Buffer,
+    uint32_t BuffSz)
 {
-	uint8_t		*pXferBuff;
-	BC_IOCTL_DATA	*pIoctlData;
+	uint8_t			*pXferBuff;
+	BC_IOCTL_DATA	*pIoctlData;	
 	BC_CMD_DEV_MEM	*pMemAccess;
-	uint32_t	BytesReturned, AllocSz;
+	uint32_t				BytesReturned, AllocSz;
 
 	if (!hDevice) {
 		DebugLog_Trace(LDIL_DBG,"DtsPushFwBinToLink: Invalid Handle\n");

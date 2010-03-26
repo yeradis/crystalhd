@@ -26,6 +26,7 @@
  *
  *******************************************************************/
 
+#include "7411d.h"
 #include "libcrystalhd_fwcmds.h"
 
 DRVIFLIB_INT_API BC_STATUS 
@@ -79,10 +80,13 @@ DtsFWInitialize(
 }
 
 DRVIFLIB_INT_API BC_STATUS
-DtsFWOpenChannel(HANDLE hDevice, uint32_t StreamType, uint32_t reserved)
+DtsFWOpenChannel(
+    HANDLE    hDevice,
+    uint32_t  StreamType,
+	uint32_t  reserved
+    )
 {
 	BC_STATUS sts = BC_STS_SUCCESS;
-
 	DTS_LIB_CONTEXT	*Ctx = NULL;
 	BC_IOCTL_DATA *pIocData = NULL;
 
@@ -95,9 +99,9 @@ DtsFWOpenChannel(HANDLE hDevice, uint32_t StreamType, uint32_t reserved)
 		pOpen = (DecCmdChannelStreamOpen *)&pIocData->u.fwCmd.cmd;
 		pOpen->command						= eCMD_C011_DEC_CHAN_STREAM_OPEN;
 		pOpen->sequence						= ++Ctx->fwcmdseq;
-		pOpen->inPort						= eC011_IN_PORT0;		//CSI
+		pOpen->inPort						= eC011_IN_PORT0;		//CSI 
 		pOpen->streamType					= (eC011_STREAM_TYPE)StreamType;
-
+		
 		if( (sts=DtsDrvCmd(Ctx,BCM_IOC_FW_CMD,1,pIocData,FALSE)) != BC_STS_SUCCESS){
 			DtsRelIoctlData(Ctx,pIocData);
 			DebugLog_Trace(LDIL_DBG,"DtsOpenDecoder: Ioctl failed: %d\n",sts);
@@ -138,14 +142,13 @@ DtsFWOpenChannel(HANDLE hDevice, uint32_t StreamType, uint32_t reserved)
 			DtsRelIoctlData(Ctx,pIocData);
 			return BC_STS_FW_CMD_ERR;
 		}
-
+		
 		Ctx->OpenRsp.channelId = pRsp->ChannelID;
 	}
 
 	// For deconf backward compatibility only...
 	Ctx->State = BC_DEC_STATE_OPEN;
 	DtsRelIoctlData(Ctx,pIocData);
-
 	return BC_STS_SUCCESS;
 }
 
@@ -164,12 +167,14 @@ DtsFWActivateDecoder(
 	
 	DTS_GET_CTX(hDevice,Ctx);
 
-	if(Ctx->State == BC_DEC_STATE_STOP) {
+	if(Ctx->State == BC_DEC_STATE_STOP) 
+	{
 		DebugLog_Trace(LDIL_DBG,"DtsActChannel: Channel is already Opened\n");
 		return BC_STS_SUCCESS;
 	}
 
-	if (Ctx->State != BC_DEC_STATE_OPEN) {
+	if(Ctx->State != BC_DEC_STATE_OPEN)
+	{
 		DebugLog_Trace(LDIL_DBG,"DtsActChannel: Channel Not Opened\n");
 		return BC_STS_DEC_NOT_OPEN;
 	}
@@ -197,16 +202,16 @@ DtsFWActivateDecoder(
 		DtsRelIoctlData(Ctx,pIocData);
 		return BC_STS_FW_CMD_ERR;
 	}
-
+	
 	DtsRelIoctlData(Ctx,pIocData);
 
 	return BC_STS_SUCCESS;
 }
 
-DRVIFLIB_INT_API BC_STATUS
+DRVIFLIB_INT_API BC_STATUS 
 DtsFWSetSingleField(
     HANDLE  hDevice,
-	BOOL bSingleField
+	BOOL bSingleField 
     )
 {
 	BC_STATUS	sts = BC_STS_SUCCESS;
@@ -215,10 +220,10 @@ DtsFWSetSingleField(
 
 	DTS_LIB_CONTEXT		*Ctx = NULL;
 	BC_IOCTL_DATA *pIocData = NULL;
-
+	
 	DTS_GET_CTX(hDevice,Ctx);
 
-	if(Ctx->State != BC_DEC_STATE_OPEN)
+	if(Ctx->State != BC_DEC_STATE_OPEN) 
 	{
 		DebugLog_Trace(LDIL_DBG,"DtsFWSetSingleField: Channel Not Opened\n");
 		return BC_STS_DEC_NOT_OPEN;
@@ -240,7 +245,7 @@ DtsFWSetSingleField(
 		DtsRelIoctlData(Ctx,pIocData);
 		return sts;
 	}
-
+	
 	pActRsp = (DecRspChannelSingleField*)&pIocData->u.fwCmd.rsp;
 
 	if(pActRsp->status){
@@ -248,7 +253,7 @@ DtsFWSetSingleField(
 		DtsRelIoctlData(Ctx,pIocData);
 		return BC_STS_FW_CMD_ERR;
 	}
-
+	
 	DtsRelIoctlData(Ctx,pIocData);
 
 	return BC_STS_SUCCESS;
@@ -622,7 +627,7 @@ DtsFWStartVideo(
 		return BC_STS_INSUFF_RES;
 
 #if 0
-/* sdd, not sure if we still need this */
+// sdd, not sure if we still need this
 	/* Let Driver know the Response offset for PIB Delivery and Response Qs.*/
 	pIocData->u.fwCmd.flags = BC_FW_CMD_PIB_QS;
 	pIocData->u.fwCmd.add_data = ((long) &((DecRspChannelStartVideo *)0)->picInfoDeliveryQ);
@@ -776,12 +781,12 @@ DtsFWDecFlushChannel(
 		}
 
 		rspFlush = (DecRspChannelFlush*)&pIocData->u.fwCmd.rsp;
-
 		if (Ctx->State != BC_DEC_STATE_START && Ctx->State != BC_DEC_STATE_PAUSE)
 			break;
 		bc_sleep_ms(5);
 
 	} while (rspFlush->status == BC_FW_CMD_TIMEOUT);
+
 
 	if(rspFlush->status){
 		DebugLog_Trace(LDIL_DBG,"DtsFWDecFlushChannel: FlushChannel Failed %u\n",rspFlush->status);
@@ -903,6 +908,7 @@ DtsFWSetHostTrickMode(
 	BC_IOCTL_DATA *pIocData = NULL;
 
 	DTS_GET_CTX(hDevice,Ctx);
+
 
 	if(!(pIocData = DtsAllocIoctlData(Ctx)))
 		return BC_STS_INSUFF_RES;
