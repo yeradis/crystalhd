@@ -27,9 +27,9 @@
 #ifndef _CRYSTALHD_FW_IF_H_
 #define _CRYSTALHD_FW_IF_H_
 
+#include <linux/types.h>
+
 /* TBD: Pull in only required defs into this file.. */
-
-
 
 /* User Data Header */
 typedef struct user_data {

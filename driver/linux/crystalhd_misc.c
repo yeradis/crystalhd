@@ -24,8 +24,8 @@
  * along with this driver.  If not, see <http://www.gnu.org/licenses/>.
  **********************************************************************/
 
-#include "crystalhd_misc.h"
 #include "crystalhd_lnx.h"
+#include "crystalhd_misc.h"
 
 uint32_t g_linklog_level;
 

@@ -118,6 +118,7 @@ typedef struct _BC_START_RX_CAP_ {
 	uint32_t		StartDeliveryThsh;
 	uint32_t		PauseThsh;
 	uint32_t		ResumeThsh;
+	DecRspChannelStartVideo SVidRsp;
 } BC_START_RX_CAP;
 
 typedef struct _BC_FLUSH_RX_CAP_ {
@@ -159,7 +160,8 @@ typedef struct _BC_DTS_STATS {
 	uint32_t		DrvNextMDataPLD;
 	uint32_t		DrvcpbEmptySize;
 
-	uint32_t		res1[11];
+	float			Temperature;
+	uint32_t		res1[10];
 
 } BC_DTS_STATS;
 
