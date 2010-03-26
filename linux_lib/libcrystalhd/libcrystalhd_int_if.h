@@ -41,6 +41,11 @@
 extern "C" {
 #endif
 
+#define BSVS_UART_DEC_NONE	0x00
+#define BSVS_UART_DEC_OUTER	0x01
+#define BSVS_UART_DEC_INNER	0x02
+#define BSVS_UART_STREAM	0x03
+
 #define STREAM_VERSION_ADDR	0x001c5f00
 
 typedef uint32_t	BC_DTS_CFG;
@@ -53,8 +58,21 @@ DtsGetHwType(
     uint32_t *HWRev
     );
 
+DRVIFLIB_INT_API VOID
+DtsHwReset(
+    HANDLE hDevice
+    );
+
 DRVIFLIB_INT_API BC_STATUS
 DtsSetLinkIn422Mode(HANDLE hDevice);
+
+DRVIFLIB_INT_API BC_STATUS
+DtsSetFleaIn422Mode(HANDLE hDevice);
+
+DRVIFLIB_INT_API BC_STATUS
+DtsSoftReset(
+    HANDLE hDevice
+    );
 
 DRVIFLIB_INT_API BC_STATUS
 DtsGetConfig(
@@ -90,6 +108,9 @@ DtsSetVideoClock(
     HANDLE   hDevice,
     uint32_t freq
     );
+
+DRVIFLIB_INT_API BOOL
+DtsIsVideoClockSet(HANDLE hDevice);
 
 DRVIFLIB_INT_API BC_STATUS
 DtsGetPciConfigSpace(
@@ -158,15 +179,6 @@ DtsDevMemWr(
     );
 
 DRVIFLIB_INT_API BC_STATUS
-DtsDownloadFW(
-    HANDLE hDevice,
-    char   *StreamFName,
-    char   *VDecOuter,
-    char   *VDecInner
-    );
-
-
-DRVIFLIB_INT_API BC_STATUS
 DtsTxDmaText(
     HANDLE   hDevice ,
     uint8_t  *pUserData,
@@ -179,6 +191,27 @@ DRVIFLIB_INT_API BC_STATUS
 DtsGetDrvStat(
     HANDLE hDevice,
     BC_DTS_STATS *pDrvStat
+    );
+
+DRVIFLIB_INT_API BC_STATUS
+DtsSendData(
+	HANDLE  hDevice ,
+	uint8_t *pUserData,
+	uint32_t ulSizeInBytes,
+	uint64_t timeStamp,
+	BOOL encrypted
+);
+
+DRVIFLIB_INT_API BC_STATUS
+DtsSetTemperatureMeasure(
+    HANDLE	hDevice,
+    BOOL	bTurnOn
+    );
+
+DRVIFLIB_INT_API BC_STATUS
+DtsGetCoreTemperature(
+    HANDLE	hDevice,
+    float	*pTemperature
     );
 
 DRVIFLIB_INT_API BC_STATUS
@@ -229,23 +262,12 @@ BC_STATUS DtsCopyNV12ToYV12(
     );
 
 BC_STATUS DtsCopyNV12(
-    struct _DTS_LIB_CONTEXT *Ctx,
-    BC_DTS_PROC_OUT *Vout,
-    BC_DTS_PROC_OUT *Vin
-    );
+	struct _DTS_LIB_CONTEXT	*Ctx,
+	BC_DTS_PROC_OUT *Vout,
+	BC_DTS_PROC_OUT *Vin);
 
-
-DRVIFLIB_INT_API BC_STATUS
-DtsPushFwBinToLink(HANDLE hDevice, uint32_t *Buffer, uint32_t BuffSz);
-
-DRVIFLIB_INT_API BC_STATUS
-fwbinPushToLINK(HANDLE hDevice, char *FwBinFile, uint32_t *bytesDnld);
-
-
-DRVIFLIB_INT_API BC_STATUS
-DtsPushAuthFwToLink(HANDLE hDevice, char *FwBinFile);
-
-DRVIFLIB_INT_API BC_STATUS dec_write_fw_Sig(HANDLE hndl,uint32_t* Sig);
+extern DRVIFLIB_INT_API BC_STATUS
+DtsPushFwBinToLink(HANDLE hDevice, uint32_t *FwBinFile, uint32_t bytesDnld);
 
 /*================ Debug/Test Routines ===================*/
 

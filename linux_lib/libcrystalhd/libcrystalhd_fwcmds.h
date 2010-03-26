@@ -30,7 +30,6 @@
 #define _BCM_FWCMDS_H_
 
 #include "libcrystalhd_priv.h"
-#include "7411d.h"
 
 DRVIFLIB_INT_API BC_STATUS
 DtsFWInitialize(
@@ -48,6 +47,12 @@ DtsFWOpenChannel(
 DRVIFLIB_INT_API BC_STATUS
 DtsFWActivateDecoder(
 	HANDLE hDevice
+    );
+
+DRVIFLIB_INT_API BC_STATUS
+DtsFWSetSingleField(
+	HANDLE  hDevice,
+	BOOL bSingleField
     );
 
 DRVIFLIB_INT_API BC_STATUS

@@ -26,11 +26,13 @@
  *
  *******************************************************************/
 
+#include "7411d.h"
+#include "bc_defines.h"
 #include "libcrystalhd_int_if.h"
 #include "libcrystalhd_if.h"
 #include "libcrystalhd_priv.h"
 #include "libcrystalhd_fwdiag_if.h"
-#include "bc_defines.h"
+#include "libcrystalhd_fwload_if.h"
 
 /* BOOTLOADER IMPLEMENTATION */
 /* Functions */

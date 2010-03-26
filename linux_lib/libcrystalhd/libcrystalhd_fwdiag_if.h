@@ -85,9 +85,6 @@ typedef enum _BC_FWDIAG_CMDS{
 }BC_FWDIAG_CMDS;
 
 
-extern DRVIFLIB_INT_API BC_STATUS
-DtsPushFwBinToLink(HANDLE hDevice, char *FwBinFile, uint32_t *bytesDnld);
-
 DRVIFLIB_INT_API BC_STATUS
 DtsDownloadFWDIAGToLINK(HANDLE hDevice, char *FwBinFile);
 
@@ -95,7 +92,7 @@ DRVIFLIB_INT_API BC_STATUS
 DtsSendFWDiagCmd(HANDLE hDevice, BC_HOST_CMD_BLOCK_ST hostMsg);
 
 DRVIFLIB_INT_API BC_STATUS
-DtsReceiveFWDiagRes(HANDLE hDevice, PBC_FWDIAG_RES_BLOCK_ST pBlMsg, uint32_t wait);
+DtsReceiveFWDiagRes(HANDLE hDevice, PBC_FWDIAG_RES_BLOCK_ST pBlMsg);
 
 DRVIFLIB_INT_API BC_STATUS
 DtsClearFWDiagCommBlock(HANDLE hDevice);

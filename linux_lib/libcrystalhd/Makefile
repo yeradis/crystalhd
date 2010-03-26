@@ -20,6 +20,7 @@ INCLUDES += -I$(ROOTDIR)/include/link
 
 
 CPPFLAGS = -D__LINUX_USER__
+# -DLDIL_PRINTS_ON
 # -D_USE_SHMEM_
 
 CPPFLAGS += ${INCLUDES}
@@ -31,6 +32,7 @@ SRCFILES = 	libcrystalhd_if.cpp \
 		libcrystalhd_fwcmds.cpp \
 		libcrystalhd_priv.cpp \
 		libcrystalhd_fwdiag_if.cpp \
+		libcrystalhd_fwload_if.cpp \
 		libcrystalhd_parser.cpp
 
 OBJFILES = ${SRCFILES:.cpp=.o}
@@ -57,6 +59,7 @@ install:
 	cp $(ROOTDIR)/include/bc_dts_defs.h $(DESTDIR)/usr/include/libcrystalhd/
 	cp $(ROOTDIR)/include/bc_dts_types.h $(DESTDIR)/usr/include/libcrystalhd/
 	cp $(ROOTDIR)/firmware/fwbin/70012/bcm70012fw.bin $(DESTDIR)/lib/firmware/
+	cp $(ROOTDIR)/firmware/fwbin/70015/bcm70015fw.bin $(DESTDIR)/lib/firmware/
 	install -m 755 $(BCLIB) $(DESTDIR)$(LIBDIR)
 	(cd $(DESTDIR)$(LIBDIR); ln -sf $(BCLIB) $(BCLIB_NAME))
 	(cd $(DESTDIR)$(LIBDIR); ln -sf $(BCLIB) $(BCLIB_SL))
