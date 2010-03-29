@@ -377,7 +377,8 @@ static uint32_t GetMode422Data(crystalhd_dio_req *dio,
 			       PBC_PIC_INFO_BLOCK pPicInfoLine, int type)
 {
 	int i;
-	uint32_t offset, val = 0;
+	uint32_t offset;
+	uintptr_t val = 0;
 
 	if (type == 1)
 		offset = OFFSETOF(BC_PIC_INFO_BLOCK, picture_meta_payload);
@@ -389,14 +390,14 @@ static uint32_t GetMode422Data(crystalhd_dio_req *dio,
 	if (dio->uinfo.b422mode == MODE422_YUY2) {
 		for (i = 0; i < 4; i++)
 			((uint8_t*)val)[i] =
-				((uint8_t*)pPicInfoLine)[(offset + i) * 2];
+				((uint8_t*)(uintptr_t)pPicInfoLine)[(offset + i) * 2];
 	} else if (dio->uinfo.b422mode == MODE422_UYVY) {
 		for (i = 0; i < 4; i++)
 			((uint8_t*)val)[i] =
-				((uint8_t*)pPicInfoLine)[(offset + i) * 2 + 1];
+				((uint8_t*)(uintptr_t)pPicInfoLine)[(offset + i) * 2 + 1];
 	}
 
-	return val;
+	return (uint32_t)val;
 }
 
 static uint32_t GetMetaDataFromPib(crystalhd_dio_req *dio,
@@ -518,10 +519,10 @@ static bool GetPictureInfo(struct crystalhd_hw *hw, crystalhd_dio_req *dio,
 
 		if (dio->uinfo.b422mode == MODE422_YUY2) {
 			for (i = 0; i < 4; i++)
-				((uint8_t *)pic_number)[i] = StartLine[i * 2];
+				((uint8_t *)(uintptr_t)pic_number)[i] = StartLine[i * 2];
 		} else if (dio->uinfo.b422mode == MODE422_UYVY) {
 			for (i = 0; i < 4; i++)
-				((uint8_t *)pic_number)[i] =
+				((uint8_t *)(uintptr_t)pic_number)[i] =
 					StartLine[(i * 2) + 1];
 		}
 	} else
