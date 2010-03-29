@@ -374,12 +374,17 @@ static uint32_t GetPicInfoLineNum(crystalhd_dio_req *dio, uint8_t *base)
 }
 
 static uint32_t GetMode422Data(crystalhd_dio_req *dio,
-			       PBC_PIC_INFO_BLOCK pPicInfoLine)
+			       PBC_PIC_INFO_BLOCK pPicInfoLine, int type)
 {
 	int i;
 	uint32_t offset, val = 0;
 
-	offset = OFFSETOF(BC_PIC_INFO_BLOCK, val);
+	if (type == 1)
+		offset = OFFSETOF(BC_PIC_INFO_BLOCK, picture_meta_payload);
+	else if (type == 2)
+		offset = OFFSETOF(BC_PIC_INFO_BLOCK, height);
+	else
+		offset = 0;
 
 	if (dio->uinfo.b422mode == MODE422_YUY2) {
 		for (i = 0; i < 4; i++)
@@ -400,7 +405,7 @@ static uint32_t GetMetaDataFromPib(crystalhd_dio_req *dio,
 	uint32_t picture_meta_payload = 0;
 
 	if (dio->uinfo.b422mode)
-		picture_meta_payload = GetMode422Data(dio, pPicInfoLine);
+		picture_meta_payload = GetMode422Data(dio, pPicInfoLine, 1);
 	else
 		picture_meta_payload = pPicInfoLine->picture_meta_payload;
 
@@ -413,7 +418,7 @@ static uint32_t GetHeightFromPib(crystalhd_dio_req *dio,
 	uint32_t height = 0;
 
 	if (dio->uinfo.b422mode)
-		height = GetMode422Data(dio, pPicInfoLine);
+		height = GetMode422Data(dio, pPicInfoLine, 2);
 	else
 		height = pPicInfoLine->height;
 
