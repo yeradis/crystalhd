@@ -27,6 +27,7 @@
 #ifndef _CRYSTALHD_HW_H_
 #define _CRYSTALHD_HW_H_
 
+#include <linux/device.h>
 #include "crystalhd_fw_if.h"
 #include "crystalhd_misc.h"
 
@@ -298,7 +299,7 @@ struct crystalhd_hw {
 	uint32_t		rx_pkt_tag_seed;
 
 	bool			dev_started;
-	void			*adp;
+	struct crystalhd_adp	*adp;
 
 	wait_queue_head_t	*pfw_cmd_event;
 	int			fwcmd_evt_sts;
@@ -306,16 +307,16 @@ struct crystalhd_hw {
 	uint32_t		pib_del_Q_addr;
 	uint32_t		pib_rel_Q_addr;
 
-	crystalhd_dioq_t		*tx_freeq;
-	crystalhd_dioq_t		*tx_actq;
+	crystalhd_dioq_t	*tx_freeq;
+	crystalhd_dioq_t	*tx_actq;
 
 	/* Rx DMA Engine Specific Locks */
 	spinlock_t		rx_lock;
 	uint32_t		rx_list_post_index;
 	list_sts		rx_list_sts[DMA_ENGINE_CNT];
-	crystalhd_dioq_t		*rx_rdyq;
-	crystalhd_dioq_t		*rx_freeq;
-	crystalhd_dioq_t		*rx_actq;
+	crystalhd_dioq_t	*rx_rdyq;
+	crystalhd_dioq_t	*rx_freeq;
+	crystalhd_dioq_t	*rx_actq;
 	uint32_t		stop_pending;
 
 	/* HW counters.. */

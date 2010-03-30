@@ -24,7 +24,9 @@
 
 #include <linux/pci.h>
 #include <linux/delay.h>
+#include <linux/device.h>
 #include "crystalhd_hw.h"
+#include "crystalhd_lnx.h"
 
 #define OFFSETOF(_s_, _m_) ((size_t)(unsigned long)&(((_s_ *)0)->_m_))
 
@@ -281,8 +283,14 @@ static bool crystalhd_load_firmware_config(struct crystalhd_adp *adp)
 static bool crystalhd_start_device(struct crystalhd_adp *adp)
 {
 	uint32_t dbg_options, glb_cntrl = 0, reg_pwrmgmt = 0;
+	struct device *dev;
 
-	BCMLOG(BCMLOG_INFO, "Starting BCM70012 Device\n");
+	if (!adp)
+		return -EINVAL;
+
+	dev = &adp->pdev->dev;
+
+	dev_info(dev, "Starting Crystal HD Device\n");
 
 	reg_pwrmgmt = crystalhd_reg_rd(adp, PCIE_DLL_DATA_LINK_CONTROL);
 	reg_pwrmgmt &= ~ASPM_L1_ENABLE;
@@ -290,7 +298,7 @@ static bool crystalhd_start_device(struct crystalhd_adp *adp)
 	crystalhd_reg_wr(adp, PCIE_DLL_DATA_LINK_CONTROL, reg_pwrmgmt);
 
 	if (!crystalhd_bring_out_of_rst(adp)) {
-		BCMLOG_ERR("Failed To Bring Link Out Of Reset\n");
+		dev_err(dev, "Failed To Bring Link Out Of Reset\n");
 		return false;
 	}
 
@@ -328,14 +336,14 @@ static bool crystalhd_stop_device(struct crystalhd_adp *adp)
 {
 	uint32_t reg;
 
-	BCMLOG(BCMLOG_INFO, "Stopping BCM70012 Device\n");
+	dev_info(&adp->pdev->dev, "Stopping Crystal HD Device\n");
 	/* Clear and disable interrupts */
 	crystalhd_disable_interrupts(adp);
 	crystalhd_clear_errors(adp);
 	crystalhd_clear_interrupts(adp);
 
 	if (!crystalhd_put_in_reset(adp))
-		BCMLOG_ERR("Failed to Put Link To Reset State\n");
+		dev_err(&adp->pdev->dev, "Failed to Put Link To Reset State\n");
 
 	reg = crystalhd_reg_rd(adp, PCIE_DLL_DATA_LINK_CONTROL);
 	reg |= ASPM_L1_ENABLE;
@@ -430,12 +438,14 @@ static bool GetPictureInfo(struct crystalhd_hw *hw, crystalhd_dio_req *dio,
 			   uint32_t PicWidth, uint32_t *PicNumber,
 			   uint32_t *PicMetaData)
 {
+	struct device *dev;
 	unsigned long PicInfoLineNum = 0, HeightInPib = 0, offset;
 	PBC_PIC_INFO_BLOCK pPicInfoLine = NULL;
 	uint8_t *Base = 0, *Limit = 0, *StartLine = NULL;
 	uint32_t pic_number = 0;
 	int i;
 
+	dev = &hw->adp->pdev->dev;
 	*PicNumber = 0;
 	*PicMetaData = 0;
 
@@ -460,24 +470,25 @@ static bool GetPictureInfo(struct crystalhd_hw *hw, crystalhd_dio_req *dio,
 
 	PicInfoLineNum = GetPicInfoLineNum(dio, Base);
 	if (PicInfoLineNum > 1092) {
-		BCMLOG(BCMLOG_ERROR, "Invalid Line Number[%d]\n",
-		       (int)PicInfoLineNum);
+		dev_err(dev, "Invalid Line Number[%d]\n",
+			(int)PicInfoLineNum);
 		goto getpictureinfo_err;
 	}
 
 	/*
-	 * -- Ajitabh[01-16-2009]: Added the check for validating the PicInfoLine Number.
-	 * -- This function is only called for link so we do not have to check for
-	 * -- height+1 or (Height+1)/2 as we are doing in DIL. In DIL we need that
-	 * -- because for flea firmware is padding the data to make it 16 byte aligned.
-	 * -- This Validates the reception of PIB itself.
+	 * -- Ajitabh[01-16-2009]: Added the check for validating the
+	 * -- PicInfoLine Number. This function is only called for link so we
+	 * -- do not have to check for height+1 or (Height+1)/2 as we are doing
+	 * -- in DIL. In DIL we need that because for flea firmware is padding
+	 * -- the data to make it 16 byte aligned. This Validates the reception
+	 * -- of PIB itself.
 	 */
 	if (hw->PICHeight) {
 		if ((PicInfoLineNum != hw->PICHeight) &&
 		    (PicInfoLineNum != hw->PICHeight/2)) {
-			BCMLOG(BCMLOG_ERROR, "PicInfoLineNum[%d] != PICHeight "
-			       "Or PICHeight/2 [%d]\n",
-			       (int)PicInfoLineNum, hw->PICHeight);
+			dev_err(dev, "PicInfoLineNum[%d] != PICHeight "
+				"Or PICHeight/2 [%d]\n",
+				(int)PicInfoLineNum, hw->PICHeight);
 			goto getpictureinfo_err;
 		}
 	}
@@ -491,8 +502,8 @@ static bool GetPictureInfo(struct crystalhd_hw *hw, crystalhd_dio_req *dio,
 
 	if (((uint8_t *)pPicInfoLine < Base) ||
 	    ((uint8_t *)pPicInfoLine > Limit)) {
-		BCMLOG(BCMLOG_ERROR, "Base Limit Check Failed for Extracting "
-		       "the PIB\n");
+		dev_err(dev, "Base Limit Check Failed for Extracting "
+			"the PIB\n");
 		goto getpictureinfo_err;
 	}
 
@@ -504,9 +515,9 @@ static bool GetPictureInfo(struct crystalhd_hw *hw, crystalhd_dio_req *dio,
 	HeightInPib = GetHeightFromPib(dio, pPicInfoLine);
 	if ((PicInfoLineNum != HeightInPib) &&
 	    (PicInfoLineNum != HeightInPib / 2)) {
-		BCMLOG(BCMLOG_ERROR, "Height Match Failed: HeightInPIB[%d] "
-		       "PicInfoLineNum[%d]\n",
-		       (int)HeightInPib, (int)PicInfoLineNum);
+		dev_err(dev, "Height Match Failed: HeightInPIB[%d] "
+			"PicInfoLineNum[%d]\n",
+			(int)HeightInPib, (int)PicInfoLineNum);
 		goto getpictureinfo_err;
 	}
 
@@ -579,9 +590,9 @@ bool crystalhd_hw_peek_next_decoded_frame(struct crystalhd_hw *hw,
 		if (rpkt) {
 			GetPictureInfo(hw, rpkt->dio_req, PicWidth,
 				       &PicNumber, meta_payload);
-			BCMLOG(BCMLOG_DBG, "%s: PicWidth(%d), PicNumber(%d), "
-			       "meta_payload(0x%x)\n", __func__, PicWidth,
-			       PicNumber, *meta_payload);
+			dev_dbg(&hw->adp->pdev->dev, "%s: PicWidth(%d), "
+				"PicNumber(%d), meta_payload(0x%x)\n",
+				__func__, PicWidth, PicNumber, *meta_payload);
 		}
 	}
 
@@ -651,14 +662,15 @@ static void crystalhd_rx_pkt_rel_call_back(void *context, void *data)
 	crystalhd_rx_dma_pkt *pkt = (crystalhd_rx_dma_pkt *)data;
 
 	if (!pkt || !hw) {
-		BCMLOG_ERR("Invalid arg - %p %p\n", hw, pkt);
+		printk(KERN_ERR "%s: Invalid arg - %p %p\n", __func__, hw, pkt);
 		return;
 	}
 
 	if (pkt->dio_req)
 		crystalhd_unmap_dio(hw->adp, pkt->dio_req);
 	else
-		BCMLOG_ERR("Missing dio_req: 0x%x\n", pkt->pkt_tag);
+		dev_err(&hw->adp->pdev->dev, "Missing dio_req: 0x%x\n",
+			pkt->pkt_tag);
 
 	crystalhd_hw_free_rx_pkt(hw, pkt);
 }
@@ -674,7 +686,7 @@ static void crystalhd_hw_delete_ioqs(struct crystalhd_hw *hw)
 	if (!hw)
 		return;
 
-	BCMLOG(BCMLOG_DBG, "Deleting IOQs\n");
+	dev_dbg(&hw->adp->pdev->dev, "Deleting IOQs\n");
 	crystalhd_hw_delete_ioq(hw->adp, hw->tx_actq);
 	crystalhd_hw_delete_ioq(hw->adp, hw->tx_freeq);
 	crystalhd_hw_delete_ioq(hw->adp, hw->rx_actq);
@@ -695,12 +707,12 @@ do {								\
  * TX - Active & Free
  * RX - Active, Ready and Free.
  */
-static BC_STATUS crystalhd_hw_create_ioqs(struct crystalhd_hw   *hw)
+static BC_STATUS crystalhd_hw_create_ioqs(struct crystalhd_hw *hw)
 {
 	BC_STATUS   sts = BC_STS_SUCCESS;
 
 	if (!hw) {
-		BCMLOG_ERR("Invalid Arg!!\n");
+		printk(KERN_ERR "%s: Invalid Arg!!\n", __func__);
 		return BC_STS_INV_ARG;
 	}
 
@@ -774,16 +786,17 @@ static BC_STATUS crystalhd_hw_tx_req_complete(struct crystalhd_hw *hw,
 	tx_dma_pkt *tx_req;
 
 	if (!hw || !list_id) {
-		BCMLOG_ERR("Invalid Arg..\n");
+		printk(KERN_ERR "%s: Invalid Arg!!\n", __func__);
 		return BC_STS_INV_ARG;
 	}
 
 	hw->pwr_lock--;
 
-	tx_req = (tx_dma_pkt *)crystalhd_dioq_find_and_fetch(hw->tx_actq, list_id);
+	tx_req = (tx_dma_pkt *)crystalhd_dioq_find_and_fetch(hw->tx_actq,
+							     list_id);
 	if (!tx_req) {
 		if (cs != BC_STS_IO_USER_ABORT)
-			BCMLOG_ERR("Find and Fetch Did not find req\n");
+			dev_err(&hw->adp->pdev->dev, "Find/Fetch: no req!\n");
 		return BC_STS_NO_DATA;
 	}
 
@@ -793,8 +806,8 @@ static BC_STATUS crystalhd_hw_tx_req_complete(struct crystalhd_hw *hw,
 		tx_req->cb_event  = NULL;
 		tx_req->call_back = NULL;
 	} else {
-		BCMLOG(BCMLOG_DBG, "Missing Tx Callback - %X\n",
-		       tx_req->list_tag);
+		dev_dbg(&hw->adp->pdev->dev, "Missing Tx Callback - %X\n",
+			tx_req->list_tag);
 	}
 
 	/* Now put back the tx_list back in FreeQ */
@@ -815,7 +828,7 @@ static bool crystalhd_tx_list0_handler(struct crystalhd_hw *hw, uint32_t err_sts
 	if (!(err_sts & err_mask))
 		return false;
 
-	BCMLOG_ERR("Error on Tx-L0 %x\n", err_sts);
+	dev_err(&hw->adp->pdev->dev, "Error on Tx-L0 %x\n", err_sts);
 
 	tmp = err_mask;
 
@@ -847,7 +860,7 @@ static bool crystalhd_tx_list1_handler(struct crystalhd_hw *hw, uint32_t err_sts
 	if (!(err_sts & err_mask))
 		return false;
 
-	BCMLOG_ERR("Error on Tx-L1 %x\n", err_sts);
+	dev_err(&hw->adp->pdev->dev, "Error on Tx-L1 %x\n", err_sts);
 
 	tmp = err_mask;
 
@@ -901,36 +914,34 @@ static void crystalhd_tx_isr(struct crystalhd_hw *hw, uint32_t int_sts)
 static void crystalhd_hw_dump_desc(pdma_descriptor p_dma_desc,
 				 uint32_t ul_desc_index, uint32_t cnt)
 {
-	uint32_t ix, ll = 0;
+	struct device *dev = chd_get_device();
+	uint32_t ix;
 
 	if (!p_dma_desc || !cnt)
 		return;
 
-	/* FIXME: jarod: perhaps a modparam desc_debug to enable this, rather than
-	 * setting ll (log level, I presume) to non-zero? */
-	if (!ll)
-		return;
-
 	for (ix = ul_desc_index; ix < (ul_desc_index + cnt); ix++) {
-		BCMLOG(ll, "%s[%d] Buff[%x:%x] Next:[%x:%x] XferSz:%x Intr:%x,Last:%x\n",
-		       ((p_dma_desc[ul_desc_index].dma_dir) ? "TDesc" : "RDesc"),
-		       ul_desc_index,
-		       p_dma_desc[ul_desc_index].buff_addr_high,
-		       p_dma_desc[ul_desc_index].buff_addr_low,
-		       p_dma_desc[ul_desc_index].next_desc_addr_high,
-		       p_dma_desc[ul_desc_index].next_desc_addr_low,
-		       p_dma_desc[ul_desc_index].xfer_size,
-		       p_dma_desc[ul_desc_index].intr_enable,
-		       p_dma_desc[ul_desc_index].last_rec_indicator);
+		dev_dbg(dev, "%s[%d] Buff[%x:%x] Next:[%x:%x] XferSz:%x "
+			"Intr:%x,Last:%x\n",
+			(p_dma_desc[ul_desc_index].dma_dir ? "TDesc" : "RDesc"),
+			ul_desc_index,
+			p_dma_desc[ul_desc_index].buff_addr_high,
+			p_dma_desc[ul_desc_index].buff_addr_low,
+			p_dma_desc[ul_desc_index].next_desc_addr_high,
+			p_dma_desc[ul_desc_index].next_desc_addr_low,
+			p_dma_desc[ul_desc_index].xfer_size,
+			p_dma_desc[ul_desc_index].intr_enable,
+			p_dma_desc[ul_desc_index].last_rec_indicator);
 	}
 
 }
 
 static BC_STATUS crystalhd_hw_fill_desc(crystalhd_dio_req *ioreq,
-				      dma_descriptor *desc,
-				      dma_addr_t desc_paddr_base,
-				      uint32_t sg_cnt, uint32_t sg_st_ix,
-				      uint32_t sg_st_off, uint32_t xfr_sz)
+					dma_descriptor *desc,
+					dma_addr_t desc_paddr_base,
+					uint32_t sg_cnt, uint32_t sg_st_ix,
+					uint32_t sg_st_off, uint32_t xfr_sz,
+					struct device *dev)
 {
 	uint32_t count = 0, ix = 0, sg_ix = 0, len = 0, last_desc_ix = 0;
 	dma_addr_t desc_phy_addr = desc_paddr_base;
@@ -938,7 +949,7 @@ static BC_STATUS crystalhd_hw_fill_desc(crystalhd_dio_req *ioreq,
 
 	if (!ioreq || !desc || !desc_paddr_base || !xfr_sz ||
 	    (!sg_cnt && !ioreq->uinfo.dir_tx)) {
-		BCMLOG_ERR("Invalid Args\n");
+		dev_err(dev, "%s: Invalid Args\n", __func__);
 		return BC_STS_INV_ARG;
 	}
 
@@ -950,7 +961,8 @@ static BC_STATUS crystalhd_hw_fill_desc(crystalhd_dio_req *ioreq,
 		/* Get SGLE length */
 		len = crystalhd_get_sgle_len(ioreq, sg_ix);
 		if (len % 4) {
-			BCMLOG_ERR(" len in sg %d %d %d\n", len, sg_ix, sg_cnt);
+			dev_err(dev, "unsupported len in sg %d %d %d\n",
+				len, sg_ix, sg_cnt);
 			return BC_STS_NOT_IMPL;
 		}
 		/* Setup DMA desc with Phy addr & Length at current index. */
@@ -974,8 +986,8 @@ static BC_STATUS crystalhd_hw_fill_desc(crystalhd_dio_req *ioreq,
 
 		/* Debug.. */
 		if ((!len) || (len > crystalhd_get_sgle_len(ioreq, sg_ix))) {
-			BCMLOG_ERR("inv-len(%x) Ix(%d) count:%x xfr_sz:%x sg_cnt:%d\n",
-				   len, ix, count, xfr_sz, sg_cnt);
+			dev_err(dev, "inv-len(%x) Ix(%d) count:%x xfr_sz:%x "
+				"sg_cnt:%d\n", len, ix, count, xfr_sz, sg_cnt);
 			return BC_STS_ERROR;
 		}
 		/* Length expects Multiple of 4 */
@@ -1010,7 +1022,8 @@ static BC_STATUS crystalhd_hw_fill_desc(crystalhd_dio_req *ioreq,
 	crystalhd_hw_dump_desc(desc, last_desc_ix, 1);
 
 	if (count != xfr_sz) {
-		BCMLOG_ERR("interal error sz curr:%x exp:%x\n", count, xfr_sz);
+		dev_err(dev, "interal error sz curr:%x exp:%x\n",
+			count, xfr_sz);
 		return BC_STS_ERROR;
 	}
 
@@ -1018,8 +1031,9 @@ static BC_STATUS crystalhd_hw_fill_desc(crystalhd_dio_req *ioreq,
 }
 
 static BC_STATUS crystalhd_xlat_sgl_to_dma_desc(crystalhd_dio_req *ioreq,
-					      pdma_desc_mem pdesc_mem,
-					      uint32_t *uv_desc_index)
+						pdma_desc_mem pdesc_mem,
+						uint32_t *uv_desc_index,
+						struct device *dev)
 {
 	dma_descriptor *desc = NULL;
 	dma_addr_t desc_paddr_base = 0;
@@ -1029,18 +1043,18 @@ static BC_STATUS crystalhd_xlat_sgl_to_dma_desc(crystalhd_dio_req *ioreq,
 
 	/* Check params.. */
 	if (!ioreq || !pdesc_mem || !uv_desc_index) {
-		BCMLOG_ERR("Invalid Args\n");
+		dev_err(dev, "%s: Invalid Args\n", __func__);
 		return BC_STS_INV_ARG;
 	}
 
 	if (!pdesc_mem->sz || !pdesc_mem->pdma_desc_start ||
 	    !ioreq->sg || (!ioreq->sg_cnt && !ioreq->uinfo.dir_tx)) {
-		BCMLOG_ERR("Invalid Args\n");
+		dev_err(dev, "%s: Invalid Args\n", __func__);
 		return BC_STS_INV_ARG;
 	}
 
 	if ((ioreq->uinfo.dir_tx) && (ioreq->uinfo.uv_offset)) {
-		BCMLOG_ERR("UV offset for TX??\n");
+		dev_err(dev, "%s: UV offset for TX??\n", __func__);
 		return BC_STS_INV_ARG;
 
 	}
@@ -1057,7 +1071,7 @@ static BC_STATUS crystalhd_xlat_sgl_to_dma_desc(crystalhd_dio_req *ioreq,
 	}
 
 	sts = crystalhd_hw_fill_desc(ioreq, desc, desc_paddr_base, sg_cnt,
-				   sg_st_ix, sg_st_off, xfr_sz);
+				   sg_st_ix, sg_st_off, xfr_sz, dev);
 
 	if ((sts != BC_STS_SUCCESS) || !ioreq->uinfo.uv_offset)
 		return sts;
@@ -1074,7 +1088,7 @@ static BC_STATUS crystalhd_xlat_sgl_to_dma_desc(crystalhd_dio_req *ioreq,
 	sg_st_off = ioreq->uinfo.uv_sg_off;
 
 	sts = crystalhd_hw_fill_desc(ioreq, desc, desc_paddr_base, sg_cnt,
-				   sg_st_ix, sg_st_off, xfr_sz);
+				   sg_st_ix, sg_st_off, xfr_sz, dev);
 	if (sts != BC_STS_SUCCESS)
 		return sts;
 
@@ -1104,17 +1118,20 @@ static void crystalhd_start_tx_dma_engine(struct crystalhd_hw *hw)
  */
 static BC_STATUS crystalhd_stop_tx_dma_engine(struct crystalhd_hw *hw)
 {
+	struct device *dev;
 	uint32_t dma_cntrl, cnt = 30;
 	uint32_t l1 = 1, l2 = 1;
 	unsigned long flags = 0;
 
 	dma_cntrl = crystalhd_reg_rd(hw->adp, MISC1_TX_SW_DESC_LIST_CTRL_STS);
 
-	BCMLOG(BCMLOG_DBG, "Stopping TX DMA Engine..\n");
+	dev = &hw->adp->pdev->dev;
+
+	dev_dbg(dev, "Stopping TX DMA Engine..\n");
 
 	/* FIXME: jarod: invert dma_ctrl and check bit? or are there missing parens? */
 	if (!dma_cntrl & DMA_START_BIT) {
-		BCMLOG(BCMLOG_DBG, "Already Stopped\n");
+		dev_dbg(dev, "Already Stopped\n");
 		return BC_STS_SUCCESS;
 	}
 
@@ -1125,18 +1142,20 @@ static BC_STATUS crystalhd_stop_tx_dma_engine(struct crystalhd_hw *hw)
 	dma_cntrl &= ~DMA_START_BIT;
 	crystalhd_reg_wr(hw->adp, MISC1_TX_SW_DESC_LIST_CTRL_STS, dma_cntrl);
 
-	BCMLOG(BCMLOG_DBG, "Cleared the DMA Start bit\n");
+	dev_dbg(dev, "Cleared the DMA Start bit\n");
 
 	/* Poll for 3seconds (30 * 100ms) on both the lists..*/
 	while ((l1 || l2) && cnt) {
 
 		if (l1) {
-			l1 = crystalhd_reg_rd(hw->adp, MISC1_TX_FIRST_DESC_L_ADDR_LIST0);
+			l1 = crystalhd_reg_rd(hw->adp,
+				MISC1_TX_FIRST_DESC_L_ADDR_LIST0);
 			l1 &= DMA_START_BIT;
 		}
 
 		if (l2) {
-			l2 = crystalhd_reg_rd(hw->adp, MISC1_TX_FIRST_DESC_L_ADDR_LIST1);
+			l2 = crystalhd_reg_rd(hw->adp,
+				MISC1_TX_FIRST_DESC_L_ADDR_LIST1);
 			l2 &= DMA_START_BIT;
 		}
 
@@ -1146,7 +1165,7 @@ static BC_STATUS crystalhd_stop_tx_dma_engine(struct crystalhd_hw *hw)
 	}
 
 	if (!cnt) {
-		BCMLOG_ERR("Failed to stop TX DMA.. l1 %d, l2 %d\n", l1, l2);
+		dev_err(dev, "Failed to stop TX DMA.. l1 %d, l2 %d\n", l1, l2);
 		crystalhd_enable_interrupts(hw->adp);
 		return BC_STS_ERROR;
 	}
@@ -1154,7 +1173,7 @@ static BC_STATUS crystalhd_stop_tx_dma_engine(struct crystalhd_hw *hw)
 	spin_lock_irqsave(&hw->lock, flags);
 	hw->tx_list_post_index = 0;
 	spin_unlock_irqrestore(&hw->lock, flags);
-	BCMLOG(BCMLOG_DBG, "stopped TX DMA..\n");
+	dev_dbg(dev, "stopped TX DMA..\n");
 	crystalhd_enable_interrupts(hw->adp);
 
 	return BC_STS_SUCCESS;
@@ -1187,7 +1206,7 @@ static uint32_t crystalhd_get_pib_avail_cnt(struct crystalhd_hw *hw)
 			  (r_offset + MIN_PIB_Q_DEPTH);
 
 	if (pib_cnt > MAX_PIB_Q_DEPTH) {
-		BCMLOG_ERR("Invalid PIB Count (%u)\n", pib_cnt);
+		dev_err(&hw->adp->pdev->dev, "Invalid PIB Count (%u)\n", pib_cnt);
 		return 0;
 	}
 
@@ -1268,21 +1287,21 @@ static bool crystalhd_rel_addr_to_pib_Q(struct crystalhd_hw *hw, uint32_t addr_t
 static void cpy_pib_to_app(C011_PIB *src_pib, BC_PIC_INFO_BLOCK *dst_pib)
 {
 	if (!src_pib || !dst_pib) {
-		BCMLOG_ERR("Invalid Arguments\n");
+		printk(KERN_ERR "%s: Invalid Arguments\n", __func__);
 		return;
 	}
 
-	dst_pib->timeStamp           = 0;
-	dst_pib->picture_number      = src_pib->ppb.picture_number;
-	dst_pib->width               = src_pib->ppb.width;
-	dst_pib->height              = src_pib->ppb.height;
-	dst_pib->chroma_format       = src_pib->ppb.chroma_format;
-	dst_pib->pulldown            = src_pib->ppb.pulldown;
-	dst_pib->flags               = src_pib->ppb.flags;
-	dst_pib->sess_num            = src_pib->ptsStcOffset;
-	dst_pib->aspect_ratio        = src_pib->ppb.aspect_ratio;
-	dst_pib->colour_primaries     = src_pib->ppb.colour_primaries;
-	dst_pib->picture_meta_payload = src_pib->ppb.picture_meta_payload;
+	dst_pib->timeStamp		= 0;
+	dst_pib->picture_number		= src_pib->ppb.picture_number;
+	dst_pib->width			= src_pib->ppb.width;
+	dst_pib->height			= src_pib->ppb.height;
+	dst_pib->chroma_format		= src_pib->ppb.chroma_format;
+	dst_pib->pulldown		= src_pib->ppb.pulldown;
+	dst_pib->flags			= src_pib->ppb.flags;
+	dst_pib->sess_num		= src_pib->ptsStcOffset;
+	dst_pib->aspect_ratio		= src_pib->ppb.aspect_ratio;
+	dst_pib->colour_primaries	= src_pib->ppb.colour_primaries;
+	dst_pib->picture_meta_payload	= src_pib->ppb.picture_meta_payload;
 	dst_pib->frame_rate		= src_pib->resolution ;
 	return;
 }
@@ -1306,7 +1325,8 @@ static void crystalhd_hw_proc_pib(struct crystalhd_hw *hw)
 				 (uint32_t *)&src_pib);
 
 		if (src_pib.bFormatChange) {
-			rx_pkt = (crystalhd_rx_dma_pkt *)crystalhd_dioq_fetch(hw->rx_freeq);
+			rx_pkt = (crystalhd_rx_dma_pkt *)
+					crystalhd_dioq_fetch(hw->rx_freeq);
 			if (!rx_pkt)
 				return;
 
@@ -1319,24 +1339,26 @@ static void crystalhd_hw_proc_pib(struct crystalhd_hw *hw)
 				hw->PICWidth = 720;
 
 			rx_pkt->flags = 0;
-			rx_pkt->flags |= COMP_FLAG_PIB_VALID | COMP_FLAG_FMT_CHANGE;
+			rx_pkt->flags |= COMP_FLAG_PIB_VALID |
+					 COMP_FLAG_FMT_CHANGE;
 			AppPib = &rx_pkt->pib;
 			cpy_pib_to_app(&src_pib, AppPib);
 
-			BCMLOG(BCMLOG_DBG,
-			       "App PIB:%x %x %x %x %x %x %x %x %x %x\n",
-			       rx_pkt->pib.picture_number,
-			       rx_pkt->pib.aspect_ratio,
-			       rx_pkt->pib.chroma_format,
-			       rx_pkt->pib.colour_primaries,
-			       rx_pkt->pib.frame_rate,
-			       rx_pkt->pib.height,
-			       rx_pkt->pib.width,
-			       rx_pkt->pib.n_drop,
-			       rx_pkt->pib.pulldown,
-			       rx_pkt->pib.ycom);
+			dev_dbg(&hw->adp->pdev->dev,
+				"App PIB:%x %x %x %x %x %x %x %x %x %x\n",
+				rx_pkt->pib.picture_number,
+				rx_pkt->pib.aspect_ratio,
+				rx_pkt->pib.chroma_format,
+				rx_pkt->pib.colour_primaries,
+				rx_pkt->pib.frame_rate,
+				rx_pkt->pib.height,
+				rx_pkt->pib.width,
+				rx_pkt->pib.n_drop,
+				rx_pkt->pib.pulldown,
+				rx_pkt->pib.ycom);
 
-			crystalhd_dioq_add(hw->rx_rdyq, (void *)rx_pkt, true, rx_pkt->pkt_tag);
+			crystalhd_dioq_add(hw->rx_rdyq, (void *)rx_pkt,
+					   true, rx_pkt->pkt_tag);
 
 		}
 
@@ -1351,13 +1373,15 @@ static void crystalhd_start_rx_dma_engine(struct crystalhd_hw *hw)
 	dma_cntrl = crystalhd_reg_rd(hw->adp, MISC1_Y_RX_SW_DESC_LIST_CTRL_STS);
 	if (!(dma_cntrl & DMA_START_BIT)) {
 		dma_cntrl |= DMA_START_BIT;
-		crystalhd_reg_wr(hw->adp, MISC1_Y_RX_SW_DESC_LIST_CTRL_STS, dma_cntrl);
+		crystalhd_reg_wr(hw->adp, MISC1_Y_RX_SW_DESC_LIST_CTRL_STS,
+				 dma_cntrl);
 	}
 
 	dma_cntrl = crystalhd_reg_rd(hw->adp, MISC1_UV_RX_SW_DESC_LIST_CTRL_STS);
 	if (!(dma_cntrl & DMA_START_BIT)) {
 		dma_cntrl |= DMA_START_BIT;
-		crystalhd_reg_wr(hw->adp, MISC1_UV_RX_SW_DESC_LIST_CTRL_STS, dma_cntrl);
+		crystalhd_reg_wr(hw->adp, MISC1_UV_RX_SW_DESC_LIST_CTRL_STS,
+				 dma_cntrl);
 	}
 
 	return;
@@ -1365,47 +1389,54 @@ static void crystalhd_start_rx_dma_engine(struct crystalhd_hw *hw)
 
 static void crystalhd_stop_rx_dma_engine(struct crystalhd_hw *hw)
 {
+	struct device *dev = &hw->adp->pdev->dev;
 	uint32_t dma_cntrl = 0, count = 30;
 	uint32_t l0y = 1, l0uv = 1, l1y = 1, l1uv = 1;
 
 	dma_cntrl = crystalhd_reg_rd(hw->adp, MISC1_Y_RX_SW_DESC_LIST_CTRL_STS);
 	if ((dma_cntrl & DMA_START_BIT)) {
 		dma_cntrl &= ~DMA_START_BIT;
-		crystalhd_reg_wr(hw->adp, MISC1_Y_RX_SW_DESC_LIST_CTRL_STS, dma_cntrl);
+		crystalhd_reg_wr(hw->adp, MISC1_Y_RX_SW_DESC_LIST_CTRL_STS,
+				 dma_cntrl);
 	}
 
 	dma_cntrl = crystalhd_reg_rd(hw->adp, MISC1_UV_RX_SW_DESC_LIST_CTRL_STS);
 	if ((dma_cntrl & DMA_START_BIT)) {
 		dma_cntrl &= ~DMA_START_BIT;
-		crystalhd_reg_wr(hw->adp, MISC1_UV_RX_SW_DESC_LIST_CTRL_STS, dma_cntrl);
+		crystalhd_reg_wr(hw->adp, MISC1_UV_RX_SW_DESC_LIST_CTRL_STS,
+				 dma_cntrl);
 	}
 
 	/* Poll for 3seconds (30 * 100ms) on both the lists..*/
 	while ((l0y || l0uv || l1y || l1uv) && count) {
 
 		if (l0y) {
-			l0y = crystalhd_reg_rd(hw->adp, MISC1_Y_RX_FIRST_DESC_L_ADDR_LIST0);
+			l0y = crystalhd_reg_rd(hw->adp,
+				MISC1_Y_RX_FIRST_DESC_L_ADDR_LIST0);
 			l0y &= DMA_START_BIT;
 			if (!l0y)
 				hw->rx_list_sts[0] &= ~rx_waiting_y_intr;
 		}
 
 		if (l1y) {
-			l1y = crystalhd_reg_rd(hw->adp, MISC1_Y_RX_FIRST_DESC_L_ADDR_LIST1);
+			l1y = crystalhd_reg_rd(hw->adp,
+				MISC1_Y_RX_FIRST_DESC_L_ADDR_LIST1);
 			l1y &= DMA_START_BIT;
 			if (!l1y)
 				hw->rx_list_sts[1] &= ~rx_waiting_y_intr;
 		}
 
 		if (l0uv) {
-			l0uv = crystalhd_reg_rd(hw->adp, MISC1_UV_RX_FIRST_DESC_L_ADDR_LIST0);
+			l0uv = crystalhd_reg_rd(hw->adp,
+				MISC1_UV_RX_FIRST_DESC_L_ADDR_LIST0);
 			l0uv &= DMA_START_BIT;
 			if (!l0uv)
 				hw->rx_list_sts[0] &= ~rx_waiting_uv_intr;
 		}
 
 		if (l1uv) {
-			l1uv = crystalhd_reg_rd(hw->adp, MISC1_UV_RX_FIRST_DESC_L_ADDR_LIST1);
+			l1uv = crystalhd_reg_rd(hw->adp,
+				MISC1_UV_RX_FIRST_DESC_L_ADDR_LIST1);
 			l1uv &= DMA_START_BIT;
 			if (!l1uv)
 				hw->rx_list_sts[1] &= ~rx_waiting_uv_intr;
@@ -1416,30 +1447,33 @@ static void crystalhd_stop_rx_dma_engine(struct crystalhd_hw *hw)
 
 	hw->rx_list_post_index = 0;
 
-	BCMLOG(BCMLOG_SSTEP, "Capture Stop: %d List0:Sts:%x List1:Sts:%x\n",
-	       count, hw->rx_list_sts[0], hw->rx_list_sts[1]);
+	dev_dbg(dev, "Capture Stop: %d List0:Sts:%x List1:Sts:%x\n",
+		count, hw->rx_list_sts[0], hw->rx_list_sts[1]);
 }
 
-static BC_STATUS crystalhd_hw_prog_rxdma(struct crystalhd_hw *hw, crystalhd_rx_dma_pkt *rx_pkt)
+static BC_STATUS crystalhd_hw_prog_rxdma(struct crystalhd_hw *hw,
+					 crystalhd_rx_dma_pkt *rx_pkt)
 {
+	struct device *dev;
 	uint32_t y_low_addr_reg, y_high_addr_reg;
 	uint32_t uv_low_addr_reg, uv_high_addr_reg;
 	addr_64 desc_addr;
 	unsigned long flags;
 
 	if (!hw || !rx_pkt) {
-		BCMLOG_ERR("Invalid Arguments\n");
+		printk(KERN_ERR "%s: Invalid Arguments\n", __func__);
 		return BC_STS_INV_ARG;
 	}
 
+	dev = &hw->adp->pdev->dev;
+
 	if (hw->rx_list_post_index >= DMA_ENGINE_CNT) {
-		BCMLOG_ERR("List Out Of bounds %x\n", hw->rx_list_post_index);
+		dev_err(dev, "List Out Of bounds %x\n", hw->rx_list_post_index);
 		return BC_STS_INV_ARG;
 	}
 
 	spin_lock_irqsave(&hw->rx_lock, flags);
-	/* FIXME: jarod: sts_free is an enum for 0, in crystalhd_hw.h... yuk... */
-	if (sts_free != hw->rx_list_sts[hw->rx_list_post_index]) {
+	if (hw->rx_list_sts[hw->rx_list_post_index]) {
 		spin_unlock_irqrestore(&hw->rx_lock, flags);
 		return BC_STS_BUSY;
 	}
@@ -1523,41 +1557,45 @@ static void crystalhd_hw_finalize_pause(struct crystalhd_hw *hw)
 	dma_cntrl = crystalhd_reg_rd(hw->adp, MISC1_Y_RX_SW_DESC_LIST_CTRL_STS);
 	if (dma_cntrl & DMA_START_BIT) {
 		dma_cntrl &= ~DMA_START_BIT;
-		crystalhd_reg_wr(hw->adp, MISC1_Y_RX_SW_DESC_LIST_CTRL_STS, dma_cntrl);
+		crystalhd_reg_wr(hw->adp, MISC1_Y_RX_SW_DESC_LIST_CTRL_STS,
+				 dma_cntrl);
 	}
 
 	dma_cntrl = crystalhd_reg_rd(hw->adp, MISC1_UV_RX_SW_DESC_LIST_CTRL_STS);
 	if (dma_cntrl & DMA_START_BIT) {
 		dma_cntrl &= ~DMA_START_BIT;
-		crystalhd_reg_wr(hw->adp, MISC1_UV_RX_SW_DESC_LIST_CTRL_STS, dma_cntrl);
+		crystalhd_reg_wr(hw->adp, MISC1_UV_RX_SW_DESC_LIST_CTRL_STS,
+				 dma_cntrl);
 	}
 	hw->rx_list_post_index = 0;
 
 	aspm = crystalhd_reg_rd(hw->adp, PCIE_DLL_DATA_LINK_CONTROL);
 	aspm |= ASPM_L1_ENABLE;
-	/* NAREN BCMLOG(BCMLOG_INFO, "aspm on\n"); */
+	/* NAREN dev_info(&hw->adp->pdev->dev, "aspm on\n"); */
 	crystalhd_reg_wr(hw->adp, PCIE_DLL_DATA_LINK_CONTROL, aspm);
 }
 
-static BC_STATUS crystalhd_rx_pkt_done(struct crystalhd_hw *hw, uint32_t list_index,
-				     BC_STATUS comp_sts)
+static BC_STATUS crystalhd_rx_pkt_done(struct crystalhd_hw *hw,
+				       uint32_t list_index,
+				       BC_STATUS comp_sts)
 {
 	crystalhd_rx_dma_pkt *rx_pkt = NULL;
 	uint32_t y_dw_dnsz, uv_dw_dnsz;
 	BC_STATUS sts = BC_STS_SUCCESS;
 
 	if (!hw || list_index >= DMA_ENGINE_CNT) {
-		BCMLOG_ERR("Invalid Arguments\n");
+		printk(KERN_ERR "%s: Invalid Arguments\n", __func__);
 		return BC_STS_INV_ARG;
 	}
 
 	rx_pkt = crystalhd_dioq_find_and_fetch(hw->rx_actq,
-					     hw->rx_pkt_tag_seed + list_index);
+		     hw->rx_pkt_tag_seed + list_index);
 	if (!rx_pkt) {
-		BCMLOG_ERR("Act-Q:PostIx:%x L0Sts:%x L1Sts:%x current L:%x tag:%x comp:%x\n",
-			   hw->rx_list_post_index, hw->rx_list_sts[0],
-			   hw->rx_list_sts[1], list_index,
-			   hw->rx_pkt_tag_seed + list_index, comp_sts);
+		dev_err(&hw->adp->pdev->dev, "Act-Q: PostIx:%x L0Sts:%x "
+			"L1Sts:%x current L:%x tag:%x comp:%x\n",
+			hw->rx_list_post_index, hw->rx_list_sts[0],
+			hw->rx_list_sts[1], list_index,
+			hw->rx_pkt_tag_seed + list_index, comp_sts);
 		return BC_STS_INV_ARG;
 	}
 
@@ -1576,8 +1614,10 @@ static BC_STATUS crystalhd_rx_pkt_done(struct crystalhd_hw *hw, uint32_t list_in
 	return crystalhd_hw_post_cap_buff(hw, rx_pkt);
 }
 
-static bool crystalhd_rx_list0_handler(struct crystalhd_hw *hw, uint32_t int_sts,
-				     uint32_t y_err_sts, uint32_t uv_err_sts)
+static bool crystalhd_rx_list0_handler(struct crystalhd_hw *hw,
+				       uint32_t int_sts,
+				       uint32_t y_err_sts,
+				       uint32_t uv_err_sts)
 {
 	uint32_t tmp;
 	list_sts tmp_lsts;
@@ -1644,8 +1684,9 @@ static bool crystalhd_rx_list0_handler(struct crystalhd_hw *hw, uint32_t int_sts
 	return (tmp_lsts != hw->rx_list_sts[0]);
 }
 
-static bool crystalhd_rx_list1_handler(struct crystalhd_hw *hw, uint32_t int_sts,
-				     uint32_t y_err_sts, uint32_t uv_err_sts)
+static bool crystalhd_rx_list1_handler(struct crystalhd_hw *hw,
+				       uint32_t int_sts, uint32_t y_err_sts,
+				       uint32_t uv_err_sts)
 {
 	uint32_t tmp;
 	list_sts tmp_lsts;
@@ -1724,7 +1765,7 @@ static void crystalhd_rx_isr(struct crystalhd_hw *hw, uint32_t intr_sts)
 	bool ret = 0;
 
 	if (!hw) {
-		BCMLOG_ERR("Invalid Arguments\n");
+		printk(KERN_ERR "%s: Invalid Arguments\n", __func__);
 		return;
 	}
 
@@ -1753,11 +1794,11 @@ static void crystalhd_rx_isr(struct crystalhd_hw *hw, uint32_t intr_sts)
 				/* We got error on both or Y or uv. */
 				hw->stats.rx_errors++;
 				crystalhd_get_dnsz(hw, i, &y_dn_sz, &uv_dn_sz);
-				/* FIXME: jarod: this is where my mini pci-e card is tripping up */
-				BCMLOG(BCMLOG_DBG, "list_index:%x rx[%d] Y:%x "
-				       "UV:%x Int:%x YDnSz:%x UVDnSz:%x\n",
-				       i, hw->stats.rx_errors, y_err_sts,
-				       uv_err_sts, intr_sts, y_dn_sz, uv_dn_sz);
+				dev_dbg(&hw->adp->pdev->dev, "list_index:%x "
+					"rx[%d] Y:%x UV:%x Int:%x YDnSz:%x "
+					"UVDnSz:%x\n", i, hw->stats.rx_errors,
+					y_err_sts, uv_err_sts, intr_sts,
+					y_dn_sz, uv_dn_sz);
 				hw->rx_list_sts[i] = sts_free;
 				comp_sts = BC_STS_ERROR;
 				break;
@@ -1798,12 +1839,12 @@ static BC_STATUS crystalhd_fw_cmd_post_proc(struct crystalhd_hw *hw,
 		st_rsp = (DecRspChannelStartVideo *)fw_cmd->rsp;
 		hw->pib_del_Q_addr = st_rsp->picInfoDeliveryQ;
 		hw->pib_rel_Q_addr = st_rsp->picInfoReleaseQ;
-		BCMLOG(BCMLOG_DBG, "DelQAddr:%x RelQAddr:%x\n",
+		dev_dbg(&hw->adp->pdev->dev, "DelQAddr:%x RelQAddr:%x\n",
 		       hw->pib_del_Q_addr, hw->pib_rel_Q_addr);
 		break;
 	case eCMD_C011_INIT:
 		if (!(crystalhd_load_firmware_config(hw->adp))) {
-			BCMLOG_ERR("Invalid Params.\n");
+			dev_err(&hw->adp->pdev->dev, "Invalid Params\n");
 			sts = BC_STS_FW_AUTH_FAILED;
 		}
 		break;
@@ -1874,22 +1915,26 @@ static BC_STATUS crystalhd_put_ddr2sleep(struct crystalhd_hw *hw)
 **
 *************************************************/
 
-BC_STATUS crystalhd_download_fw(struct crystalhd_adp *adp, void *buffer, uint32_t sz)
+BC_STATUS crystalhd_download_fw(struct crystalhd_adp *adp,
+				void *buffer, uint32_t sz)
 {
+	struct device *dev;
 	uint32_t reg_data, cnt, *temp_buff;
 	uint32_t fw_sig_len = 36;
 	uint32_t dram_offset = BC_FWIMG_ST_ADDR, sig_reg;
 
-	BCMLOG_ENTER;
-
 	if (!adp || !buffer || !sz) {
-		BCMLOG_ERR("Invalid Params.\n");
+		printk(KERN_ERR "%s: Invalid Params\n", __func__);
 		return BC_STS_INV_ARG;
 	}
 
+	dev = &adp->pdev->dev;
+
+	dev_dbg(dev, "%s entered\n", __func__);
+
 	reg_data = crystalhd_reg_rd(adp, OTP_CMD);
 	if (!(reg_data & 0x02)) {
-		BCMLOG_ERR("Invalid hw config.. otp not programmed\n");
+		dev_err(dev, "Invalid hw config.. otp not programmed\n");
 		return BC_STS_ERROR;
 	}
 
@@ -1906,7 +1951,7 @@ BC_STATUS crystalhd_download_fw(struct crystalhd_adp *adp, void *buffer, uint32_
 		reg_data = crystalhd_reg_rd(adp, DCI_STATUS);
 		reg_data &= BC_BIT(4);
 		if (--cnt == 0) {
-			BCMLOG_ERR("Firmware Download RDY Timeout.\n");
+			dev_err(dev, "Firmware Download RDY Timeout.\n");
 			return BC_STS_TIMEOUT;
 		}
 	}
@@ -1958,16 +2003,17 @@ BC_STATUS crystalhd_download_fw(struct crystalhd_adp *adp, void *buffer, uint32_
 		crystalhd_reg_wr(adp, DCI_CMD, reg_data);
 
 	} else {
-		BCMLOG_ERR("F/w Signature mismatch\n");
+		dev_err(dev, "F/w Signature mismatch\n");
 		return BC_STS_FW_AUTH_FAILED;
 	}
 
-	BCMLOG(BCMLOG_INFO, "Firmware Downloaded Successfully\n");
+	dev_info(dev, "Firmware Downloaded Successfully\n");
 	return BC_STS_SUCCESS;;
 }
 
 BC_STATUS crystalhd_do_fw_cmd(struct crystalhd_hw *hw, BC_FW_CMD *fw_cmd)
 {
+	struct device *dev;
 	uint32_t cnt = 0, cmd_res_addr;
 	uint32_t *cmd_buff, *res_buff;
 	wait_queue_head_t fw_cmd_event;
@@ -1976,18 +2022,20 @@ BC_STATUS crystalhd_do_fw_cmd(struct crystalhd_hw *hw, BC_FW_CMD *fw_cmd)
 
 	crystalhd_create_event(&fw_cmd_event);
 
-	BCMLOG_ENTER;
-
 	if (!hw || !fw_cmd) {
-		BCMLOG_ERR("Invalid Arguments\n");
+		printk(KERN_ERR "%s: Invalid Arguments\n", __func__);
 		return BC_STS_INV_ARG;
 	}
+
+	dev = &hw->adp->pdev->dev;
+
+	dev_dbg(dev, "%s entered\n", __func__);
 
 	cmd_buff = fw_cmd->cmd;
 	res_buff = fw_cmd->rsp;
 
 	if (!cmd_buff || !res_buff) {
-		BCMLOG_ERR("Invalid Parameters for F/W Command\n");
+		dev_err(dev, "Invalid Parameters for F/W Command\n");
 		return BC_STS_INV_ARG;
 	}
 
@@ -2012,18 +2060,18 @@ BC_STATUS crystalhd_do_fw_cmd(struct crystalhd_hw *hw, BC_FW_CMD *fw_cmd)
 	if (!rc) {
 		sts = BC_STS_SUCCESS;
 	} else if (rc == -EBUSY) {
-		BCMLOG_ERR("Firmware command T/O\n");
+		dev_err(dev, "Firmware command T/O\n");
 		sts = BC_STS_TIMEOUT;
 	} else if (rc == -EINTR) {
-		BCMLOG(BCMLOG_DBG, "FwCmd Wait Signal int.\n");
+		dev_dbg(dev, "FwCmd Wait Signal int.\n");
 		sts = BC_STS_IO_USER_ABORT;
 	} else {
-		BCMLOG_ERR("FwCmd IO Error.\n");
+		dev_err(dev, "FwCmd IO Error.\n");
 		sts = BC_STS_IO_ERROR;
 	}
 
 	if (sts != BC_STS_SUCCESS) {
-		BCMLOG_ERR("FwCmd Failed.\n");
+		dev_err(dev, "FwCmd Failed.\n");
 		hw->pwr_lock--;
 		return sts;
 	}
@@ -2037,13 +2085,13 @@ BC_STATUS crystalhd_do_fw_cmd(struct crystalhd_hw *hw, BC_FW_CMD *fw_cmd)
 	hw->pwr_lock--;
 
 	if (res_buff[2] != C011_RET_SUCCESS) {
-		BCMLOG_ERR("res_buff[2] != C011_RET_SUCCESS\n");
+		dev_err(dev, "res_buff[2] != C011_RET_SUCCESS\n");
 		return BC_STS_FW_CMD_ERR;
 	}
 
 	sts = crystalhd_fw_cmd_post_proc(hw, fw_cmd);
 	if (sts != BC_STS_SUCCESS)
-		BCMLOG_ERR("crystalhd_fw_cmd_post_proc Failed.\n");
+		dev_err(dev, "crystalhd_fw_cmd_post_proc Failed.\n");
 
 	return sts;
 }
@@ -2083,7 +2131,6 @@ bool crystalhd_hw_interrupt(struct crystalhd_adp *adp, struct crystalhd_hw *hw)
 			crystalhd_hw_proc_pib(hw);
 
 		bc_dec_reg_wr(adp, Stream2Host_Intr_Sts, deco_intr);
-		/* FIXME: jarod: No udelay? might this be the real reason mini pci-e cards were stalling out? */
 		bc_dec_reg_wr(adp, Stream2Host_Intr_Sts, 0);
 		rc = 1;
 	}
@@ -2110,7 +2157,7 @@ bool crystalhd_hw_interrupt(struct crystalhd_adp *adp, struct crystalhd_hw *hw)
 BC_STATUS crystalhd_hw_open(struct crystalhd_hw *hw, struct crystalhd_adp *adp)
 {
 	if (!hw || !adp) {
-		BCMLOG_ERR("Invalid Arguments\n");
+		printk(KERN_ERR "%s: Invalid Arguments\n", __func__);
 		return BC_STS_INV_ARG;
 	}
 
@@ -2142,7 +2189,7 @@ BC_STATUS crystalhd_hw_open(struct crystalhd_hw *hw, struct crystalhd_adp *adp)
 BC_STATUS crystalhd_hw_close(struct crystalhd_hw *hw)
 {
 	if (!hw) {
-		BCMLOG_ERR("Invalid Arguments\n");
+		printk(KERN_ERR "%s: Invalid Arguments\n", __func__);
 		return BC_STS_INV_ARG;
 	}
 
@@ -2158,6 +2205,7 @@ BC_STATUS crystalhd_hw_close(struct crystalhd_hw *hw)
 
 BC_STATUS crystalhd_hw_setup_dma_rings(struct crystalhd_hw *hw)
 {
+	struct device *dev;
 	unsigned int i;
 	void *mem;
 	size_t mem_len;
@@ -2166,13 +2214,15 @@ BC_STATUS crystalhd_hw_setup_dma_rings(struct crystalhd_hw *hw)
 	crystalhd_rx_dma_pkt *rpkt;
 
 	if (!hw || !hw->adp) {
-		BCMLOG_ERR("Invalid Arguments\n");
+		printk(KERN_ERR "%s: Invalid Arguments\n", __func__);
 		return BC_STS_INV_ARG;
 	}
 
+	dev = &hw->adp->pdev->dev;
+
 	sts = crystalhd_hw_create_ioqs(hw);
 	if (sts != BC_STS_SUCCESS) {
-		BCMLOG_ERR("Failed to create IOQs..\n");
+		dev_err(dev, "Failed to create IOQs..\n");
 		return sts;
 	}
 
@@ -2183,7 +2233,7 @@ BC_STATUS crystalhd_hw_setup_dma_rings(struct crystalhd_hw *hw)
 		if (mem) {
 			memset(mem, 0, mem_len);
 		} else {
-			BCMLOG_ERR("Insufficient Memory For TX\n");
+			dev_err(dev, "Insufficient Memory For TX\n");
 			crystalhd_hw_free_dma_rings(hw);
 			return BC_STS_INSUFF_RES;
 		}
@@ -2206,7 +2256,7 @@ BC_STATUS crystalhd_hw_setup_dma_rings(struct crystalhd_hw *hw)
 	for (i = 0; i < BC_RX_LIST_CNT; i++) {
 		rpkt = kzalloc(sizeof(*rpkt), GFP_KERNEL);
 		if (!rpkt) {
-			BCMLOG_ERR("Insufficient Memory For RX\n");
+			dev_err(dev, "Insufficient Memory For RX\n");
 			crystalhd_hw_free_dma_rings(hw);
 			return BC_STS_INSUFF_RES;
 		}
@@ -2215,7 +2265,7 @@ BC_STATUS crystalhd_hw_setup_dma_rings(struct crystalhd_hw *hw)
 		if (mem) {
 			memset(mem, 0, mem_len);
 		} else {
-			BCMLOG_ERR("Insufficient Memory For RX\n");
+			dev_err(dev, "Insufficient Memory For RX\n");
 			crystalhd_hw_free_dma_rings(hw);
 			return BC_STS_INSUFF_RES;
 		}
@@ -2235,7 +2285,7 @@ BC_STATUS crystalhd_hw_free_dma_rings(struct crystalhd_hw *hw)
 	crystalhd_rx_dma_pkt *rpkt = NULL;
 
 	if (!hw || !hw->adp) {
-		BCMLOG_ERR("Invalid Arguments\n");
+		printk(KERN_ERR "%s: Invalid Arguments\n", __func__);
 		return BC_STS_INV_ARG;
 	}
 
@@ -2253,7 +2303,7 @@ BC_STATUS crystalhd_hw_free_dma_rings(struct crystalhd_hw *hw)
 		}
 	}
 
-	BCMLOG(BCMLOG_DBG, "Releasing RX Pkt pool\n");
+	dev_dbg(&hw->adp->pdev->dev, "Releasing RX Pkt pool\n");
 	do {
 		rpkt = crystalhd_hw_alloc_rx_pkt(hw);
 		if (!rpkt)
@@ -2272,6 +2322,7 @@ BC_STATUS crystalhd_hw_post_tx(struct crystalhd_hw *hw, crystalhd_dio_req *ioreq
 			     wait_queue_head_t *cb_event, uint32_t *list_id,
 			     uint8_t data_flags)
 {
+	struct device *dev;
 	tx_dma_pkt *tx_dma_packet = NULL;
 	uint32_t first_desc_u_addr, first_desc_l_addr;
 	uint32_t low_addr, high_addr;
@@ -2282,9 +2333,11 @@ BC_STATUS crystalhd_hw_post_tx(struct crystalhd_hw *hw, crystalhd_dio_req *ioreq
 	bool rc;
 
 	if (!hw || !ioreq || !call_back || !cb_event || !list_id) {
-		BCMLOG_ERR("Invalid Arguments\n");
+		printk(KERN_ERR "%s: Invalid Arguments\n", __func__);
 		return BC_STS_INV_ARG;
 	}
+
+	dev = &hw->adp->pdev->dev;
 
 	/*
 	 * Since we hit code in busy condition very frequently,
@@ -2303,18 +2356,18 @@ BC_STATUS crystalhd_hw_post_tx(struct crystalhd_hw *hw, crystalhd_dio_req *ioreq
 	/* Get a list from TxFreeQ */
 	tx_dma_packet = (tx_dma_pkt *)crystalhd_dioq_fetch(hw->tx_freeq);
 	if (!tx_dma_packet) {
-		BCMLOG_ERR("No empty elements..\n");
+		dev_err(dev, "No empty elements..\n");
 		return BC_STS_ERR_USAGE;
 	}
 
 	sts = crystalhd_xlat_sgl_to_dma_desc(ioreq,
-					   &tx_dma_packet->desc_mem,
-					   &dummy_index);
+					     &tx_dma_packet->desc_mem,
+					     &dummy_index, dev);
 	if (sts != BC_STS_SUCCESS) {
 		add_sts = crystalhd_dioq_add(hw->tx_freeq, tx_dma_packet,
 					   false, 0);
 		if (add_sts != BC_STS_SUCCESS)
-			BCMLOG_ERR("double fault..\n");
+			dev_err(dev, "double fault..\n");
 
 		return sts;
 	}
@@ -2377,7 +2430,7 @@ BC_STATUS crystalhd_hw_post_tx(struct crystalhd_hw *hw, crystalhd_dio_req *ioreq
 BC_STATUS crystalhd_hw_cancel_tx(struct crystalhd_hw *hw, uint32_t list_id)
 {
 	if (!hw || !list_id) {
-		BCMLOG_ERR("Invalid Arguments\n");
+		printk(KERN_ERR "%s: Invalid Arguments\n", __func__);
 		return BC_STS_INV_ARG;
 	}
 
@@ -2395,20 +2448,21 @@ BC_STATUS crystalhd_hw_add_cap_buffer(struct crystalhd_hw *hw,
 	BC_STATUS sts;
 
 	if (!hw || !ioreq) {
-		BCMLOG_ERR("Invalid Arguments\n");
+		printk(KERN_ERR "%s: Invalid Arguments\n", __func__);
 		return BC_STS_INV_ARG;
 	}
 
 	rpkt = crystalhd_hw_alloc_rx_pkt(hw);
 	if (!rpkt) {
-		BCMLOG_ERR("Insufficient resources\n");
+		dev_err(&hw->adp->pdev->dev, "Insufficient resources\n");
 		return BC_STS_INSUFF_RES;
 	}
 
 	rpkt->dio_req = ioreq;
 	tag = rpkt->pkt_tag;
 
-	sts = crystalhd_xlat_sgl_to_dma_desc(ioreq, &rpkt->desc_mem, &uv_desc_ix);
+	sts = crystalhd_xlat_sgl_to_dma_desc(ioreq, &rpkt->desc_mem,
+					     &uv_desc_ix, &hw->adp->pdev->dev);
 	if (sts != BC_STS_SUCCESS)
 		return sts;
 
@@ -2437,14 +2491,15 @@ BC_STATUS crystalhd_hw_get_cap_buffer(struct crystalhd_hw *hw,
 
 
 	if (!hw || !ioreq || !pib) {
-		BCMLOG_ERR("Invalid Arguments\n");
+		printk(KERN_ERR "%s: Invalid Arguments\n", __func__);
 		return BC_STS_INV_ARG;
 	}
 
 	rpkt = crystalhd_dioq_fetch_wait(hw->rx_rdyq, timeout, &sig_pending);
 	if (!rpkt) {
 		if (sig_pending) {
-			BCMLOG(BCMLOG_INFO, "wait on frame time out %d\n", sig_pending);
+			dev_info(&hw->adp->pdev->dev, "frame wait timeout %d\n",
+				 sig_pending);
 			return BC_STS_IO_USER_ABORT;
 		} else {
 			return BC_STS_TIMEOUT;
@@ -2470,7 +2525,7 @@ BC_STATUS crystalhd_hw_start_capture(struct crystalhd_hw *hw)
 	uint32_t i;
 
 	if (!hw) {
-		BCMLOG_ERR("Invalid Arguments\n");
+		printk(KERN_ERR "%s: Invalid Arguments\n", __func__);
 		return BC_STS_INV_ARG;
 	}
 
@@ -2493,7 +2548,7 @@ BC_STATUS crystalhd_hw_stop_capture(struct crystalhd_hw *hw)
 	void *temp = NULL;
 
 	if (!hw) {
-		BCMLOG_ERR("Invalid Arguments\n");
+		printk(KERN_ERR "%s: Invalid Arguments\n", __func__);
 		return BC_STS_INV_ARG;
 	}
 
@@ -2529,7 +2584,7 @@ BC_STATUS crystalhd_hw_unpause(struct crystalhd_hw *hw)
 
 	aspm = crystalhd_reg_rd(hw->adp, PCIE_DLL_DATA_LINK_CONTROL);
 	aspm &= ~ASPM_L1_ENABLE;
-/* NAREN BCMLOG(BCMLOG_INFO, "aspm off\n"); */
+/* NAREN dev_info(&hw->adp->pdev->dev, "aspm off\n"); */
 	crystalhd_reg_wr(hw->adp, PCIE_DLL_DATA_LINK_CONTROL, aspm);
 
 	sts = crystalhd_hw_start_capture(hw);
@@ -2541,18 +2596,18 @@ BC_STATUS crystalhd_hw_suspend(struct crystalhd_hw *hw)
 	BC_STATUS sts;
 
 	if (!hw) {
-		BCMLOG_ERR("Invalid Arguments\n");
+		printk(KERN_ERR "%s: Invalid Arguments\n", __func__);
 		return BC_STS_INV_ARG;
 	}
 
 	sts = crystalhd_put_ddr2sleep(hw);
 	if (sts != BC_STS_SUCCESS) {
-		BCMLOG_ERR("Failed to Put DDR To Sleep!!\n");
+		dev_err(&hw->adp->pdev->dev, "Failed to Put DDR To Sleep!!\n");
 		return BC_STS_ERROR;
 	}
 
 	if (!crystalhd_stop_device(hw->adp)) {
-		BCMLOG_ERR("Failed to Stop Device!!\n");
+		dev_err(&hw->adp->pdev->dev, "Failed to Stop Device!!\n");
 		return BC_STS_ERROR;
 	}
 
@@ -2562,7 +2617,7 @@ BC_STATUS crystalhd_hw_suspend(struct crystalhd_hw *hw)
 void crystalhd_hw_stats(struct crystalhd_hw *hw, struct crystalhd_hw_stats *stats)
 {
 	if (!hw) {
-		BCMLOG_ERR("Invalid Arguments\n");
+		printk(KERN_ERR "%s: Invalid Arguments\n", __func__);
 		return;
 	}
 
@@ -2579,23 +2634,26 @@ void crystalhd_hw_stats(struct crystalhd_hw *hw, struct crystalhd_hw_stats *stat
 
 BC_STATUS crystalhd_hw_set_core_clock(struct crystalhd_hw *hw)
 {
+	struct device *dev;
 	uint32_t reg, n, i;
 	uint32_t vco_mg, refresh_reg;
 
 	if (!hw) {
-		BCMLOG_ERR("Invalid Arguments\n");
+		printk(KERN_ERR "%s: Invalid Arguments\n", __func__);
 		return BC_STS_INV_ARG;
 	}
 
+	dev = &hw->adp->pdev->dev;
+
 	/* FIXME: jarod: wha? */
 	/*n = (hw->core_clock_mhz * 3) / 20 + 1; */
-	n = hw->core_clock_mhz/5;
+	n = hw->core_clock_mhz / 5;
 
 	if (n == hw->prev_n)
 		return BC_STS_CLK_NOCHG;
 
 	if (hw->pwr_lock > 0) {
-		/* BCMLOG(BCMLOG_INFO,"pwr_lock is %u\n", hw->pwr_lock) */
+		dev_dbg(dev, "pwr_lock is %u\n", hw->pwr_lock);
 		return BC_STS_CLK_NOCHG;
 	}
 
@@ -2615,8 +2673,8 @@ BC_STATUS crystalhd_hw_set_core_clock(struct crystalhd_hw *hw)
 	reg |= n;
 	reg |= vco_mg << 12;
 
-	BCMLOG(BCMLOG_INFO, "clock is moving to %d with n %d with vco_mg %d\n",
-	       hw->core_clock_mhz, n, vco_mg);
+	dev_info(dev, "clock is moving to %d with n %d with vco_mg %d\n",
+		 hw->core_clock_mhz, n, vco_mg);
 
 	/* Change the DRAM refresh rate to accomodate the new frequency */
 	/* refresh reg = ((refresh_rate * clock_rate)/16) - 1; rounding up*/
@@ -2632,13 +2690,12 @@ BC_STATUS crystalhd_hw_set_core_clock(struct crystalhd_hw *hw)
 
 		if (reg & 0x00020000) {
 			hw->prev_n = n;
-			/* FIXME: jarod: outputting a random "C" is... confusing... */
-			BCMLOG(BCMLOG_INFO, "C");
+			dev_dbg(dev, "clk set complete\n");
 			return BC_STS_SUCCESS;
 		} else {
 			msleep_interruptible(10);
 		}
 	}
-	BCMLOG(BCMLOG_INFO, "clk change failed\n");
+	dev_dbg(dev, "clk change failed\n");
 	return BC_STS_CLK_NOCHG;
 }

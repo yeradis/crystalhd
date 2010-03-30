@@ -39,9 +39,6 @@
 #include <asm/system.h>
 #include "bc_dts_glob_lnx.h"
 
-/* Global log level variable defined in crystal_misc.c file */
-extern uint32_t g_linklog_level;
-
 /* Global element pool for all Queue management.
  * TX: Active = BC_TX_LIST_CNT, Free = BC_TX_LIST_CNT.
  * RX: Free = BC_RX_LIST_CNT, Active = 2
@@ -89,7 +86,7 @@ typedef struct _crystalhd_dio_req {
 	void				*fb_va;
 	uint32_t			fb_size;
 	dma_addr_t			fb_pa;
-	struct _crystalhd_dio_req		*next;
+	struct _crystalhd_dio_req	*next;
 } crystalhd_dio_req;
 
 #define BC_LINK_DIOQ_SIG	(0x09223280)
@@ -97,8 +94,8 @@ typedef struct _crystalhd_dio_req {
 typedef struct _crystalhd_elem_s {
 	struct _crystalhd_elem_s	*flink;
 	struct _crystalhd_elem_s	*blink;
-	void			*data;
-	uint32_t		tag;
+	void				*data;
+	uint32_t			tag;
 } crystalhd_elem_t;
 
 typedef void (*crystalhd_data_free_cb)(void *context, void *data);
@@ -106,8 +103,8 @@ typedef void (*crystalhd_data_free_cb)(void *context, void *data);
 typedef struct _crystalhd_dioq_s {
 	uint32_t		sig;
 	struct crystalhd_adp	*adp;
-	crystalhd_elem_t		*head;
-	crystalhd_elem_t		*tail;
+	crystalhd_elem_t	*head;
+	crystalhd_elem_t	*tail;
 	uint32_t		count;
 	spinlock_t		lock;
 	wait_queue_head_t	event;
@@ -191,39 +188,5 @@ extern void crystalhd_delete_elem_pool(struct crystalhd_adp *);
 
 /*================ Debug routines/macros .. ================================*/
 extern void crystalhd_show_buffer(uint32_t off, uint8_t *buff, uint32_t dwcount);
-
-enum _chd_log_levels {
-	BCMLOG_ERROR		= 0x80000000,	/* Don't disable this option */
-	BCMLOG_DATA		= 0x40000000,	/* Data, enable by default */
-	BCMLOG_SPINLOCK		= 0x20000000,	/* Spcial case for Spin locks*/
-
-	/* Following are allowed only in debug mode */
-	BCMLOG_INFO		= 0x00000001,	/* Generic informational */
-	BCMLOG_DBG		= 0x00000002,	/* First level Debug info */
-	BCMLOG_SSTEP		= 0x00000004,	/* Stepping information */
-	BCMLOG_ENTER_LEAVE	= 0x00000008,	/* stack tracking */
-};
-
-#define BCMLOG_ENTER				\
-if (g_linklog_level & BCMLOG_ENTER_LEAVE) {	\
-	printk("Entered %s\n", __func__);	\
-}
-
-#define BCMLOG_LEAVE				\
-if (g_linklog_level & BCMLOG_ENTER_LEAVE) {	\
-	printk("Leaving %s\n", __func__);	\
-}
-
-#define BCMLOG(trace, fmt, args...)		\
-if (g_linklog_level & trace) {			\
-	printk(fmt, ##args);			\
-}
-
-#define BCMLOG_ERR(fmt, args...)					\
-do {									\
-	if (g_linklog_level & BCMLOG_ERROR) {				\
-		printk("*ERR*:%s:%d: "fmt, __FILE__, __LINE__, ##args);	\
-	}								\
-} while (0);
 
 #endif
