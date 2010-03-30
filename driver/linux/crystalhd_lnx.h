@@ -58,6 +58,7 @@ struct crystalhd_adp {
 	/* Hardware borad/PCI specifics */
 	char			name[32];
 	struct pci_dev		*pdev;
+	struct device		*d;
 
 	unsigned long		pci_mem_start;
 	uint32_t		pci_mem_len;
@@ -80,11 +81,11 @@ struct crystalhd_adp {
 	unsigned int		cfg_users;
 
 	crystalhd_ioctl_data	*idata_free_head;	/* ioctl data pool */
-	crystalhd_elem_t		*elem_pool_head;	/* Queue element pool */
+	crystalhd_elem_t	*elem_pool_head;	/* Queue element pool */
 
 	struct crystalhd_cmd	cmds;
 
-	crystalhd_dio_req		*ua_map_free_head;
+	crystalhd_dio_req	*ua_map_free_head;
 	struct pci_pool		*fill_byte_pool;
 };
 

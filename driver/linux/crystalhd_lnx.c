@@ -562,6 +562,7 @@ static int __devinit chd_dec_pci_probe(struct pci_dev *pdev,
 	}
 
 	pinfo->pdev = pdev;
+	pinfo->d = &pdev->dev;
 
 	rc = pci_enable_device(pdev);
 	if (rc) {
