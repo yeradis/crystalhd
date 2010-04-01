@@ -290,7 +290,7 @@ static bool crystalhd_start_device(struct crystalhd_adp *adp)
 
 	dev = &adp->pdev->dev;
 
-	dev_info(dev, "Starting Crystal HD Device\n");
+	dev_dbg(dev, "Starting Crystal HD Device\n");
 
 	reg_pwrmgmt = crystalhd_reg_rd(adp, PCIE_DLL_DATA_LINK_CONTROL);
 	reg_pwrmgmt &= ~ASPM_L1_ENABLE;
@@ -336,7 +336,7 @@ static bool crystalhd_stop_device(struct crystalhd_adp *adp)
 {
 	uint32_t reg;
 
-	dev_info(&adp->pdev->dev, "Stopping Crystal HD Device\n");
+	dev_dbg(&adp->pdev->dev, "Stopping Crystal HD Device\n");
 	/* Clear and disable interrupts */
 	crystalhd_disable_interrupts(adp);
 	crystalhd_clear_errors(adp);
@@ -2673,8 +2673,8 @@ BC_STATUS crystalhd_hw_set_core_clock(struct crystalhd_hw *hw)
 	reg |= n;
 	reg |= vco_mg << 12;
 
-	dev_info(dev, "clock is moving to %d with n %d with vco_mg %d\n",
-		 hw->core_clock_mhz, n, vco_mg);
+	dev_dbg(dev, "clock is moving to %d with n %d with vco_mg %d\n",
+		hw->core_clock_mhz, n, vco_mg);
 
 	/* Change the DRAM refresh rate to accomodate the new frequency */
 	/* refresh reg = ((refresh_rate * clock_rate)/16) - 1; rounding up*/

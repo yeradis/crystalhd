@@ -914,7 +914,7 @@ BC_STATUS crystalhd_resume(struct crystalhd_cmd *ctx)
  * is done for the first open request.
  */
 BC_STATUS crystalhd_user_open(struct crystalhd_cmd *ctx,
-			    struct crystalhd_user **user_ctx)
+			      struct crystalhd_user **user_ctx)
 {
 	struct device *dev = chd_get_device();
 	struct crystalhd_user *uc;
@@ -991,7 +991,7 @@ BC_STATUS crystalhd_user_close(struct crystalhd_cmd *ctx, struct crystalhd_user 
 BC_STATUS __devinit crystalhd_setup_cmd_context(struct crystalhd_cmd *ctx,
 				    struct crystalhd_adp *adp)
 {
-	struct device *dev = chd_get_device();
+	struct device *dev = &adp->pdev->dev;
 	int i = 0;
 
 	if (!ctx || !adp) {
@@ -1093,10 +1093,8 @@ crystalhd_cmd_proc crystalhd_get_cmd_proc(struct crystalhd_cmd *ctx, uint32_t cm
  */
 bool crystalhd_cmd_interrupt(struct crystalhd_cmd *ctx)
 {
-	struct device *dev = chd_get_device();
-
 	if (!ctx) {
-		dev_err(dev, "%s: Invalid arg..\n", __func__);
+		printk(KERN_ERR "%s: Invalid arg..\n", __func__);
 		return 0;
 	}
 

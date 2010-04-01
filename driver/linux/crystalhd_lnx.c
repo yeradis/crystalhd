@@ -363,7 +363,7 @@ static const struct file_operations chd_dec_fops = {
 
 static int __devinit chd_dec_init_chdev(struct crystalhd_adp *adp)
 {
-	struct device *xdev = chd_get_device();
+	struct device *xdev = &adp->pdev->dev;
 	struct device *dev;
 	crystalhd_ioctl_data *temp;
 	int rc = -ENODEV, i = 0;
@@ -458,25 +458,24 @@ static void __devexit chd_dec_release_chdev(struct crystalhd_adp *adp)
 
 static int __devinit chd_pci_reserve_mem(struct crystalhd_adp *pinfo)
 {
-	struct device *dev = chd_get_device();
 	int rc;
 	unsigned long bar2 = pci_resource_start(pinfo->pdev, 2);
 	uint32_t mem_len   = pci_resource_len(pinfo->pdev, 2);
 	unsigned long bar0 = pci_resource_start(pinfo->pdev, 0);
 	uint32_t i2o_len   = pci_resource_len(pinfo->pdev, 0);
 
-	dev_dbg(dev, "bar2:0x%lx-0x%08x  bar0:0x%lx-0x%08x\n",
-	       bar2, mem_len, bar0, i2o_len);
+	/* printk(KERN_DEBUG "bar2:0x%lx-0x%08x  bar0:0x%lx-0x%08x\n", */
+	/*       bar2, mem_len, bar0, i2o_len); */
 
 	rc = check_mem_region(bar2, mem_len);
 	if (rc) {
-		dev_err(dev, "No valid mem region...\n");
+		printk(KERN_ERR "No valid mem region...\n");
 		return -ENOMEM;
 	}
 
 	pinfo->addr = ioremap_nocache(bar2, mem_len);
 	if (!pinfo->addr) {
-		dev_err(dev, "Failed to remap mem region...\n");
+		printk(KERN_ERR "Failed to remap mem region...\n");
 		return -ENOMEM;
 	}
 
@@ -485,13 +484,13 @@ static int __devinit chd_pci_reserve_mem(struct crystalhd_adp *pinfo)
 
 	rc = check_mem_region(bar0, i2o_len);
 	if (rc) {
-		dev_err(dev, "No valid mem region...\n");
+		printk(KERN_ERR "No valid mem region...\n");
 		return -ENOMEM;
 	}
 
 	pinfo->i2o_addr = ioremap_nocache(bar0, i2o_len);
 	if (!pinfo->i2o_addr) {
-		dev_err(dev, "Failed to remap mem region...\n");
+		printk(KERN_ERR "Failed to remap mem region...\n");
 		return -ENOMEM;
 	}
 
@@ -500,12 +499,12 @@ static int __devinit chd_pci_reserve_mem(struct crystalhd_adp *pinfo)
 
 	rc = pci_request_regions(pinfo->pdev, pinfo->name);
 	if (rc < 0) {
-		dev_err(dev, "Region request failed: %d\n", rc);
+		printk(KERN_ERR "Region request failed: %d\n", rc);
 		return rc;
 	}
 
-	dev_dbg(dev, "Mapped addr:0x%08lx  i2o_addr:0x%08lx\n",
-		(unsigned long)pinfo->addr, (unsigned long)pinfo->i2o_addr);
+	/* printk(KERN_DEBUG "Mapped addr:0x%08lx  i2o_addr:0x%08lx\n", */
+	/*        (unsigned long)pinfo->addr, (unsigned long)pinfo->i2o_addr); */
 
 	return 0;
 }
@@ -558,19 +557,20 @@ static int __devinit chd_dec_pci_probe(struct pci_dev *pdev,
 			     const struct pci_device_id *entry)
 {
 	struct crystalhd_adp *pinfo;
-	struct device *dev = &pdev->dev;
 	int rc;
 	BC_STATUS sts = BC_STS_SUCCESS;
 
-	dev_dbg(dev, "%s: Vendor:0x%04x Device:0x%04x "
+#if 0
+	printk(KERN_DEBUG "%s: Vendor:0x%04x Device:0x%04x "
 		"s_vendor:0x%04x s_device: 0x%04x\n", __func__,
 		pdev->vendor, pdev->device, pdev->subsystem_vendor,
 		pdev->subsystem_device);
+#endif
 
 	/* FIXME: jarod: why atomic? */
 	pinfo = kzalloc(sizeof(struct crystalhd_adp), GFP_ATOMIC);
 	if (!pinfo) {
-		dev_err(dev, "%s: Failed to allocate memory\n", __func__);
+		printk(KERN_ERR "%s: Failed to allocate memory\n", __func__);
 		return -ENOMEM;
 	}
 
@@ -578,7 +578,7 @@ static int __devinit chd_dec_pci_probe(struct pci_dev *pdev,
 
 	rc = pci_enable_device(pdev);
 	if (rc) {
-		dev_err(dev, "Failed to enable PCI device\n");
+		printk(KERN_ERR "%s: Failed to enable PCI device\n", __func__);
 		return rc;
 	}
 
@@ -588,7 +588,8 @@ static int __devinit chd_dec_pci_probe(struct pci_dev *pdev,
 
 	rc = chd_pci_reserve_mem(pinfo);
 	if (rc) {
-		dev_err(dev, "Failed to setup memory regions.\n");
+		printk(KERN_ERR "%s: Failed to setup memory regions.\n",
+			__func__);
 		return -ENOMEM;
 	}
 
@@ -602,7 +603,7 @@ static int __devinit chd_dec_pci_probe(struct pci_dev *pdev,
 	chd_dec_init_chdev(pinfo);
 	rc = chd_dec_enable_int(pinfo);
 	if (rc) {
-		dev_err(dev, "_enable_int err:%d\n", rc);
+		printk(KERN_ERR "%s: _enable_int err:%d\n", __func__, rc);
 		pci_disable_device(pdev);
 		return -ENODEV;
 	}
@@ -615,14 +616,14 @@ static int __devinit chd_dec_pci_probe(struct pci_dev *pdev,
 		pci_set_consistent_dma_mask(pdev, DMA_BIT_MASK(32));
 		pinfo->dmabits = 32;
 	} else {
-		dev_err(dev, "Unabled to setup DMA %d\n", rc);
+		printk(KERN_ERR "%s: Unabled to setup DMA %d\n", __func__, rc);
 		pci_disable_device(pdev);
 		return -ENODEV;
 	}
 
 	sts = crystalhd_setup_cmd_context(&pinfo->cmds, pinfo);
 	if (sts != BC_STS_SUCCESS) {
-		dev_err(dev, "cmd setup :%d\n", sts);
+		printk(KERN_ERR "%s: cmd setup :%d\n", __func__, sts);
 		pci_disable_device(pdev);
 		return -ENODEV;
 	}
@@ -721,7 +722,7 @@ static DEFINE_PCI_DEVICE_TABLE(chd_dec_pci_id_table) = {
 MODULE_DEVICE_TABLE(pci, chd_dec_pci_id_table);
 
 static struct pci_driver bc_chd_70012_driver = {
-	.name     = "Broadcom Crystald HD Decoder",
+	.name     = "crystalhd",
 	.probe    = chd_dec_pci_probe,
 	.remove   = __devexit_p(chd_dec_pci_remove),
 	.id_table = chd_dec_pci_id_table,
