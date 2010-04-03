@@ -92,6 +92,9 @@ DtsFWOpenChannel(
 
 	DTS_GET_CTX(hDevice,Ctx);
 
+	if (!(pIocData = DtsAllocIoctlData(Ctx)))
+		return BC_STS_INSUFF_RES;
+
 	if (Ctx->DevId != BC_PCI_DEVID_FLEA)
 	{
 		DecCmdChannelStreamOpen		*pOpen;
