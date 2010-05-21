@@ -27,7 +27,7 @@
 #define __BCMDECIF_H__
 
 #include "bc_dts_defs.h"
-#include "bc_ldil_if.h"
+#include "libcrystalhd.h"
 
 #define PROC_TIMEOUT 2000
 #define ALIGN_BUF_SIZE	(512*1024)

@@ -913,19 +913,19 @@ static void gst_bcmdec_init(GstBcmDec *bcmdec, GstBcmDecClass *gclass)
 	gst_pad_set_event_function(bcmdec->sinkpad, GST_DEBUG_FUNCPTR(gst_bcmdec_sink_event));
 
 	gst_pad_set_setcaps_function(bcmdec->sinkpad, GST_DEBUG_FUNCPTR(gst_bcmdec_sink_set_caps));
-	/* FIXME: jarod: this is needed for newer gstreamer */
-	gst_pad_set_getcaps_function(bcmdec->sinkpad, GST_DEBUG_FUNCPTR(gst_pad_proxy_getcaps));
+	/* FIXME: jarod: is this needed for newer gstreamer? */
+	//gst_pad_set_getcaps_function(bcmdec->sinkpad, GST_DEBUG_FUNCPTR(gst_pad_proxy_getcaps));
 	gst_pad_set_chain_function(bcmdec->sinkpad, GST_DEBUG_FUNCPTR(gst_bcmdec_chain));
 
 	bcmdec->srcpad = gst_pad_new_from_static_template (&src_factory, "src");
 
-	/* FIXME: jarod: this is needed for newer gstreamer */
-	gst_pad_set_getcaps_function(bcmdec->srcpad, GST_DEBUG_FUNCPTR(gst_pad_proxy_getcaps));
+	/* FIXME: jarod: is this needed for newer gstreamer? */
+	//gst_pad_set_getcaps_function(bcmdec->srcpad, GST_DEBUG_FUNCPTR(gst_pad_proxy_getcaps));
 
 	gst_pad_set_event_function(bcmdec->srcpad, GST_DEBUG_FUNCPTR(gst_bcmdec_src_event));
 
 	gst_pad_use_fixed_caps(bcmdec->srcpad);
-	//bcmdec_negotiate_format(bcmdec);
+	bcmdec_negotiate_format(bcmdec);
 
 	gst_element_add_pad(GST_ELEMENT(bcmdec), bcmdec->sinkpad);
 	gst_element_add_pad(GST_ELEMENT(bcmdec), bcmdec->srcpad);
