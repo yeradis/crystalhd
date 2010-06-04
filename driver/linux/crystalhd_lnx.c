@@ -157,10 +157,8 @@ static int chd_dec_fetch_cdata(struct crystalhd_adp *adp, crystalhd_ioctl_data *
 	if (rc) {
 		dev_err(dev, "failed to pull add_cdata sz:%x ua_off:%x\n",
 			io->add_cdata_sz, (unsigned int)ua_off);
-		if (io->add_cdata) {
-			kfree(io->add_cdata);
-			io->add_cdata = NULL;
-		}
+		kfree(io->add_cdata);
+		io->add_cdata = NULL;
 		return -ENODATA;
 	}
 
@@ -449,8 +447,7 @@ static void __devexit chd_dec_release_chdev(struct crystalhd_adp *adp)
 	/* Clear iodata pool.. */
 	do {
 		temp = chd_dec_alloc_iodata(adp, 0);
-		if (temp)
-			kfree(temp);
+		kfree(temp);
 	} while (temp);
 
 	crystalhd_delete_elem_pool(adp);
