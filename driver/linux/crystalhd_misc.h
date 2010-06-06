@@ -75,18 +75,19 @@ struct crystalhd_dio_user_info {
 };
 
 typedef struct _crystalhd_dio_req {
-	uint32_t			sig;
-	uint32_t			max_pages;
-	struct page			**pages;
-	struct scatterlist		*sg;
-	int				sg_cnt;
-	int				page_cnt;
-	int				direction;
+	uint32_t						sig;
+	uint32_t						max_pages;
+	struct page						**pages;
+	struct scatterlist				*sg;
+	int								sg_cnt;
+	int								page_cnt;
+	int								direction;
 	struct crystalhd_dio_user_info	uinfo;
-	void				*fb_va;
-	uint32_t			fb_size;
-	dma_addr_t			fb_pa;
-	struct _crystalhd_dio_req	*next;
+	void							*fb_va;
+	uint32_t						fb_size;
+	dma_addr_t						fb_pa;
+	void							*pib_va; // pointer to temporary buffer to extract metadata
+	struct _crystalhd_dio_req		*next;
 } crystalhd_dio_req;
 
 #define BC_LINK_DIOQ_SIG	(0x09223280)
@@ -140,11 +141,11 @@ void bc_kern_dma_free(struct crystalhd_adp *, uint32_t,
 #define crystalhd_wait_on_event(ev, condition, timeout, ret, nosig)	\
 do {									\
 	DECLARE_WAITQUEUE(entry, current);				\
-	unsigned long end = jiffies + ((timeout * HZ) / 1000);		\
+	unsigned long end = jiffies + msecs_to_jiffies(timeout);		\
 		ret = 0;						\
 	add_wait_queue(ev, &entry);					\
-	for (;;) {							\
-		__set_current_state(TASK_INTERRUPTIBLE);		\
+	for (;;) {									\
+		set_current_state(TASK_INTERRUPTIBLE);		\
 		if (condition) {					\
 			break;						\
 		}							\
@@ -158,7 +159,7 @@ do {									\
 			break;						\
 		}							\
 	}								\
-	__set_current_state(TASK_RUNNING);				\
+	set_current_state(TASK_RUNNING);				\
 	remove_wait_queue(ev, &entry);					\
 } while (0)
 
@@ -178,13 +179,13 @@ extern void crystalhd_delete_dioq(struct crystalhd_adp *, crystalhd_dioq_t *);
 extern BC_STATUS crystalhd_dioq_add(crystalhd_dioq_t *ioq, void *data, bool wake, uint32_t tag);
 extern void *crystalhd_dioq_fetch(crystalhd_dioq_t *ioq);
 extern void *crystalhd_dioq_find_and_fetch(crystalhd_dioq_t *ioq, uint32_t tag);
-extern void *crystalhd_dioq_fetch_wait(crystalhd_dioq_t *ioq, uint32_t to_secs, uint32_t *sig_pend);
+extern void *crystalhd_dioq_fetch_wait(void *, uint32_t , uint32_t *);
 
 #define crystalhd_dioq_count(_ioq)	((_ioq) ? _ioq->count : 0)
 
 extern int crystalhd_create_elem_pool(struct crystalhd_adp *, uint32_t);
 extern void crystalhd_delete_elem_pool(struct crystalhd_adp *);
-
+extern unsigned long GetRptDropParam(uint32_t picHeight, uint32_t picWidth, void *);
 
 /*================ Debug routines/macros .. ================================*/
 extern void crystalhd_show_buffer(uint32_t off, uint8_t *buff, uint32_t dwcount);

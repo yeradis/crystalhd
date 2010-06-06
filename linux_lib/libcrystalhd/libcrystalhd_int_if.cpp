@@ -44,7 +44,7 @@
 
 
 //===================================Externs ============================================
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
 DtsGetHwType(
     HANDLE  hDevice,
     uint32_t     *DeviceID,
@@ -83,7 +83,7 @@ DtsGetHwType(
 	return BC_STS_SUCCESS;
 }
 
-DRVIFLIB_INT_API VOID 
+DRVIFLIB_INT_API VOID
 DtsHwReset(
     HANDLE hDevice
     )
@@ -92,7 +92,7 @@ DtsHwReset(
 	return;
 }
 
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
 DtsSoftReset(
     HANDLE hDevice
     )
@@ -120,7 +120,7 @@ DtsSoftReset(
 	{
 		// For Link, this is used to bring up 7412 and running.
 		// Since the 70012 was running in low power mode, but the 7412 was not.
-		// In flea there is no need for this. In general most of the chip will be in idle mode, 
+		// In flea there is no need for this. In general most of the chip will be in idle mode,
 		// and should not be needed to reset in order to start up.
 		// In Flea, we can never do full chip reset, because that will reset PCIe as well and
 		// probably cause a BSOD. Individual blocks will have to be reset, either by asserting true resets
@@ -140,9 +140,10 @@ DtsSetLinkIn422Mode(HANDLE hDevice)
 	DTS_GET_CTX(hDevice,Ctx);
 	ModeSelect = Ctx->b422Mode;
 
-	/* 
+	DebugLog_Trace(LDIL_DBG,"Setting Color Mode to %u\n", Ctx->b422Mode);
+	/*
 	 * EN_WRITE_ALL BIT -Bit 20
-	 * This bit dictates that weather the data will be xferred in 
+	 * This bit dictates that weather the data will be xferred in
 	 * 1 -  UYVY Mode.
 	 * 0 - YUY2 Mode.
  	 */
@@ -150,7 +151,7 @@ DtsSetLinkIn422Mode(HANDLE hDevice)
 
 	if (ModeSelect == OUTPUT_MODE420) {
         Val &= 0xffeeffff;
-	} else {	
+	} else {
 		Val |= BC_BIT(16);
 		if(ModeSelect == OUTPUT_MODE422_UYVY) {
 			Val |= BC_BIT(20);
@@ -180,7 +181,7 @@ DtsSetFleaIn422Mode(HANDLE hDevice)
 	DtsDevRegisterRead(hDevice,BCHP_MISC2_GLOBAL_CTRL,&Val);
 
 	Val &= 0x0000007c;
-	if( ModeSelect == OUTPUT_MODE422_YUY2 ) 
+	if( ModeSelect == OUTPUT_MODE422_YUY2 )
 	{
 		Val |= BC_BIT(1);  // bit_1  0-> UYVY, 1-> YUY2
 	}
@@ -189,7 +190,7 @@ DtsSetFleaIn422Mode(HANDLE hDevice)
 	return BC_STS_SUCCESS;
 }
 
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
 DtsGetConfig(
     HANDLE hDevice,
 	BC_DTS_CFG *cfg
@@ -207,7 +208,7 @@ DtsGetConfig(
 	return BC_STS_SUCCESS;
 }
 
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
 DtsSetConfig(
     HANDLE hDevice,
 	BC_DTS_CFG *cfg
@@ -226,7 +227,7 @@ DtsSetConfig(
 	return BC_STS_SUCCESS;
 }
 
-BC_STATUS 
+BC_STATUS
 DtsSetCoreClock(
     HANDLE hDevice,
 	uint32_t freq
@@ -275,10 +276,10 @@ DtsSetCoreClock(
 		return BC_STS_CLK_NOCHG;
 
 	n = freq/5;
-	
+
 	//if (n == Ctx->prev_n)
 	//	return BC_STS_CLK_NOCHG;
-	
+
 	if ((n * 27) < 560)
 		vco_mg = 0;
 	else if ((n * 27) < 900)
@@ -287,23 +288,23 @@ DtsSetCoreClock(
 		vco_mg = 2;
 	else
 		vco_mg = 3;
-	
+
 	DtsDevRegisterRead(hDevice,DecHt_PllACtl, &reg);
 
 	reg &= 0xFFFFCFC0;
 	reg |= n;
 	reg |= vco_mg << 12;
-	
+
 	refresh_reg = (7 * freq / 16);
 	DtsDevRegisterWr(hDevice,SDRAM_REF_PARAM,((1 << 12) | refresh_reg));
 
 	DtsDevRegisterWr(hDevice, DecHt_PllACtl, reg);
 	DebugLog_Trace(LDIL_DBG,"C set %d\n", freq);
 	i = 0;
-	
-	while (i < 10) { 
+
+	while (i < 10) {
 		DtsDevRegisterRead(hDevice,DecHt_PllACtl, &reg);
-		
+
 		if (reg & 0x00020000) {
 			//Ctx->prev_n = n;
 			return BC_STS_SUCCESS;
@@ -317,11 +318,11 @@ DtsSetCoreClock(
 	return BC_STS_CLK_NOCHG;
 
 #if 0
-	DtsDevRegisterWr( hDevice, DecHt_PllBCtl, clkRate);	
+	DtsDevRegisterWr( hDevice, DecHt_PllBCtl, clkRate);
 	cnt = 0;
 	do{
 		bc_sleep_ms(20);
-	
+
 		DtsDevRegisterRead( hDevice, DecHt_PllBCtl, &Val);
 		if(Val == clkRate)
 			break;
@@ -397,16 +398,16 @@ DtsSetProgressive(
 	return BC_STS_SUCCESS;
 }
 
-BC_STATUS 
+BC_STATUS
 DtsRstVidClkDLL(
 				HANDLE hDevice)
 {
 	uint32_t RegVal,Cnt=100;
-	
+
 	DtsFPGARegisterRead(hDevice,PCI_GLOBAL_CONTROL,&RegVal);
 	RegVal |= 0x08;		//Set Bit 3 the Reset Bit
 	DtsFPGARegisterWr(hDevice,PCI_GLOBAL_CONTROL,RegVal);
-	
+
 	//
 	// Wait for the bit to go low [Unlock]
 	//
@@ -426,12 +427,12 @@ DtsRstVidClkDLL(
 	DtsFPGARegisterRead(hDevice,PCI_GLOBAL_CONTROL,&RegVal);
 	RegVal &= 0xfffffff7;	//reset bit 3
 	DtsFPGARegisterWr(hDevice,PCI_GLOBAL_CONTROL,RegVal);
-	RegVal=0;	
-	Cnt =100;	
+	RegVal=0;
+	Cnt =100;
 	while(Cnt)
 	{
 		DtsFPGARegisterRead(hDevice,PCI_INT_STS_REG,&RegVal);
-		if(RegVal & 0x04) 
+		if(RegVal & 0x04)
 		{
 			//
 			// This means that the video clock is locked.
@@ -447,7 +448,7 @@ DtsRstVidClkDLL(
 	return BC_STS_ERROR;
 }
 
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
 DtsSetVideoClock(
     HANDLE hDevice,
 	uint32_t freq
@@ -488,7 +489,7 @@ DtsSetVideoClock(
 	DtsDevRegisterWr( hDevice, DecHt_PllDCtl, 0x00010000);	// Bypass PLL-D
 
 	bc_sleep_ms(50);
-	
+
 	DtsDevRegisterRead( hDevice, DecHt_PllDCtl, &Val);
 
 	if(Val != 0x00030000){
@@ -497,10 +498,10 @@ DtsSetVideoClock(
 		//return BC_STS_NO_ACCESS;
 	}
 
-	DtsDevRegisterWr( hDevice, DecHt_PllECtl, clkRate);	
+	DtsDevRegisterWr( hDevice, DecHt_PllECtl, clkRate);
 
 	bc_sleep_ms(50);
-	
+
 	DtsDevRegisterRead( hDevice, DecHt_PllECtl, &Val);
 
 	if(Val != (clkRate | 0x00020000) ){
@@ -517,7 +518,7 @@ DtsSetVideoClock(
 
 	return BC_STS_SUCCESS;
 }
-DRVIFLIB_INT_API BOOL 
+DRVIFLIB_INT_API BOOL
 DtsIsVideoClockSet(HANDLE hDevice)
 {
 	uint32_t RegVal=0;
@@ -542,14 +543,14 @@ DtsIsVideoClockSet(HANDLE hDevice)
 
 	if(RegVal & BC_BIT(0))
 		return TRUE;
-	
+
 	DtsFPGARegisterRead(hDevice,PCI_INT_STS_REG,&RegVal);
 
 	return (RegVal & BC_BIT(2));
 
 }
 
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
 DtsGetPciConfigSpace(
     HANDLE 	hDevice,
     uint8_t          *info
@@ -593,7 +594,7 @@ DtsGetPciConfigSpace(
 
 /****/
 
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
 DtsReadPciConfigSpace(
     HANDLE		hDevice,
     uint32_t			Offset,
@@ -634,7 +635,7 @@ DtsReadPciConfigSpace(
 	return BC_STS_SUCCESS;
 }
 
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
 DtsWritePciConfigSpace(
     HANDLE		hDevice,
     uint32_t			Offset,
@@ -670,21 +671,21 @@ DtsWritePciConfigSpace(
 
 /****/
 
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
 DtsDevRegisterRead(
     HANDLE		hDevice,
     uint32_t			offset,
     uint32_t			*Value
     )
 {
-	BC_IOCTL_DATA *pIocData = NULL;	
+	BC_IOCTL_DATA *pIocData = NULL;
 	BC_CMD_REG_ACC	*reg_acc_read;
 	DTS_LIB_CONTEXT		*Ctx = NULL;
 	BC_STATUS	sts = BC_STS_SUCCESS;
 
 
 	DTS_GET_CTX(hDevice,Ctx);
-	
+
 	if(!(pIocData = DtsAllocIoctlData(Ctx)))
 		return BC_STS_INSUFF_RES;
 
@@ -704,14 +705,14 @@ DtsDevRegisterRead(
 	}
 
 	*Value = reg_acc_read->Value;
-	
+
 	DtsRelIoctlData(Ctx,pIocData);
 
 	return BC_STS_SUCCESS;
 }
 
 
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
 DtsDevRegisterWr(
     HANDLE	hDevice,
     uint32_t		offset,
@@ -719,13 +720,13 @@ DtsDevRegisterWr(
     )
 {
 	BC_CMD_REG_ACC	*reg_acc_wr;
-	BC_IOCTL_DATA *pIocData = NULL;	
+	BC_IOCTL_DATA *pIocData = NULL;
 	DTS_LIB_CONTEXT		*Ctx = NULL;
 	BC_STATUS	sts = BC_STS_SUCCESS;
 
 
 	DTS_GET_CTX(hDevice,Ctx);
-	
+
 	if(!(pIocData = DtsAllocIoctlData(Ctx)))
 		return BC_STS_INSUFF_RES;
 
@@ -748,21 +749,21 @@ DtsDevRegisterWr(
 	return BC_STS_SUCCESS;
 }
 
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
 DtsFPGARegisterRead(
     HANDLE		hDevice,
     uint32_t			offset,
     uint32_t			*Value
     )
 {
-	BC_IOCTL_DATA *pIocData = NULL;	
+	BC_IOCTL_DATA *pIocData = NULL;
 	BC_CMD_REG_ACC	*reg_acc_read;
 	DTS_LIB_CONTEXT		*Ctx = NULL;
 	BC_STATUS	sts = BC_STS_SUCCESS;
 
 
 	DTS_GET_CTX(hDevice,Ctx);
-	
+
 	if(!(pIocData = DtsAllocIoctlData(Ctx)))
 		return BC_STS_INSUFF_RES;
 
@@ -782,13 +783,13 @@ DtsFPGARegisterRead(
 	}
 
 	*Value = reg_acc_read->Value;
-	
+
 	DtsRelIoctlData(Ctx,pIocData);
 
 	return BC_STS_SUCCESS;
 }
 
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
 DtsFPGARegisterWr(
     HANDLE	hDevice,
     uint32_t		offset,
@@ -796,13 +797,13 @@ DtsFPGARegisterWr(
     )
 {
 	BC_CMD_REG_ACC	*reg_acc_wr;
-	BC_IOCTL_DATA *pIocData = NULL;	
+	BC_IOCTL_DATA *pIocData = NULL;
 	DTS_LIB_CONTEXT		*Ctx = NULL;
 	BC_STATUS	sts = BC_STS_SUCCESS;
 
 
 	DTS_GET_CTX(hDevice,Ctx);
-	
+
 	if(!(pIocData = DtsAllocIoctlData(Ctx)))
 		return BC_STS_INSUFF_RES;
 
@@ -825,7 +826,7 @@ DtsFPGARegisterWr(
 	return BC_STS_SUCCESS;
 }
 
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
 DtsDevMemRd(
     HANDLE	hDevice,
     uint32_t		*Buffer,
@@ -835,10 +836,10 @@ DtsDevMemRd(
 {
 	uint8_t					*pXferBuff;
 	uint32_t					IOcCode,size_in_dword;
-	BC_IOCTL_DATA		*pIoctlData;	
+	BC_IOCTL_DATA		*pIoctlData;
 	BC_CMD_DEV_MEM		*pMemAccessRd;
 	uint32_t					BytesReturned,AllocSz;
-	
+
 	if(!hDevice)
 	{
 		DebugLog_Trace(LDIL_DBG,"DtsDevMemRd: Invalid Handle\n");
@@ -897,9 +898,9 @@ DtsDevMemRd(
 		DebugLog_Trace(LDIL_DBG,"DtsDevMemRd: IOCTL Cmd Failed By Driver\n");
 		return pIoctlData->RetSts;
 	}
-	
+
 	memcpy(Buffer,pXferBuff,BuffSz);
-	
+
 	if(pIoctlData)
 		free(pIoctlData);
 
@@ -908,7 +909,7 @@ DtsDevMemRd(
 
 
 
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
 DtsDevMemWr(
     HANDLE	hDevice,
     uint32_t		*Buffer,
@@ -918,10 +919,10 @@ DtsDevMemWr(
 {
 	uint8_t					*pXferBuff;
 	uint32_t					IOcCode,size_in_dword;
-	BC_IOCTL_DATA		*pIoctlData;	
+	BC_IOCTL_DATA		*pIoctlData;
 	BC_CMD_DEV_MEM		*pMemAccessRd;
 	uint32_t					BytesReturned,AllocSz;
-	
+
 	//pIoctlData = (BC_IOCTL_DATA *)malloc(sizeof(BC_IOCTL_DATA));
 
 
@@ -983,7 +984,7 @@ DtsDevMemWr(
 		DebugLog_Trace(LDIL_DBG,"DtsDevMemRd: IOCTL Cmd Failed By Driver\n");
 		return pIoctlData->RetSts;
 	}
-	
+
 	if(pIoctlData)
 		free(pIoctlData);
 
@@ -991,7 +992,7 @@ DtsDevMemWr(
 
 }
 
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
 DtsTxDmaText( HANDLE  hDevice ,
 				 uint8_t *pUserData,
 				 uint32_t ulSizeInBytes,
@@ -999,9 +1000,9 @@ DtsTxDmaText( HANDLE  hDevice ,
 				 uint8_t Encrypted)
 {
 	BC_STATUS status = BC_STS_SUCCESS;
-	uint32_t		ulDmaSz; 
+	uint32_t		ulDmaSz;
 	uint8_t		*pDmaBuff;
-	
+
 	DTS_LIB_CONTEXT		*Ctx = NULL;
 	BC_IOCTL_DATA		*pIocData = NULL;
 
@@ -1014,7 +1015,7 @@ DtsTxDmaText( HANDLE  hDevice ,
 
 	pDmaBuff = pUserData;
 	ulDmaSz = ulSizeInBytes;
-	
+
 	if(!(pIocData = DtsAllocIoctlData(Ctx)))
 		return BC_STS_INSUFF_RES;
 
@@ -1039,19 +1040,19 @@ DtsTxDmaText( HANDLE  hDevice ,
 	}
 
 	DtsRelIoctlData(Ctx,pIocData);
-	
+
 	DumpInputSampleToFile(pUserData,ulSizeInBytes);
-	
+
 	return status;
 }
 
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
 DtsCancelProcOutput(
     HANDLE  hDevice,
 	PVOID	Context)
 {
 	DTS_LIB_CONTEXT		*Ctx = NULL;
-	
+
 	DTS_GET_CTX(hDevice,Ctx);
 
 	return DtsCancelFetchOutInt(Ctx);
@@ -1067,8 +1068,8 @@ DtsCancelProcOutput(
 //
 //------------------------------------------------------------------------
 DRVIFLIB_INT_API BC_STATUS DtsChkYUVSizes(
-	DTS_LIB_CONTEXT *Ctx, 
-	BC_DTS_PROC_OUT *Vout, 
+	DTS_LIB_CONTEXT *Ctx,
+	BC_DTS_PROC_OUT *Vout,
 	BC_DTS_PROC_OUT *Vin)
 {
 	if (!Vout || !Vout->Ybuff || !Vin || !Vin->Ybuff){
@@ -1099,7 +1100,7 @@ DRVIFLIB_INT_API BC_STATUS DtsChkYUVSizes(
 
 /***/
 
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
 DtsGetDrvStat(
     HANDLE		hDevice,
 	BC_DTS_STATS *pDrvStat
@@ -1146,10 +1147,10 @@ DtsGetDrvStat(
 	pDrvStat->DrvTotalFrmDropped = pIntDrvStat->DrvTotalFrmDropped;
 	pDrvStat->DrvTotalHWErrs = pIntDrvStat->DrvTotalHWErrs;
 	pDrvStat->DrvTotalPIBFlushCnt = pIntDrvStat->DrvTotalPIBFlushCnt;
-	pDrvStat->DrvTotalFrmCaptured = pIntDrvStat->DrvTotalFrmCaptured;		
+	pDrvStat->DrvTotalFrmCaptured = pIntDrvStat->DrvTotalFrmCaptured;
 	pDrvStat->DrvPIBMisses = pIntDrvStat->DrvPIBMisses;
 	pDrvStat->DrvPauseTime = pIntDrvStat->DrvPauseTime;
-	pDrvStat->DrvRepeatedFrms = pIntDrvStat->DrvRepeatedFrms;	
+	pDrvStat->DrvRepeatedFrms = pIntDrvStat->DrvRepeatedFrms;
 	pDrvStat->TxFifoBsyCnt = pIntDrvStat->TxFifoBsyCnt;
 	pDrvStat->pwr_state_change = pIntDrvStat->pwr_state_change;
 	pDrvStat->DrvNextMDataPLD = pIntDrvStat->DrvNextMDataPLD;
@@ -1157,15 +1158,15 @@ DtsGetDrvStat(
 	pDrvStat->eosDetected = pIntDrvStat->eosDetected;
 
 
-	DtsGetCoreTemperature(hDevice, &fTemperature);
-	pDrvStat->Temperature = fTemperature;
+// 	DtsGetCoreTemperature(hDevice, &fTemperature);
+// 	pDrvStat->Temperature = fTemperature;
 
 	DtsRelIoctlData(Ctx,pIocData);
 
 	return BC_STS_SUCCESS;
 }
 
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
 DtsSetTemperatureMeasure(
     HANDLE			hDevice,
 	BOOL			bTurnOn
@@ -1184,24 +1185,24 @@ DtsSetTemperatureMeasure(
 
 	if( bTurnOn )
 	{
-		Val = 0x3; // 
+		Val = 0x3; //
 		sts = DtsDevRegisterWr(hDevice,BCHP_CLK_TEMP_MON_CTRL,Val);
 		bc_sleep_ms(10);
 
-		Val = 0x203; // 
+		Val = 0x203; //
 		sts = DtsDevRegisterWr(hDevice,BCHP_CLK_TEMP_MON_CTRL,Val);
 		bc_sleep_ms(10);
 	}
 	else
 	{
-		Val = 0x103; // 
+		Val = 0x103; //
 		sts = DtsDevRegisterWr(hDevice,BCHP_CLK_TEMP_MON_CTRL,Val);
 		bc_sleep_ms(10);
 	}
 	return sts;
 }
 
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
 DtsGetCoreTemperature(
     HANDLE			hDevice,
 	float			*pTemperature
@@ -1225,12 +1226,12 @@ DtsGetCoreTemperature(
 	Val = Val & 0x0000ffff;
 
 	*pTemperature = 267.2 - 0.7 * (float)Val;
-	
+
 	return sts;
 }
 
 
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
 DtsRstDrvStat(
     HANDLE		hDevice
     )
@@ -1264,7 +1265,7 @@ DtsRstDrvStat(
 
 /**/
 /* Get firmware files */
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
 DtsGetFWFiles(
 	HANDLE hDevice,
 	char *StreamFName,
@@ -1274,7 +1275,7 @@ DtsGetFWFiles(
 {
 	DTS_LIB_CONTEXT		*Ctx = NULL;
 	BC_STATUS	sts = BC_STS_SUCCESS;
-	
+
 	DTS_GET_CTX(hDevice,Ctx);
 
 	sts = DtsGetFirmwareFiles(Ctx);
@@ -1290,7 +1291,7 @@ DtsGetFWFiles(
 }
 /**/
 
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
 DtsDownloadFWBin(HANDLE	hDevice, uint8_t *binBuff, uint32_t buffsize, uint32_t dramOffset)
 {
 	BC_STATUS rstatus = BC_STS_SUCCESS;
@@ -1306,8 +1307,8 @@ DtsDownloadFWBin(HANDLE	hDevice, uint8_t *binBuff, uint32_t buffsize, uint32_t d
 }
 
 BC_STATUS
-DtsCopyRawDataToOutBuff(DTS_LIB_CONTEXT	*Ctx, 
-						BC_DTS_PROC_OUT *Vout, 
+DtsCopyRawDataToOutBuff(DTS_LIB_CONTEXT	*Ctx,
+						BC_DTS_PROC_OUT *Vout,
 						BC_DTS_PROC_OUT *Vin)
 {
 	uint32_t	y,lDestStride=0;
@@ -1319,9 +1320,9 @@ DtsCopyRawDataToOutBuff(DTS_LIB_CONTEXT	*Ctx,
 	if ( (Sts = DtsChkYUVSizes(Ctx,Vout,Vin)) != BC_STS_SUCCESS)
 		return Sts;
 
-	if(Vout->PoutFlags & BC_POUT_FLAGS_STRIDE) 
+	if(Vout->PoutFlags & BC_POUT_FLAGS_STRIDE)
 		lDestStride = Vout->StrideSz;
-	
+
 	if(Vout->PoutFlags & BC_POUT_FLAGS_SIZE) {
 		// Use DShow provided size for now
 		dstWidthInPixels = Vout->PicInfo.width;
@@ -1330,8 +1331,10 @@ DtsCopyRawDataToOutBuff(DTS_LIB_CONTEXT	*Ctx,
 		else
 			dstHeightInPixels = Vout->PicInfo.height;
 		/* Check for Valid data based on the filter information */
-		if(Vout->YBuffDoneSz < (dstWidthInPixels * dstHeightInPixels / 2))
+		if(Vout->YBuffDoneSz < (dstWidthInPixels * dstHeightInPixels / 2)) {
+			DebugLog_Trace(LDIL_DBG,"DtsCopy422: XFER ERROR dnsz %u, w %u, h %u\n", Vout->YBuffDoneSz, dstWidthInPixels, dstHeightInPixels);
 			return BC_STS_IO_XFR_ERROR;
+		}
 		srcWidthInPixels = Ctx->picWidth;
 		srcHeightInPixels = dstHeightInPixels;
 	} else {
@@ -1362,7 +1365,7 @@ DtsCopyRawDataToOutBuff(DTS_LIB_CONTEXT	*Ctx,
 	return BC_STS_SUCCESS;
 }
 /***/
-//FIX_ME:: This routine assumes, Y & UV buffs are contiguous.. 
+//FIX_ME:: This routine assumes, Y & UV buffs are contiguous..
 BC_STATUS DtsCopyNV12ToYV12(DTS_LIB_CONTEXT	*Ctx, BC_DTS_PROC_OUT *Vout, BC_DTS_PROC_OUT *Vin)
 {
 
@@ -1373,7 +1376,7 @@ BC_STATUS DtsCopyNV12ToYV12(DTS_LIB_CONTEXT	*Ctx, BC_DTS_PROC_OUT *Vout, BC_DTS_
 	uint32_t	x,y,lDestStride=0;
 	uint8_t	*pSrc = NULL, *pDest=NULL;
 	uint32_t	dstWidthInPixels, dstHeightInPixels;
-	uint32_t srcWidthInPixels, srcHeightInPixels;	
+	uint32_t srcWidthInPixels, srcHeightInPixels;
 
 
 	if ( (Sts = DtsChkYUVSizes(Ctx,Vout,Vin)) != BC_STS_SUCCESS)
@@ -1381,9 +1384,9 @@ BC_STATUS DtsCopyNV12ToYV12(DTS_LIB_CONTEXT	*Ctx, BC_DTS_PROC_OUT *Vout, BC_DTS_
 
 	if(Vout->PoutFlags & BC_POUT_FLAGS_SIZE)// needs to be optimized.
 	{
-		if(Vout->PoutFlags & BC_POUT_FLAGS_STRIDE) 
+		if(Vout->PoutFlags & BC_POUT_FLAGS_STRIDE)
 			lDestStride = Vout->StrideSz;
-		
+
 		// Use DShow provided size for now
 		dstWidthInPixels = Vout->PicInfo.width;
 		if(Vout->PoutFlags & BC_POUT_FLAGS_INTERLACED)
@@ -1418,9 +1421,9 @@ BC_STATUS DtsCopyNV12ToYV12(DTS_LIB_CONTEXT	*Ctx, BC_DTS_PROC_OUT *Vout, BC_DTS_
 		{
 			for(x = 0; x < dstWidthInPixels; x += 2)
 			{
-				pDest[x/2] = pSrc[x+1];	
+				pDest[x/2] = pSrc[x+1];
 				pDest[uvbase + x/2] = pSrc[x];
-			}		
+			}
 			pDest += (dstWidthInPixels + lDestStride) / 2;
 			pSrc += srcWidthInPixels;
 		}
@@ -1434,7 +1437,7 @@ BC_STATUS DtsCopyNV12ToYV12(DTS_LIB_CONTEXT	*Ctx, BC_DTS_PROC_OUT *Vout, BC_DTS_
 			yv12buff[i] = buff[i];
 			yv12buff[i+1] = buff[i+1];
 		}
-		
+
 		/* UV-Buff loop */
 		buff = Vin->UVbuff;
 		yv12buff = Vout->UVbuff;
@@ -1448,22 +1451,22 @@ BC_STATUS DtsCopyNV12ToYV12(DTS_LIB_CONTEXT	*Ctx, BC_DTS_PROC_OUT *Vout, BC_DTS_
 	return BC_STS_SUCCESS;
 }
 
-	
+
 BC_STATUS DtsCopyNV12(DTS_LIB_CONTEXT *Ctx, BC_DTS_PROC_OUT *Vout, BC_DTS_PROC_OUT *Vin)
 {
 	uint32_t y,lDestStride=0;
 	uint8_t	*pSrc = NULL, *pDest=NULL;
 	uint32_t dstWidthInPixels, dstHeightInPixels;
 	uint32_t srcWidthInPixels, srcHeightInPixels;
-	
+
 	BC_STATUS	Sts = BC_STS_SUCCESS;
 
 	if ( (Sts = DtsChkYUVSizes(Ctx,Vout,Vin)) != BC_STS_SUCCESS)
 		return Sts;
 
-	if(Vout->PoutFlags & BC_POUT_FLAGS_STRIDE) 
+	if(Vout->PoutFlags & BC_POUT_FLAGS_STRIDE)
 		lDestStride = Vout->StrideSz;
-	
+
 	if(Vout->PoutFlags & BC_POUT_FLAGS_SIZE) {
 		// Use DShow provided size for now
 		dstWidthInPixels = Vout->PicInfo.width;
@@ -1482,8 +1485,8 @@ BC_STATUS DtsCopyNV12(DTS_LIB_CONTEXT *Ctx, BC_DTS_PROC_OUT *Vout, BC_DTS_PROC_O
 		dstHeightInPixels = Vin->PicInfo.height;
 	}
 
-	
-	
+
+
 	//WidthInPixels = 1280;
 	//HeightInPixels = 720;
     // NV12 is planar: Y plane, followed by packed U-V plane.
@@ -1524,7 +1527,7 @@ DtsPushFwBinToLink(
     uint32_t BuffSz)
 {
 	uint8_t			*pXferBuff;
-	BC_IOCTL_DATA	*pIoctlData;	
+	BC_IOCTL_DATA	*pIoctlData;
 	BC_CMD_DEV_MEM	*pMemAccess;
 	uint32_t				BytesReturned, AllocSz;
 
@@ -1549,7 +1552,7 @@ DtsPushFwBinToLink(
 		DebugLog_Trace(LDIL_DBG,"DtsPushFwBinToLink: Memory Allocation Failed\n");
 		return BC_STS_ERROR;
 	}
-
+	memset(pIoctlData, 0, AllocSz);
 	pXferBuff = ((PUCHAR)pIoctlData) + sizeof(BC_IOCTL_DATA);
 	pMemAccess = &pIoctlData->u.devMem;
 	pIoctlData->RetSts = BC_STS_ERROR;
@@ -1567,7 +1570,7 @@ DtsPushFwBinToLink(
 		DebugLog_Trace(LDIL_DBG,"DtsPushFwBinToLink: IOCTL Cmd Failed By Driver\n");
 		return pIoctlData->RetSts;
 	}
-	
+
 	if(pIoctlData) {
 		free(pIoctlData);
 	}
@@ -1581,7 +1584,7 @@ void DumpDataToFile(FILE *fp, char *header, uint32_t off, uint8_t *buff, uint32_
 	uint32_t i, k=1;
 
 #ifndef  _LIB_EN_FWDUMP_
-	// Skip FW Download dumping.. 
+	// Skip FW Download dumping..
 	return ;
 #endif
 
@@ -1593,11 +1596,11 @@ void DumpDataToFile(FILE *fp, char *header, uint32_t off, uint8_t *buff, uint32_
 	}
 
 	for(i = 0; i < dwcount; i++){
-		if (k == 1) 
+		if (k == 1)
 			fprintf(fp, "0x%08X : ", off);
-		
+
 		fprintf(fp," 0x%08X ", *((uint32_t *)buff));
-		
+
 		buff	+= sizeof(uint32_t);
 		off		+= sizeof(uint32_t);
 		k++;

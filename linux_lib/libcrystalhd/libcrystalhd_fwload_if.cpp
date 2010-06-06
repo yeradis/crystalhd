@@ -102,6 +102,7 @@ fwbinPushToLINK(HANDLE hDevice, char *FwBinFile, uint32_t *bytesDnld)
 	if(!fp)
 	{
 		DebugLog_Trace(LDIL_DBG,"Failed to Open FW file\n");
+		perror("LINK FW");
 		return BC_STS_ERROR;
 	}
 

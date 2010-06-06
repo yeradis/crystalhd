@@ -53,7 +53,7 @@
 
 static const uint8_t b_pes_header[9]={0x00, 0x00, 0x01, 0xE0,
 									  0x00, 0x00, 0x81, 0x00, 0x00};
-typedef enum 
+typedef enum
 {
   P_SLICE = 0,
   B_SLICE,
@@ -79,20 +79,20 @@ typedef enum
 	NALU_TYPE_FILL
 }NALuType;
 
-typedef struct 
+typedef struct
 {
   int StartcodePrefixLen;		//! 4 for parameter sets and first slice in picture, 3 for everything else (suggested)
   unsigned int Len;				//! Length of the NAL unit (Excluding the start code, which does not belong to the NALU)
   unsigned int MaxSize;			//! Nal Unit Buffer size
-  int NalUnitType;				//! NALU_TYPE_xxxx  
-  int ForbiddenBit;				//! should be always FALSE  
+  int NalUnitType;				//! NALU_TYPE_xxxx
+  int ForbiddenBit;				//! should be always FALSE
   uint8_t* pNalBuf;
 } NALU_t;
 
 typedef struct stSYMBINT
 {
 	uint8_t*	m_pInputBuffer;
-	uint8_t*	m_pInputBufferEnd;	
+	uint8_t*	m_pInputBufferEnd;
 	uint8_t*	m_pCurrent;
 	uint32_t	m_ulMask;
 	uint32_t	m_ulOffset;
@@ -101,37 +101,36 @@ typedef struct stSYMBINT
 	ULONG	m_ulZero;
 } SYMBINT;
 
-
 typedef struct stPES_CONVERT_PARAMS
 {
-	bool			m_bIsFirstByteStreamNALU;
+	bool		m_bIsFirstByteStreamNALU;
 	SYMBINT		m_SymbInt;
 
-	uint8_t		*m_pSpsPpsBuf;
-	ULONG		m_iSpsPpsLen;
-	ULONG 		m_lStartCodeDataSize;
+	uint8_t*	m_pSpsPpsBuf;
+	uint32_t	m_iSpsPpsLen;
+	uint32_t	m_lStartCodeDataSize;
 
-	uint8_t 		*pStartcodePendBuff;
-	uint32_t 		lPendBufferSize;
+	uint8_t  	*pStartcodePendBuff;
+	uint32_t 	lPendBufferSize;
 
 	//Get Sequence Header Info (Sequence Layer Bitestream for Simple and Main Profile)
-	bool			m_bRangered;
-	bool			m_bFinterpFlag;
-	bool			m_bMaxbFrames;
+	bool		m_bRangered;
+	bool		m_bFinterpFlag;
+	bool		m_bMaxbFrames;
 
 	bool 		m_bIsAdd_SCode_CodeIn;
-	bool			m_bAddSpsPps;
+	bool		m_bAddSpsPps;
 	//PES header parameter
-	bool			m_bPESPrivData;
-	bool			m_bPESExtField;
+	bool		m_bPESPrivData;
+	bool		m_bPESExtField;
 	uint32_t	m_nPESExtLen;
-	bool			m_bStuffing;
+	bool		m_bStuffing;
 	uint32_t	m_nStuffingBytes;
-	
+
 	uint8_t		*m_pPESPrivData;
 	uint8_t		*m_pPESExtField;
 	//SoftRave (VC-1 S/M and Divx) EOS Timing Marker
-	bool			m_bSoftRaveEOS;
+	bool		m_bSoftRave;
 }PES_CONVERT_PARAMS;
 
 BC_STATUS DtsSetPESConverter( HANDLE hDevice);
@@ -140,7 +139,8 @@ BC_STATUS DtsReleasePESConverter(HANDLE hDevice);
 BC_STATUS DtsCheckProfile(HANDLE hDevice);
 
 BC_STATUS DtsCheckKeyFrame(HANDLE hDevice, uint8_t *pBuffer);
-BC_STATUS DtsSetH264SpsPps(HANDLE hDevice);
+BC_STATUS DtsSetSpsPps(HANDLE hDevice);
+BOOL DtsCheckSpsPps(HANDLE hDevice, uint8_t *pBuffer, uint32_t ulSize);
 
 BC_STATUS DtsSetVC1SH(HANDLE hDevice);
 
@@ -159,8 +159,10 @@ inline int DtsSymbIntNextBit ( HANDLE hDevice );
 BC_STATUS DtsSymbIntSiUe (HANDLE hDevice, ULONG* pCode);
 BC_STATUS DtsSymbIntSiBuffer (HANDLE hDevice, uint8_t* pInputBuffer, ULONG ulSize);
 
+#if 0
 void *DtsAlignedMalloc(size_t size, size_t alignment);
 void DtsAlignedFree(void *ptr);
+#endif
 
 void PTS2MakerBit5Bytes(uint8_t *pMakerBit, int64_t llPTS);
 uint16_t WORD_SWAP(uint16_t x);

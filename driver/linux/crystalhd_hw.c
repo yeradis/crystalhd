@@ -25,6 +25,7 @@
 #include <linux/pci.h>
 #include <linux/delay.h>
 #include <linux/device.h>
+#include <asm/tsc.h>
 #include "crystalhd_hw.h"
 #include "crystalhd_lnx.h"
 
@@ -292,11 +293,6 @@ static bool crystalhd_start_device(struct crystalhd_adp *adp)
 
 	dev_dbg(dev, "Starting Crystal HD Device\n");
 
-	reg_pwrmgmt = crystalhd_reg_rd(adp, PCIE_DLL_DATA_LINK_CONTROL);
-	reg_pwrmgmt &= ~ASPM_L1_ENABLE;
-
-	crystalhd_reg_wr(adp, PCIE_DLL_DATA_LINK_CONTROL, reg_pwrmgmt);
-
 	if (!crystalhd_bring_out_of_rst(adp)) {
 		dev_err(dev, "Failed To Bring Link Out Of Reset\n");
 		return false;
@@ -328,6 +324,11 @@ static bool crystalhd_start_device(struct crystalhd_adp *adp)
 	crystalhd_soft_rst(adp);
 	crystalhd_start_dram(adp);
 	crystalhd_enable_uarts(adp);
+
+	reg_pwrmgmt = crystalhd_reg_rd(adp, PCIE_DLL_DATA_LINK_CONTROL);
+	reg_pwrmgmt &= ~ASPM_L1_ENABLE;
+
+	crystalhd_reg_wr(adp, PCIE_DLL_DATA_LINK_CONTROL, reg_pwrmgmt);
 
 	return true;
 }
@@ -385,8 +386,9 @@ static uint32_t GetMode422Data(crystalhd_dio_req *dio,
 			       PBC_PIC_INFO_BLOCK pPicInfoLine, int type)
 {
 	int i;
-	uint32_t offset;
-	uintptr_t val = 0;
+	uint32_t offset = 0, val = 0;
+	uint8_t *tmp;
+	tmp = (uint8_t *)&val;
 
 	if (type == 1)
 		offset = OFFSETOF(BC_PIC_INFO_BLOCK, picture_meta_payload);
@@ -397,15 +399,15 @@ static uint32_t GetMode422Data(crystalhd_dio_req *dio,
 
 	if (dio->uinfo.b422mode == MODE422_YUY2) {
 		for (i = 0; i < 4; i++)
-			((uint8_t*)val)[i] =
-				((uint8_t*)(uintptr_t)pPicInfoLine)[(offset + i) * 2];
+			((uint8_t*)tmp)[i] =
+				((uint8_t*)pPicInfoLine)[(offset + i) * 2];
 	} else if (dio->uinfo.b422mode == MODE422_UYVY) {
 		for (i = 0; i < 4; i++)
-			((uint8_t*)val)[i] =
-				((uint8_t*)(uintptr_t)pPicInfoLine)[(offset + i) * 2 + 1];
+			((uint8_t*)tmp)[i] =
+				((uint8_t*)pPicInfoLine)[(offset + i) * 2 + 1];
 	}
 
-	return (uint32_t)val;
+	return val;
 }
 
 static uint32_t GetMetaDataFromPib(crystalhd_dio_req *dio,
@@ -434,26 +436,28 @@ static uint32_t GetHeightFromPib(crystalhd_dio_req *dio,
 	return BC_SWAP32(height);
 }
 
-static bool GetPictureInfo(struct crystalhd_hw *hw, crystalhd_dio_req *dio,
-			   uint32_t PicWidth, uint32_t *PicNumber,
-			   uint32_t *PicMetaData)
+/* This function cannot be called from ISR context since it uses APIs that can sleep */
+static bool GetPictureInfo(uint32_t picHeight, uint32_t picWidth, crystalhd_dio_req *dio,
+			   uint32_t *PicNumber, uint32_t *PicMetaData)
 {
-	struct device *dev;
-	unsigned long PicInfoLineNum = 0, HeightInPib = 0, offset;
+	unsigned long PicInfoLineNum = 0, HeightInPib = 0, offset = 0, size = 0;
 	PBC_PIC_INFO_BLOCK pPicInfoLine = NULL;
-	uint8_t *Base = 0, *Limit = 0, *StartLine = NULL;
 	uint32_t pic_number = 0;
+	uint8_t *tmp = (uint8_t *)&pic_number;
 	int i;
+	unsigned long res = 0;
 
-	dev = &hw->adp->pdev->dev;
 	*PicNumber = 0;
 	*PicMetaData = 0;
 
-	if (!dio || !PicWidth)
+	if (!dio || !picWidth)
 		goto getpictureinfo_err;
 
-	Base = (uint8_t *)vmap(dio->pages, dio->page_cnt, VM_MAP, PAGE_KERNEL);
-	if (!Base)
+	dio->pib_va = kmalloc(2 * sizeof(BC_PIC_INFO_BLOCK) + 16, GFP_KERNEL); // since copy_from_user can sleep anyway
+	if(dio->pib_va == NULL)
+		goto getpictureinfo_err;
+	res = copy_from_user(dio->pib_va, (void *)dio->uinfo.xfr_buff, 8);
+	if (res != 0)
 		goto getpictureinfo_err;
 
 	/*
@@ -466,12 +470,11 @@ static bool GetPictureInfo(struct crystalhd_hw *hw, crystalhd_dio_req *dio,
 	 */
 	/* Limit = Base + pRxDMAReq->RxYDMADesc.RxBuffSz; */
 	/* Limit = Base + (pRxDMAReq->RxYDoneSzInDword * 4); */
-	Limit = Base + dio->uinfo.xfr_len;
+// 	Limit = dio->uinfo.xfr_buff + dio->uinfo.xfr_len;
 
-	PicInfoLineNum = GetPicInfoLineNum(dio, Base);
+	PicInfoLineNum = GetPicInfoLineNum(dio, dio->pib_va);
 	if (PicInfoLineNum > 1092) {
-		dev_err(dev, "Invalid Line Number[%d]\n",
-			(int)PicInfoLineNum);
+		printk("Invalid Line Number[%d]\n",	(int)PicInfoLineNum);
 		goto getpictureinfo_err;
 	}
 
@@ -483,39 +486,47 @@ static bool GetPictureInfo(struct crystalhd_hw *hw, crystalhd_dio_req *dio,
 	 * -- the data to make it 16 byte aligned. This Validates the reception
 	 * -- of PIB itself.
 	 */
-	if (hw->PICHeight) {
-		if ((PicInfoLineNum != hw->PICHeight) &&
-		    (PicInfoLineNum != hw->PICHeight/2)) {
-			dev_err(dev, "PicInfoLineNum[%d] != PICHeight "
+	if (picHeight) {
+		if ((PicInfoLineNum != picHeight) &&
+		    (PicInfoLineNum != picHeight/2)) {
+			printk("PicInfoLineNum[%d] != PICHeight "
 				"Or PICHeight/2 [%d]\n",
-				(int)PicInfoLineNum, hw->PICHeight);
+				(int)PicInfoLineNum, picHeight);
 			goto getpictureinfo_err;
 		}
 	}
-
+	
 	/* calc pic info line offset */
-	if (dio->uinfo.b422mode)
-		offset = (PicInfoLineNum * PicWidth * 2) + 8;
-	else
-		offset = (PicInfoLineNum * PicWidth) + 4;
-	pPicInfoLine = (PBC_PIC_INFO_BLOCK)(Base + offset);
-
-	if (((uint8_t *)pPicInfoLine < Base) ||
-	    ((uint8_t *)pPicInfoLine > Limit)) {
-		dev_err(dev, "Base Limit Check Failed for Extracting "
-			"the PIB\n");
-		goto getpictureinfo_err;
+	if (dio->uinfo.b422mode) {
+		size = 2 * sizeof(BC_PIC_INFO_BLOCK);
+		offset = (PicInfoLineNum * picWidth * 2) + 8;
+	} else {
+		size = sizeof(BC_PIC_INFO_BLOCK);
+		offset = (PicInfoLineNum * picWidth) + 4;
 	}
+
+	res = copy_from_user(dio->pib_va, (void *)(dio->uinfo.xfr_buff+offset), size);
+	if (res != 0)
+		goto getpictureinfo_err;
+	pPicInfoLine = (PBC_PIC_INFO_BLOCK)(dio->pib_va);
+
+// 	if (((uint8_t *)pPicInfoLine < Base) ||
+// 	    ((uint8_t *)pPicInfoLine > Limit)) {
+// 		dev_err(dev, "Base Limit Check Failed for Extracting "
+// 			"the PIB\n");
+// 		goto getpictureinfo_err;
+// 	}
 
 	/*
 	 * -- Ajitabh[01-16-2009]:
 	 * We have seen that the data gets shifted for some repeated frames.
 	 * To detect those we use PicInfoLineNum and compare it with height.
 	 */
+
 	HeightInPib = GetHeightFromPib(dio, pPicInfoLine);
 	if ((PicInfoLineNum != HeightInPib) &&
 	    (PicInfoLineNum != HeightInPib / 2)) {
-		dev_err(dev, "Height Match Failed: HeightInPIB[%d] "
+		printk("Height Match Failed: HeightInPIB[%d] "
 			"PicInfoLineNum[%d]\n",
 			(int)HeightInPib, (int)PicInfoLineNum);
 		goto getpictureinfo_err;
@@ -523,45 +534,51 @@ static bool GetPictureInfo(struct crystalhd_hw *hw, crystalhd_dio_req *dio,
 
 	/* get pic meta data from pib */
 	*PicMetaData = GetMetaDataFromPib(dio, pPicInfoLine);
-
 	/* get pic number from pib */
-	if (dio->uinfo.b422mode) {
-		StartLine = Base + (PicInfoLineNum * PicWidth * 2);
+	/* calc pic info line offset */
+	if (dio->uinfo.b422mode)
+		offset = (PicInfoLineNum * picWidth * 2);
+	else
+		offset = (PicInfoLineNum * picWidth);
 
-		if (dio->uinfo.b422mode == MODE422_YUY2) {
-			for (i = 0; i < 4; i++)
-				((uint8_t *)(uintptr_t)pic_number)[i] = StartLine[i * 2];
-		} else if (dio->uinfo.b422mode == MODE422_UYVY) {
-			for (i = 0; i < 4; i++)
-				((uint8_t *)(uintptr_t)pic_number)[i] =
-					StartLine[(i * 2) + 1];
-		}
+	res = copy_from_user(dio->pib_va, (void *)(dio->uinfo.xfr_buff+offset), 12);
+	if (res != 0)
+		goto getpictureinfo_err;
+	
+	if (dio->uinfo.b422mode == MODE422_YUY2) {
+		for (i = 0; i < 4; i++)
+			((uint8_t *)tmp)[i] = ((uint8_t *)dio->pib_va)[i * 2];
+	} else if (dio->uinfo.b422mode == MODE422_UYVY) {
+		for (i = 0; i < 4; i++)
+			((uint8_t *)tmp)[i] = ((uint8_t *)dio->pib_va)[(i * 2) + 1];
 	} else
-		pic_number = *(uint32_t *)(Base + (PicInfoLineNum * PicWidth));
-	*PicNumber =  BC_SWAP32(pic_number);
+		pic_number = *(uint32_t *)(dio->pib_va);
 
-	vunmap(Base);
+	*PicNumber =  BC_SWAP32(pic_number);
+	
+	if(dio->pib_va)
+		kfree(dio->pib_va);
 
 	return true;
 
 getpictureinfo_err:
-	if (Base)
-		vunmap(Base);
+	if(dio->pib_va)
+		kfree(dio->pib_va);
 	*PicNumber = 0;
 	*PicMetaData = 0;
 
 	return false;
 }
 
-unsigned long GetRptDropParam(struct crystalhd_hw *hw,
-			      crystalhd_rx_dma_pkt *pRxDMAReq)
+unsigned long GetRptDropParam(uint32_t picHeight, uint32_t picWidth, void *pRxDMAReq)
 {
-	uint32_t PicNumber = 0, PicMetaData = 0, Result = 0;
+	uint32_t PicNumber = 0, PicMetaData = 0, result = 0;
+			
+	if(GetPictureInfo(picHeight, picWidth, ((crystalhd_rx_dma_pkt *)pRxDMAReq)->dio_req,
+				&PicNumber, &PicMetaData))
+		result = PicNumber;
 
-	Result = GetPictureInfo(hw, pRxDMAReq->dio_req, hw->PICWidth,
-				&PicNumber, &PicMetaData);
-
-	return Result;
+	return result;
 }
 
 /*
@@ -588,7 +605,7 @@ bool crystalhd_hw_peek_next_decoded_frame(struct crystalhd_hw *hw,
 		tmp = ioq->head;
 		rpkt = (crystalhd_rx_dma_pkt *)tmp->data;
 		if (rpkt) {
-			GetPictureInfo(hw, rpkt->dio_req, PicWidth,
+			GetPictureInfo(hw->PICHeight, hw->PICWidth, rpkt->dio_req,
 				       &PicNumber, meta_payload);
 			dev_dbg(&hw->adp->pdev->dev, "%s: PicWidth(%d), "
 				"PicNumber(%d), meta_payload(0x%x)\n",
@@ -790,6 +807,7 @@ static BC_STATUS crystalhd_hw_tx_req_complete(struct crystalhd_hw *hw,
 		return BC_STS_INV_ARG;
 	}
 
+	//dev_info(&hw->adp->pdev->dev, "TX INTR\n");
 	hw->pwr_lock--;
 
 	tx_req = (tx_dma_pkt *)crystalhd_dioq_find_and_fetch(hw->tx_actq,
@@ -1330,6 +1348,12 @@ static void crystalhd_hw_proc_pib(struct crystalhd_hw *hw)
 			if (!rx_pkt)
 				return;
 
+			rx_pkt->flags = 0;
+			rx_pkt->flags |= COMP_FLAG_PIB_VALID |
+					 COMP_FLAG_FMT_CHANGE;
+			AppPib = &rx_pkt->pib;
+			cpy_pib_to_app(&src_pib, AppPib);
+
 			hw->PICHeight = rx_pkt->pib.height;
 			if (rx_pkt->pib.width > 1280)
 				hw->PICWidth = 1920;
@@ -1338,13 +1362,7 @@ static void crystalhd_hw_proc_pib(struct crystalhd_hw *hw)
 			else
 				hw->PICWidth = 720;
 
-			rx_pkt->flags = 0;
-			rx_pkt->flags |= COMP_FLAG_PIB_VALID |
-					 COMP_FLAG_FMT_CHANGE;
-			AppPib = &rx_pkt->pib;
-			cpy_pib_to_app(&src_pib, AppPib);
-
-			dev_dbg(&hw->adp->pdev->dev,
+			dev_info(&hw->adp->pdev->dev,
 				"App PIB:%x %x %x %x %x %x %x %x %x %x\n",
 				rx_pkt->pib.picture_number,
 				rx_pkt->pib.aspect_ratio,
@@ -1550,7 +1568,7 @@ static void crystalhd_get_dnsz(struct crystalhd_hw *hw, uint32_t list_index,
  */
 static void crystalhd_hw_finalize_pause(struct crystalhd_hw *hw)
 {
-	uint32_t dma_cntrl, aspm;
+	uint32_t dma_cntrl;
 
 	hw->stop_pending = 0;
 
@@ -1569,10 +1587,10 @@ static void crystalhd_hw_finalize_pause(struct crystalhd_hw *hw)
 	}
 	hw->rx_list_post_index = 0;
 
-	aspm = crystalhd_reg_rd(hw->adp, PCIE_DLL_DATA_LINK_CONTROL);
-	aspm |= ASPM_L1_ENABLE;
-	/* NAREN dev_info(&hw->adp->pdev->dev, "aspm on\n"); */
-	crystalhd_reg_wr(hw->adp, PCIE_DLL_DATA_LINK_CONTROL, aspm);
+// 	aspm = crystalhd_reg_rd(hw->adp, PCIE_DLL_DATA_LINK_CONTROL);
+// 	aspm |= ASPM_L1_ENABLE;
+// 	dev_info(&hw->adp->pdev->dev, "aspm on\n");
+// 	crystalhd_reg_wr(hw->adp, PCIE_DLL_DATA_LINK_CONTROL, aspm);
 }
 
 static BC_STATUS crystalhd_rx_pkt_done(struct crystalhd_hw *hw,
@@ -1582,6 +1600,7 @@ static BC_STATUS crystalhd_rx_pkt_done(struct crystalhd_hw *hw,
 	crystalhd_rx_dma_pkt *rx_pkt = NULL;
 	uint32_t y_dw_dnsz, uv_dw_dnsz;
 	BC_STATUS sts = BC_STS_SUCCESS;
+	uint32_t pause = 0x1;
 
 	if (!hw || list_index >= DMA_ENGINE_CNT) {
 		printk(KERN_ERR "%s: Invalid Arguments\n", __func__);
@@ -1607,9 +1626,15 @@ static BC_STATUS crystalhd_rx_pkt_done(struct crystalhd_hw *hw,
 			rx_pkt->dio_req->uinfo.uv_done_sz = uv_dw_dnsz;
 		crystalhd_dioq_add(hw->rx_rdyq, rx_pkt, true,
 				hw->rx_pkt_tag_seed + list_index);
+		if(crystalhd_dioq_count(hw->rx_rdyq) > HW_PAUSE_THRESHOLD)
+		{
+		  dev_info(&hw->adp->pdev->dev, "HW PAUSE\n");
+		  crystalhd_mem_wr(hw->adp, HW_PauseMbx, 4, &pause);
+		  crystalhd_hw_pause(hw);
+		  hw->hw_pause_issued = true;
+		}
 		return sts;
 	}
-
 	/* Check if we can post this DIO again. */
 	return crystalhd_hw_post_cap_buff(hw, rx_pkt);
 }
@@ -1787,6 +1812,7 @@ static void crystalhd_rx_isr(struct crystalhd_hw *hw, uint32_t intr_sts)
 			case sts_free:
 				comp_sts = BC_STS_SUCCESS;
 				list_avail = 1;
+				hw->stats.rx_success++;
 				break;
 			case rx_y_error:
 			case rx_uv_error:
@@ -1794,9 +1820,10 @@ static void crystalhd_rx_isr(struct crystalhd_hw *hw, uint32_t intr_sts)
 				/* We got error on both or Y or uv. */
 				hw->stats.rx_errors++;
 				crystalhd_get_dnsz(hw, i, &y_dn_sz, &uv_dn_sz);
-				dev_dbg(&hw->adp->pdev->dev, "list_index:%x "
-					"rx[%d] Y:%x UV:%x Int:%x YDnSz:%x "
+				dev_info(&hw->adp->pdev->dev, "list_index:%x "
+					"rx[%d] rxtot[%d] Y:%x UV:%x Int:%x YDnSz:%x "
 					"UVDnSz:%x\n", i, hw->stats.rx_errors,
+					hw->stats.rx_errors + hw->stats.rx_success,
 					y_err_sts, uv_err_sts, intr_sts,
 					y_dn_sz, uv_dn_sz);
 				hw->rx_list_sts[i] = sts_free;
@@ -1823,7 +1850,8 @@ static void crystalhd_rx_isr(struct crystalhd_hw *hw, uint32_t intr_sts)
 			    (hw->rx_list_sts[1] == sts_free))
 				crystalhd_hw_finalize_pause(hw);
 		} else {
-			crystalhd_hw_start_capture(hw);
+			if(!hw->hw_pause_issued)
+				crystalhd_hw_start_capture(hw);
 		}
 	}
 }
@@ -2473,7 +2501,7 @@ BC_STATUS crystalhd_hw_add_cap_buffer(struct crystalhd_hw *hw,
 		rpkt->uv_phy_addr = rpkt->desc_mem.phy_addr +
 				    (sizeof(dma_descriptor) * (uv_desc_ix + 1));
 
-	if (en_post)
+	if (en_post && !hw->hw_pause_issued)
 		sts = crystalhd_hw_post_cap_buff(hw, rpkt);
 	else
 		sts = crystalhd_dioq_add(hw->rx_freeq, rpkt, false, tag);
@@ -2488,6 +2516,7 @@ BC_STATUS crystalhd_hw_get_cap_buffer(struct crystalhd_hw *hw,
 	crystalhd_rx_dma_pkt *rpkt;
 	uint32_t timeout = BC_PROC_OUTPUT_TIMEOUT / 1000;
 	uint32_t sig_pending = 0;
+	uint32_t pause = 0x0;
 
 
 	if (!hw || !ioreq || !pib) {
@@ -2495,11 +2524,16 @@ BC_STATUS crystalhd_hw_get_cap_buffer(struct crystalhd_hw *hw,
 		return BC_STS_INV_ARG;
 	}
 
-	rpkt = crystalhd_dioq_fetch_wait(hw->rx_rdyq, timeout, &sig_pending);
+	rpkt = crystalhd_dioq_fetch_wait(hw, timeout, &sig_pending);
+	if((crystalhd_dioq_count(hw->rx_rdyq) < HW_RESUME_THRESHOLD) && hw->hw_pause_issued)
+	{
+		dev_info(&hw->adp->pdev->dev, "HW RESUME with rdy list %u \n",crystalhd_dioq_count(hw->rx_rdyq));
+		crystalhd_hw_unpause(hw);
+		crystalhd_mem_wr(hw->adp, HW_PauseMbx, 4, &pause);
+		hw->hw_pause_issued = false;
+	}
 	if (!rpkt) {
 		if (sig_pending) {
-			dev_info(&hw->adp->pdev->dev, "frame wait timeout %d\n",
-				 sig_pending);
 			return BC_STS_IO_USER_ABORT;
 		} else {
 			return BC_STS_TIMEOUT;
@@ -2543,7 +2577,7 @@ BC_STATUS crystalhd_hw_start_capture(struct crystalhd_hw *hw)
 	return BC_STS_SUCCESS;
 }
 
-BC_STATUS crystalhd_hw_stop_capture(struct crystalhd_hw *hw)
+BC_STATUS crystalhd_hw_stop_capture(struct crystalhd_hw *hw, bool unmap)
 {
 	void *temp = NULL;
 
@@ -2553,6 +2587,22 @@ BC_STATUS crystalhd_hw_stop_capture(struct crystalhd_hw *hw)
 	}
 
 	crystalhd_stop_rx_dma_engine(hw);
+
+	if(!unmap)
+		return BC_STS_SUCCESS;
+	
+	// Clear up Active, Ready and Free lists one by one and release resources
+	do {
+		temp = crystalhd_dioq_fetch(hw->rx_actq);
+		if (temp)
+			crystalhd_rx_pkt_rel_call_back(hw, temp);
+	} while (temp);
+
+	do {
+		temp = crystalhd_dioq_fetch(hw->rx_rdyq);
+		if (temp)
+			crystalhd_rx_pkt_rel_call_back(hw, temp);
+	} while (temp);
 
 	do {
 		temp = crystalhd_dioq_fetch(hw->rx_freeq);
@@ -2578,14 +2628,14 @@ BC_STATUS crystalhd_hw_pause(struct crystalhd_hw *hw)
 BC_STATUS crystalhd_hw_unpause(struct crystalhd_hw *hw)
 {
 	BC_STATUS sts;
-	uint32_t aspm;
+	//uint32_t aspm;
 
 	hw->stop_pending = 0;
 
-	aspm = crystalhd_reg_rd(hw->adp, PCIE_DLL_DATA_LINK_CONTROL);
-	aspm &= ~ASPM_L1_ENABLE;
-/* NAREN dev_info(&hw->adp->pdev->dev, "aspm off\n"); */
-	crystalhd_reg_wr(hw->adp, PCIE_DLL_DATA_LINK_CONTROL, aspm);
+// 	aspm = crystalhd_reg_rd(hw->adp, PCIE_DLL_DATA_LINK_CONTROL);
+// 	aspm &= ~ASPM_L1_ENABLE;
+// 	dev_info(&hw->adp->pdev->dev, "aspm off\n");
+// 	crystalhd_reg_wr(hw->adp, PCIE_DLL_DATA_LINK_CONTROL, aspm);
 
 	sts = crystalhd_hw_start_capture(hw);
 	return sts;

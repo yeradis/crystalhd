@@ -32,11 +32,9 @@
 #define CLOCK_BASE 9LL
 #define CLOC_FREQ_CLOC_BASE * 10000
 
-#define GST_BUF_LIST_POOL_SZ  350;
+#define GST_BUF_LIST_POOL_SZ  150;
 
 #define GST_RENDERER_BUF_POOL_SZ 20
-#define GST_RENDERER_BUF_LOW_THRESHOLD 5
-#define GST_RENDERER_BUF_NORMAL_THRESHOLD 10
 
 #define MPEGTIME_TO_GSTTIME(time) ((time) * (GST_MSECOND/10)) / CLOCK_BASE)
 
@@ -61,14 +59,14 @@ const gint64 UNITS = 1000000000;
 #define	MPEG2_FRM_SUFFIX 0x00
 #define	MPEG2_SEQ_SUFFIX 0xB3
 
-#define PAUSE_THRESHOLD 30
-#define RESUME_THRESHOLD 10
+#define PAUSE_THRESHOLD 16
+#define RESUME_THRESHOLD 8
 #define	SPS_PPS_SIZE 1000
 
 #define BCM_GST_SHMEM_KEY 0xDEADBEEF
 #define	THUMBNAIL_FRAMES 60
 
-typedef enum { 
+typedef enum {
 	H264=0,
 	MPEG2,
 	VC1
@@ -164,7 +162,7 @@ G_BEGIN_DECLS
 
 typedef struct _GstBcmDec      GstBcmDec;
 typedef struct _GstBcmDecClass GstBcmDecClass;
- 
+
 
 struct _GstBcmDec
 {
@@ -176,7 +174,7 @@ struct _GstBcmDec
 	gboolean 	streaming;
 	gboolean 	feos;
 	GMutex 		*mPlayLock;
-	guint8      input_format;
+	BC_MEDIA_SUBTYPE      input_format;
 	OUTPARAMS output_params;
 	pthread_t recv_thread;
 	sem_t     play_event;
@@ -192,7 +190,7 @@ struct _GstBcmDec
 	GstEvent* ev_eos;
 	GSTBUF_LIST* gst_buf_que_hd;
 	GSTBUF_LIST* gst_buf_que_tl;
-	pthread_mutex_t  gst_buf_que_lock;	
+	pthread_mutex_t  gst_buf_que_lock;
 	guint	gst_que_cnt;
 	pthread_t push_thread;
 	gboolean	last_picture_set;
@@ -234,7 +232,7 @@ struct _GstBcmDec
 	GstClockTime base_clock_time;
 	GstClockTime prev_clock_time;
 	GstClockTime cur_stream_time;
-	guint8		 proc_in_flags;	
+	guint8		 proc_in_flags;
 #ifdef WMV_FILE_HANDLING
 	/*WMV File handling*/
 	gboolean	wmv_file;
@@ -245,121 +243,123 @@ struct _GstBcmDec
 	/*Simple/Main parameters*/
 	gboolean	bRangered;
 	gboolean	bMaxbFrames;
-	gboolean	bFinterpFlag; 
+	gboolean	bFinterpFlag;
 	gint		frame_width;	/*The value from Demux*/
 	gint		frame_height;	/*The value from Demux*/
 #endif
 
-	GSTBUF_LIST* gst_rbuf_que_hd;
-	GSTBUF_LIST* gst_rbuf_que_tl;
-	pthread_mutex_t  gst_rbuf_que_lock;
-	guint	gst_rbuf_que_cnt;
+	GSTBUF_LIST* gst_padbuf_que_hd;
+	GSTBUF_LIST* gst_padbuf_que_tl;
+	pthread_mutex_t  gst_padbuf_que_lock;
+	guint	gst_padbuf_que_cnt;
 	pthread_t get_rbuf_thread;
 	sem_t	rbuf_start_event;
 	sem_t	rbuf_stop_event;
 	sem_t	rbuf_ins_event;
-	guint	gst_rbuf_que_sz;
-	GSTBUF_LIST* gst_mem_rbuf_que_hd;
+	guint	gst_padbuf_que_sz;
+	GSTBUF_LIST* gst_mem_padbuf_que_hd;
 	gboolean rbuf_thread_running;
 };
 
-struct _GstBcmDecClass 
+struct _GstBcmDecClass
 {
   GstElementClass parent_class;
 };
 
 GType gst_bcmdec_get_type (void);
 
-static void 
+static void
 gst_bcmdec_base_init (gpointer gclass);
 
-static void 
+static void
 gst_bcmdec_class_init(GstBcmDecClass * klass);
 
-static void 
+static void
 gst_bcmdec_init(GstBcmDec * bcmdec,
 				GstBcmDecClass * gclass);
 
 static void
 gst_bcmdec_finalize(GObject * object);
 
-static GstFlowReturn 
+static GstFlowReturn
 gst_bcmdec_chain(GstPad * pad,
 				 GstBuffer * buffer);
 
-static GstStateChangeReturn 
+static GstStateChangeReturn
 gst_bcmdec_change_state(GstElement * element,
 						GstStateChange transition);
 
-static gboolean 
+static gboolean
 gst_bcmdec_sink_set_caps(GstPad * pad,
 						 GstCaps * caps);
 
-static gboolean 
-gst_bcmdec_src_event(GstPad * pad, 
+static GstCaps *gst_bcmdec_getcaps (GstPad * pad);
+
+static gboolean
+gst_bcmdec_src_event(GstPad * pad,
 					 GstEvent * event);
 
-static gboolean 
+static gboolean
 gst_bcmdec_sink_event(GstPad * pad,
 					  GstEvent * event);
 
-static void 
+static void
 gst_bcmdec_set_property (GObject * object, guint prop_id,
 						const GValue * value, GParamSpec * pspec);
 
-static void 
+static void
 gst_bcmdec_get_property (GObject * object, guint prop_id,
 						GValue * value, GParamSpec * pspec);
 
 static gboolean
 bcmdec_negotiate_format (GstBcmDec * bcmdec);
 
-static void 
+static void
 bcmdec_reset(GstBcmDec * bcmdec);
 
-static gboolean 
+static gboolean
 bcmdec_get_buffer(GstBcmDec * bcmdec, GstBuffer ** obuf);
 
-static void* 
+static void*
 bcmdec_process_output(void * ctx);
 
-static void 
+static void
 bcmdec_init_procout(GstBcmDec * filter,BC_DTS_PROC_OUT* pout, guint8* buf);
 
-static void 
+static void
 bcmdec_set_framerate(GstBcmDec * filter,guint32 resolution);
 
-static gboolean 
+static gboolean
 bcmdec_format_change(GstBcmDec * filter,BC_PIC_INFO_BLOCK* pic_info);
 
-static BC_STATUS 
+static BC_STATUS
 gst_bcmdec_cleanup(GstBcmDec *filter);
 
 static gboolean
 bcmdec_start_recv_thread(GstBcmDec * bcmdec);
 
-static GstClockTime 
+static GstClockTime
 bcmdec_get_time_stamp(GstBcmDec* filter, guint32 pic_no,GstClockTime spes_time);
 
 static gboolean
 bcmdec_process_play(GstBcmDec *filter);
 
-static gboolean 
+static gboolean
 bcmdec_alloc_mem_buf_que_pool(GstBcmDec *filter);
 
-static gboolean 
+static gboolean
 bcmdec_release_mem_buf_que_pool(GstBcmDec *filter);
 
-static void 
+static void
 bcmdec_put_que_mem_buf(GstBcmDec *filter,GSTBUF_LIST *gst_queue_element);
 
 static GSTBUF_LIST*
 bcmdec_get_que_mem_buf(GstBcmDec *filter);
 
-static void 
+static void
 bcmdec_ins_buf(GstBcmDec *filter,GSTBUF_LIST	*gst_queue_element);
 
-static GSTBUF_LIST* 
+static GSTBUF_LIST*
 bcmdec_rem_buf(GstBcmDec *filter);
 
 static void*
@@ -368,8 +368,8 @@ bcmdec_process_push(void* ctx);
 static gboolean
 bcmdec_start_push_thread(GstBcmDec * bcmdec);
 
-static BC_STATUS
-bcmdec_insert_startcode(GstBcmDec* filter,GstBuffer* gstbuf, guint8* dest_buf,guint32* sz);
+//static BC_STATUS
+//bcmdec_insert_startcode(GstBcmDec* filter,GstBuffer* gstbuf, guint8* dest_buf,guint32* sz);
 
 static BC_STATUS
 bcmdec_insert_sps_pps(GstBcmDec* filter,GstBuffer* gstbuf);
@@ -377,10 +377,10 @@ bcmdec_insert_sps_pps(GstBcmDec* filter,GstBuffer* gstbuf);
 static void
 bcmdec_set_aspect_ratio(GstBcmDec *filter,BC_PIC_INFO_BLOCK* pic_info);
 
-static void 
+static void
 bcmdec_process_flush_start(GstBcmDec* filter);
 
-static void 
+static void
 bcmdec_process_flush_stop(GstBcmDec* filter);
 
 static BC_STATUS
@@ -389,41 +389,38 @@ bcmdec_resume_callback(GstBcmDec* filter);
 static BC_STATUS
 bcmdec_suspend_callback(GstBcmDec* filter);
 
-static BC_STATUS
-bcmdec_send_buffer(GstBcmDec* filter, guint8* pbuffer,guint32 size, guint32 offset, GstClockTime tCurrent,guint8 flags);
-
-static gboolean 
+static gboolean
 bcmdec_mul_inst_cor(GstBcmDec* filter);
 
-static BC_STATUS 
+static BC_STATUS
 bcmdec_create_shmem(GstBcmDec* filter,int *shmem_id);
 
-static BC_STATUS 
+static BC_STATUS
 bcmdec_get_shmem(GstBcmDec* filter,int shmid,gboolean newsh);
 
-static BC_STATUS 
+static BC_STATUS
 bcmdec_del_shmem(GstBcmDec* filter);
 
 static gboolean
 bcmdec_start_get_rbuf_thread(GstBcmDec * bcmdec);
 
-static gboolean 
-bcmdec_alloc_mem_rbuf_que_pool(GstBcmDec *filter);
+// static gboolean
+// bcmdec_alloc_mem_padbuf_que_pool(GstBcmDec *filter);
+// 
+// static gboolean
+// bcmdec_release_mem_padbuf_que_pool(GstBcmDec *filter);
 
-static gboolean 
-bcmdec_release_mem_rbuf_que_pool(GstBcmDec *filter);
+// static void
+// bcmdec_put_que_mem_padbuf(GstBcmDec *filter,GSTBUF_LIST *gst_queue_element);
+// 
+// static GSTBUF_LIST*
+// bcmdec_get_que_mem_padbuf(GstBcmDec *filter);
 
-static void 
-bcmdec_put_que_mem_rbuf(GstBcmDec *filter,GSTBUF_LIST *gst_queue_element);
+static void
+bcmdec_ins_padbuf(GstBcmDec *filter,GSTBUF_LIST	*gst_queue_element);
 
 static GSTBUF_LIST*
-bcmdec_get_que_mem_rbuf(GstBcmDec *filter);
-
-static void 
-bcmdec_ins_rbuf(GstBcmDec *filter,GSTBUF_LIST	*gst_queue_element);
-
-static GSTBUF_LIST* 
-bcmdec_rem_rbuf(GstBcmDec *filter);
+bcmdec_rem_padbuf(GstBcmDec *filter);
 
 
 G_END_DECLS

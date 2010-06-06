@@ -14,7 +14,7 @@
   You should have received a copy of the GNU General Public License
   along with this driver.  If not, see <http://www.gnu.org/licenses/>.
 ***************************************************************************/
-
+#define DEBUG
 #include <linux/version.h>
 
 #include "crystalhd_lnx.h"
@@ -396,11 +396,11 @@ static int __devinit chd_dec_init_chdev(struct crystalhd_adp *adp)
 		goto device_create_fail;
 	}
 
-	rc = crystalhd_create_elem_pool(adp, BC_LINK_ELEM_POOL_SZ);
-	if (rc) {
-		dev_err(xdev, "failed to create device\n");
-		goto elem_pool_fail;
-	}
+//	rc = crystalhd_create_elem_pool(adp, BC_LINK_ELEM_POOL_SZ);
+//	if (rc) {
+//		dev_err(xdev, "failed to create device\n");
+//		goto elem_pool_fail;
+//	}
 
 	/* Allocate general purpose ioctl pool. */
 	for (i = 0; i < CHD_IODATA_POOL_SZ; i++) {
@@ -418,8 +418,8 @@ static int __devinit chd_dec_init_chdev(struct crystalhd_adp *adp)
 	return 0;
 
 kzalloc_fail:
-	crystalhd_delete_elem_pool(adp);
-elem_pool_fail:
+	//crystalhd_delete_elem_pool(adp);
+//elem_pool_fail:
 	device_destroy(crystalhd_class, MKDEV(adp->chd_dec_major, 0));
 device_create_fail:
 	class_destroy(crystalhd_class);
@@ -450,7 +450,7 @@ static void __devexit chd_dec_release_chdev(struct crystalhd_adp *adp)
 		kfree(temp);
 	} while (temp);
 
-	crystalhd_delete_elem_pool(adp);
+	//crystalhd_delete_elem_pool(adp);
 }
 
 static int __devinit chd_pci_reserve_mem(struct crystalhd_adp *pinfo)

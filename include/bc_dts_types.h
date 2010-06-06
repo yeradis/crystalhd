@@ -92,10 +92,11 @@ typedef bool	bc_bool_t;
 #else
 
 #ifndef uint64_t
-typedef struct _uint64_t {
-	uint32_t low_dw;
-	uint32_t hi_dw;
-} uint64_t;
+// typedef struct _uint64_t {
+// 	uint32_t low_dw;
+// 	uint32_t hi_dw;
+// } uint64_t;
+typedef unsigned long long uint64_t;
 #endif
 
 #ifndef int32_t

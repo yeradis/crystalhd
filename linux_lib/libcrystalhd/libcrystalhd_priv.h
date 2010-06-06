@@ -58,7 +58,7 @@ enum _bc_ldil_log_level{
  */
 enum _crystalhd_ldil_globals {
 	BC_EOS_PIC_COUNT	= 16,			/* EOS check counter..*/
-	BC_INPUT_MDATA_POOL_SZ  = 4560,			/* Input Meta Data Pool size */
+	BC_INPUT_MDATA_POOL_SZ  = 512,			/* Input Meta Data Pool size */
 	BC_MAX_SW_VOUT_BUFFS    = BC_RX_LIST_CNT,	/* MAX - pre allocated buffers..*/
 	RX_START_DELIVERY_THRESHOLD = 0,
 	PAUSE_DECODER_THRESHOLD = 12,
@@ -96,7 +96,7 @@ enum _BCMemTypeFlags {
 
 enum _STCapParams{
 	NO_PARAM				= 0,
-	ST_CAP_IMMIDIATE		= 0x01, 
+	ST_CAP_IMMIDIATE		= 0x01,
 };
 
 /* Application specific run-time configurations */
@@ -130,7 +130,7 @@ enum _DtsAppSpecificCfgFlags {
 
 #define BC_FW_CMD_TIMEOUT		2
 //Use the Last Un-Fetched One
-#define MAX_DISOEDER_GAP	5
+#define MAX_DISORDER_GAP	5
 
 #define ALIGN_BUF_SIZE	(512*1024)
 #define TX_CIRCULAR_BUFFER
@@ -257,11 +257,12 @@ typedef struct _DTS_LIB_CONTEXT{
 	uint32_t		MDLastFetchTag;
 
 	/* End Of Stream detection */
-	BOOL			FlushIssued;			/* Flag to start EOS detection */
-	uint32_t		eosCnt;					/* Last picture repetition count */
+	BOOL			bEOSCheck;				/* Flag to start EOS detection */
+	uint32_t		EOSCnt;					/* Last picture repetition count */
+	uint32_t		DrvStatusEOSCnt;
 	uint32_t		LastPicNum;				/* Last picture number */
 	uint32_t		LastSessNum;			/* Last session number */
-	uint8_t 		PullDownFlag;
+	uint8_t		    PullDownFlag;
 	BOOL			bEOS;
 
 	/* Statistics Related */
@@ -282,8 +283,8 @@ typedef struct _DTS_LIB_CONTEXT{
 
 	uint8_t			SingleThreadedAppMode;	/* flag to indicate that we are running in single threaded mode */
 	uint32_t		cpbBase;				/* Only used in single threaded mode to save base and end to reduce number of HW reads */
-	uint32_t		cpbEnd;					
-	PES_CONVERT_PARAMS PESConvParams;	
+	uint32_t		cpbEnd;
+	PES_CONVERT_PARAMS PESConvParams;
 	BC_HW_CAPS		capInfo;
 	uint16_t		InSampleCount;
 	uint8_t			bMapOutBufDone;
@@ -369,15 +370,15 @@ uint32_t DtsGetWidthfromResolution(DTS_LIB_CONTEXT *Ctx, uint32_t Resolution);
 BC_STATUS
 DtsAddBuffsWithFmtChInfo(DTS_LIB_CONTEXT	*Ctx);
 
-BC_STATUS 
+BC_STATUS
 DtsAllocNewRxBuffs(DTS_LIB_CONTEXT		*Ctx,
 					uint32_t				BuffSz,
 					uint32_t				BuffCnt);
 
-BC_STATUS 
+BC_STATUS
 DtsFreeRxBuffs(DTS_LIB_CONTEXT		*Ctx);
 
-void 
+void
 DtsGetMaxSize(DTS_LIB_CONTEXT *Ctx, U32 *Sz);
 
 BC_STATUS
@@ -420,6 +421,7 @@ BC_STATUS DtsGetDilShMem(uint32_t shmid);
 BC_STATUS DtsDelDilShMem(void);
 BC_STATUS DtsCreateShMem(int *shmem_id);
 #endif
+/* DTS Global Parameters Utility functions */
 uint32_t DtsGetOPMode( void );
 void DtsSetOPMode( uint32_t value );
 uint32_t DtsGetHwInitSts( void );

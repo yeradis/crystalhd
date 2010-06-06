@@ -26,7 +26,6 @@
 
 #ifndef _CRYSTALHD_HW_H_
 #define _CRYSTALHD_HW_H_
-
 #include <linux/device.h>
 #include "crystalhd_fw_if.h"
 #include "crystalhd_misc.h"
@@ -44,6 +43,7 @@
 **************************************************/
 #define FW_CMD_BUFF_SZ		64
 #define TS_Host2CpuSnd		0x00000100
+#define HW_PauseMbx		0x00000300
 #define Hst2CpuMbx1		0x00100F00
 #define Cpu2HstMbx1		0x00100F04
 #define MbxStat1		0x00100F08
@@ -360,6 +360,7 @@ struct crystalhd_hw_stats{
 	uint32_t	dev_interrupts;
 	uint32_t	cin_busy;
 	uint32_t	pause_cnt;
+	uint32_t	rx_success;
 };
 
 struct crystalhd_hw {
@@ -393,6 +394,8 @@ struct crystalhd_hw {
 	crystalhd_dioq_t	*rx_actq;
 	uint32_t		stop_pending;
 
+	uint32_t		hw_pause_issued;
+
 	/* HW counters.. */
 	struct crystalhd_hw_stats	stats;
 
@@ -410,7 +413,7 @@ struct crystalhd_hw {
 };
 
 /* Clock defines for power control */
-#define CLOCK_PRESET 175
+#define CLOCK_PRESET 200
 
 /* DMA engine register BIT mask wrappers.. */
 #define DMA_START_BIT		MISC1_TX_SW_DESC_LIST_CTRL_STS_TX_DMA_RUN_STOP_MASK
@@ -470,7 +473,7 @@ BC_STATUS crystalhd_hw_add_cap_buffer(struct crystalhd_hw *hw,
 BC_STATUS crystalhd_hw_get_cap_buffer(struct crystalhd_hw *hw,
 				    BC_PIC_INFO_BLOCK *pib,
 				    crystalhd_dio_req **ioreq);
-BC_STATUS crystalhd_hw_stop_capture(struct crystalhd_hw *hw);
+BC_STATUS crystalhd_hw_stop_capture(struct crystalhd_hw *hw, bool unmap);
 BC_STATUS crystalhd_hw_start_capture(struct crystalhd_hw *hw);
 void crystalhd_hw_stats(struct crystalhd_hw *hw, struct crystalhd_hw_stats *stats);
 bool crystalhd_hw_peek_next_decoded_frame(struct crystalhd_hw *hw,

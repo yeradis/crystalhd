@@ -29,13 +29,12 @@
 #include "bc_dts_defs.h"
 #include "libcrystalhd.h"
 
-#define PROC_TIMEOUT 2000
+#define PROC_TIMEOUT 3000
 #define ALIGN_BUF_SIZE	(512*1024)
 
 struct _DecIf
 {
 	HANDLE	hdev;
-	guint8* aligned_buf;
 };
 typedef struct _DecIf BcmDecIF;
 
@@ -46,7 +45,7 @@ BC_STATUS
 decif_close(BcmDecIF * decif);
 
 BC_STATUS
-decif_prepare_play(BcmDecIF * decif,guint8 comp);
+decif_prepare_play(BcmDecIF* decif);
 
 BC_STATUS
 decif_start_play(BcmDecIF * decif);
@@ -67,13 +66,19 @@ BC_STATUS
 decif_send_buffer(BcmDecIF * decif,guint8* buffer,guint32 size,GstClockTime time_stamp,guint8 flags);
 
 BC_STATUS
-decif_set422_mode(BcmDecIF * decif,guint8 mode);
+decif_setcolorspace(BcmDecIF * decif, BC_OUTPUT_FORMAT mode);
 
-BC_STATUS 
-decif_get_drv_status(BcmDecIF * decif, gboolean* suspended);
+BC_STATUS
+decif_get_drv_status(BcmDecIF * decif, gboolean* suspended, guint32 *rll);
+
+BC_STATUS
+decif_get_eos(BcmDecIF *decif, gboolean *bEOS);
 
 BC_STATUS
 decif_decode_catchup(BcmDecIF * decif, gboolean catchup);
+
+BC_STATUS
+decif_setinputformat(BcmDecIF *decif, BC_INPUT_FORMAT bcInputFormat);
 
 #endif
 

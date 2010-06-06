@@ -87,13 +87,19 @@ static crystalhd_elem_t *crystalhd_alloc_elem(struct crystalhd_adp *adp)
 	crystalhd_elem_t *temp = NULL;
 
 	if (!adp)
+	{
+		printk(KERN_ERR "%s: Invalid args\n", __func__);
 		return temp;
+	}
 	spin_lock_irqsave(&adp->lock, flags);
 	temp = adp->elem_pool_head;
 	if (temp) {
 		adp->elem_pool_head = adp->elem_pool_head->flink;
 		memset(temp, 0, sizeof(*temp));
 	}
+	else
+		printk(KERN_ERR "no element found\n");
+
 	spin_unlock_irqrestore(&adp->lock, flags);
 
 	return temp;
@@ -678,41 +684,64 @@ void *crystalhd_dioq_find_and_fetch(crystalhd_dioq_t *ioq, uint32_t tag)
  * Return element from head if Q is not empty. Wait for new element
  * if Q is empty for Timeout seconds.
  */
-void *crystalhd_dioq_fetch_wait(crystalhd_dioq_t *ioq, uint32_t to_secs,
-			      uint32_t *sig_pend)
+void *crystalhd_dioq_fetch_wait(void *hw, uint32_t to_secs, uint32_t *sig_pend)
 {
 	struct device *dev = chd_get_device();
 	unsigned long flags = 0;
-	int rc = 0, count;
-	void *tmp = NULL;
+	int rc = 0;
 
+	crystalhd_rx_dma_pkt *r_pkt = NULL;
+	crystalhd_dioq_t *ioq = ((struct crystalhd_hw *)hw)->rx_rdyq;
+	unsigned long picYcomp = 0;
+
+	unsigned long fetchTimeout = jiffies + msecs_to_jiffies(to_secs * 1000);
+	
 	if (!ioq || (ioq->sig != BC_LINK_DIOQ_SIG) || !to_secs || !sig_pend) {
 		dev_err(dev, "%s: Invalid arg\n", __func__);
-		return tmp;
+		return r_pkt;
 	}
 
-	count = to_secs;
 	spin_lock_irqsave(&ioq->lock, flags);
-	while ((ioq->count == 0) && count) {
-		spin_unlock_irqrestore(&ioq->lock, flags);
-
-		crystalhd_wait_on_event(&ioq->event, (ioq->count > 0),
-					1000, rc, false);
+	while (!time_after_eq(jiffies, fetchTimeout)) {
+		if(ioq->count == 0) {
+			spin_unlock_irqrestore(&ioq->lock, flags);
+			crystalhd_wait_on_event(&ioq->event, (ioq->count > 0),
+					250, rc, false);
+		}
+		else
+			spin_unlock_irqrestore(&ioq->lock, flags);
 		if (rc == 0) {
-			goto out;
+			// Found a packet. Check if it is a repeated picture or not
+			// Drop the picture if it is a repeated picture
+			r_pkt = crystalhd_dioq_fetch(ioq);
+			// If format change packet, then return with out checking anything
+			if(r_pkt->flags & (COMP_FLAG_PIB_VALID | COMP_FLAG_FMT_CHANGE))
+				return r_pkt;
+			picYcomp = GetRptDropParam(((struct crystalhd_hw *)hw)->PICHeight, ((struct crystalhd_hw *)hw)->PICWidth, (void *)r_pkt);
+			if(!picYcomp || (picYcomp == ((struct crystalhd_hw *)hw)->LastPicNo) ||
+				(picYcomp == ((struct crystalhd_hw *)hw)->LastTwoPicNo)) {
+				//Discard picture
+				if(picYcomp != 0) {
+					((struct crystalhd_hw *)hw)->LastTwoPicNo = ((struct crystalhd_hw *)hw)->LastPicNo;
+					((struct crystalhd_hw *)hw)->LastPicNo = picYcomp;
+				}
+				crystalhd_dioq_add(((struct crystalhd_hw *)hw)->rx_freeq, r_pkt, false, r_pkt->pkt_tag);
+				r_pkt = NULL;
+			} else {
+				if((picYcomp - ((struct crystalhd_hw *)hw)->LastPicNo) > 1)
+					dev_info(dev, "MISSING %lu PICTURES\n", (picYcomp - ((struct crystalhd_hw *)hw)->LastPicNo));
+				((struct crystalhd_hw *)hw)->LastTwoPicNo = ((struct crystalhd_hw *)hw)->LastPicNo;
+				((struct crystalhd_hw *)hw)->LastPicNo = picYcomp;
+				return r_pkt;
+			}
 		} else if (rc == -EINTR) {
-			dev_info(dev, "%s: Cancelling fetch wait\n",
-			       __func__);
 			*sig_pend = 1;
-			return tmp;
+			return r_pkt;
 		}
 		spin_lock_irqsave(&ioq->lock, flags);
-		count--;
 	}
 	spin_unlock_irqrestore(&ioq->lock, flags);
-
-out:
-	return crystalhd_dioq_fetch(ioq);
+	return r_pkt;
 }
 
 /**

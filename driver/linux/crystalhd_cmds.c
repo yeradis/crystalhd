@@ -23,7 +23,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this driver.  If not, see <http://www.gnu.org/licenses/>.
  **********************************************************************/
-
 #include "crystalhd_cmds.h"
 #include "crystalhd_hw.h"
 #include "crystalhd_lnx.h"
@@ -104,6 +103,10 @@ static BC_STATUS bc_cproc_notify_mode(struct crystalhd_cmd *ctx,
 	}
 	ctx->cin_wait_exit = 0;
 	ctx->user[idata->u_id].mode = idata->udata.u.NotifyMode.Mode;
+	/* Create list pools */
+	rc = crystalhd_create_elem_pool(ctx->adp, BC_LINK_ELEM_POOL_SZ);
+	if (rc)
+		return BC_STS_ERROR;
 	/* Setup mmap pool for uaddr sgl mapping..*/
 	rc = crystalhd_create_dio_pool(ctx->adp, BC_LINK_MAX_SGLS);
 	if (rc)
@@ -668,10 +671,7 @@ static BC_STATUS bc_cproc_flush_cap_buffs(struct crystalhd_cmd *ctx,
 					  crystalhd_ioctl_data *idata)
 {
 	struct device *dev = chd_get_device();
-	crystalhd_dio_req *dio = NULL;
-	BC_STATUS sts = BC_STS_SUCCESS;
-	BC_DEC_OUT_BUFF *frame;
-	uint32_t count;
+	crystalhd_rx_dma_pkt *rpkt;
 
 	if (!ctx || !idata) {
 		dev_err(dev, "%s: Invalid Arg\n", __func__);
@@ -682,22 +682,25 @@ static BC_STATUS bc_cproc_flush_cap_buffs(struct crystalhd_cmd *ctx,
 		return BC_STS_ERR_USAGE;
 
 	/* We should ack flush even when we are in paused/suspend state */
-	if (!(ctx->state & BC_LINK_READY))
-		return crystalhd_hw_stop_capture(&ctx->hw_ctx);
+// 	if (!(ctx->state & BC_LINK_READY))
+// 		return crystalhd_hw_stop_capture(&ctx->hw_ctx);
 
-	ctx->state &= ~(BC_LINK_CAP_EN|BC_LINK_FMT_CHG);
-
-	frame = &idata->udata.u.DecOutData;
-	for (count = 0; count < BC_RX_LIST_CNT; count++) {
-
-		sts = crystalhd_hw_get_cap_buffer(&ctx->hw_ctx, &frame->PibInfo, &dio);
-		if (sts != BC_STS_SUCCESS)
-			break;
-
-		crystalhd_unmap_dio(ctx->adp, dio);
+	dev_info(dev, "number of rx success %u and failure %u\n", ctx->hw_ctx.stats.rx_success, ctx->hw_ctx.stats.rx_errors);
+	if(idata->udata.u.FlushRxCap.bDiscardOnly) {
+		// just flush without unmapping and then resume
+		crystalhd_hw_stop_capture(&ctx->hw_ctx, false);
+		while((rpkt = crystalhd_dioq_fetch(ctx->hw_ctx.rx_actq)) != NULL)
+			crystalhd_dioq_add(ctx->hw_ctx.rx_freeq, rpkt, false, rpkt->pkt_tag);
+		
+		while((rpkt = crystalhd_dioq_fetch(ctx->hw_ctx.rx_rdyq)) != NULL)
+			crystalhd_dioq_add(ctx->hw_ctx.rx_freeq, rpkt, false, rpkt->pkt_tag);
+		crystalhd_hw_start_capture(&ctx->hw_ctx);
+	} else {
+		ctx->state &= ~(BC_LINK_CAP_EN|BC_LINK_FMT_CHG);
+		crystalhd_hw_stop_capture(&ctx->hw_ctx, true);
 	}
 
-	return crystalhd_hw_stop_capture(&ctx->hw_ctx);
+	return BC_STS_SUCCESS;
 }
 
 static BC_STATUS bc_cproc_get_stats(struct crystalhd_cmd *ctx,
@@ -965,8 +968,11 @@ BC_STATUS crystalhd_user_close(struct crystalhd_cmd *ctx, struct crystalhd_user 
 	dev_info(dev, "Closing user[%x] handle\n", uc->uid);
 
 	if ((mode == DTS_DIAG_MODE) || (mode == DTS_PLAYBACK_MODE)) {
+		// Stop the HW Capture just in case flush did not get called before stop
+		crystalhd_hw_stop_capture(&ctx->hw_ctx, true);
 		crystalhd_hw_free_dma_rings(&ctx->hw_ctx);
 		crystalhd_destroy_dio_pool(ctx->adp);
+		crystalhd_delete_elem_pool(ctx->adp);
 	} else if (bc_cproc_get_user_count(ctx)) {
 		return BC_STS_SUCCESS;
 	}

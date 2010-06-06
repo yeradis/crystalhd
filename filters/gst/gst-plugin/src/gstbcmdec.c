@@ -57,32 +57,6 @@ GST_DEBUG_CATEGORY_STATIC (gst_bcmdec_debug);
 
 //#define FILE_DUMP__ 1
 
-static BC_STATUS bcmdec_send_buffer(GstBcmDec *bcmdec, guint8* pbuffer,
-				    guint32 size, guint32 offset,
-				    GstClockTime tCurrent, guint8 flags)
-{
-	BC_STATUS sts;
-
-	if (bcmdec->enable_spes) {
-		if (offset == 0) {
-			sts = decif_send_buffer(&bcmdec->decif, pbuffer, size, tCurrent, flags);
-			if (sts != BC_STS_SUCCESS)
-				GST_DEBUG_OBJECT(bcmdec, "decif_send_buffer -- failed...0");
-		} else {
-			sts = decif_send_buffer(&bcmdec->decif, pbuffer, offset, 0, flags);
-			if (sts != BC_STS_SUCCESS)
-				GST_DEBUG_OBJECT(bcmdec, "decif_send_buffer -- failed...1");
-			sts = decif_send_buffer(&bcmdec->decif, pbuffer + offset, size - offset, tCurrent, flags);
-			if (sts != BC_STS_SUCCESS)
-				GST_DEBUG_OBJECT(bcmdec, "decif_send_buffer -- failed...2");
-		}
-	} else {
-		sts = decif_send_buffer(&bcmdec->decif, pbuffer, size, 0, flags);
-	}
-
-	return sts;
-}
-
 static GstFlowReturn bcmdec_send_buff_detect_error(GstBcmDec *bcmdec, GstBuffer *buf,
 						   guint8* pbuffer, guint32 size,
 						   guint32 offset, GstClockTime tCurrent,
@@ -90,39 +64,41 @@ static GstFlowReturn bcmdec_send_buff_detect_error(GstBcmDec *bcmdec, GstBuffer 
 {
 	BC_STATUS sts, suspend_sts = BC_STS_SUCCESS;
 	gboolean suspended = FALSE;
+	uint32_t rll=0;
 
-	sts = bcmdec_send_buffer(bcmdec, pbuffer, size, offset, tCurrent, flags);
+	sts = decif_send_buffer(&bcmdec->decif, pbuffer, size, tCurrent, flags);
+	
 	if (sts != BC_STS_SUCCESS) {
 		GST_ERROR_OBJECT(bcmdec, "proc input failed sts = %d", sts);
 		GST_ERROR_OBJECT(bcmdec, "Chain: timeStamp = %llu size = %d data = %p",
 				 GST_BUFFER_TIMESTAMP(buf), GST_BUFFER_SIZE(buf),
 				 GST_BUFFER_DATA (buf));
 		if ((sts == BC_STS_IO_USER_ABORT) || (sts == BC_STS_ERROR)) {
-			suspend_sts = decif_get_drv_status(&bcmdec->decif,&suspended);
+			suspend_sts = decif_get_drv_status(&bcmdec->decif,&suspended, &rll);
 			if (suspend_sts == BC_STS_SUCCESS) {
 				if (suspended) {
-					GST_INFO_OBJECT(bcmdec, "suspend ststus recv");
+					GST_DEBUG_OBJECT(bcmdec, "suspend status recv");
 					if (!bcmdec->suspend_mode)  {
 						bcmdec_suspend_callback(bcmdec);
 						bcmdec->suspend_mode = TRUE;
-						GST_INFO_OBJECT(bcmdec, "suspend done", sts);
+						GST_DEBUG_OBJECT(bcmdec, "suspend done", sts);
 					}
 					if (bcmdec_resume_callback(bcmdec) == BC_STS_SUCCESS) {
-						GST_INFO_OBJECT(bcmdec, "resume done", sts);
+						GST_DEBUG_OBJECT(bcmdec, "resume done", sts);
 						bcmdec->suspend_mode = FALSE;
-						sts = bcmdec_send_buffer(bcmdec, pbuffer, size, offset, tCurrent, flags);
+						sts = decif_send_buffer(&bcmdec->decif, pbuffer, size, tCurrent, flags);
 						GST_ERROR_OBJECT(bcmdec, "proc input..2 sts = %d", sts);
 					} else {
-						GST_INFO_OBJECT(bcmdec, "resume failed", sts);
+						GST_DEBUG_OBJECT(bcmdec, "resume failed", sts);
 					}
 				}
 				else if (sts == BC_STS_ERROR) {
-					GST_INFO_OBJECT(bcmdec, "device is not suspended");
+					GST_DEBUG_OBJECT(bcmdec, "device is not suspended");
 					//gst_buffer_unref (buf);
 					return GST_FLOW_ERROR;
 				}
 			} else {
-				GST_INFO_OBJECT(bcmdec, "decif_get_drv_status -- failed %d", sts);
+				GST_DEBUG_OBJECT(bcmdec, "decif_get_drv_status -- failed %d", sts);
 			}
 		}
 	}
@@ -130,8 +106,6 @@ static GstFlowReturn bcmdec_send_buff_detect_error(GstBcmDec *bcmdec, GstBuffer 
 	return GST_FLOW_OK;
 }
 
-
-#ifdef WMV_FILE_HANDLING
 static const guint8 b_asf_vc1_frame_scode[4] = { 0x00, 0x00, 0x01, 0x0D };
 static const uint8_t b_asf_vc1_sm_frame_scode[4] = { 0x00, 0x00, 0x01, 0xE0 };
 static const uint8_t b_asf_vc1_sm_codein_scode[4] = { 0x5a, 0x5a, 0x5a, 0x5a };
@@ -195,7 +169,7 @@ static BC_STATUS parse_VC1SeqHdr(GstBcmDec *bcmdec, void *pBuffer, guint32 buff_
 		pdata += index;
 		if (((buff_sz - index) >= 4) && (*pdata == 0x00) && (*(pdata + 1) == 0x00) &&
 		    (*(pdata + 2) == 0x01) && (*(pdata + 3) == 0x0f)) {
-			GST_INFO_OBJECT(bcmdec, "VC1 Seqeucne Header Found for AdvProfile");
+			GST_DEBUG_OBJECT(bcmdec, "VC1 Seqeucne Header Found for AdvProfile");
 			bcmdec->adv_profile = TRUE;
 			seq_hdr_sz = buff_sz - index + 1;
 
@@ -208,15 +182,15 @@ static BC_STATUS parse_VC1SeqHdr(GstBcmDec *bcmdec, void *pBuffer, guint32 buff_
 	}
 
 	if (bcmdec->adv_profile) {
-		GST_INFO_OBJECT(bcmdec, "Setting Input format to Adv Profile");
-		bcmdec->input_format = BC_VID_ALGO_VC1;
+		GST_DEBUG_OBJECT(bcmdec, "Setting Input format to Adv Profile");
+		bcmdec->input_format = BC_MSUBTYPE_VC1;
 	} else {
 
-		GST_INFO_OBJECT(bcmdec, "Parsing VC-1 SI/MA Seq Header [Sz:%x]\n", buff_sz);
+		GST_DEBUG_OBJECT(bcmdec, "Parsing VC-1 SI/MA Seq Header [Sz:%x]\n", buff_sz);
 		bcmdec->vc1_seq_header_sz = buff_sz;
 		memcpy(bcmdec->vc1_advp_seq_header, pBuffer, bcmdec->vc1_seq_header_sz);
 
-		bcmdec->input_format = BC_VID_ALGO_VC1MP;
+		bcmdec->input_format = BC_MSUBTYPE_WMV3;
 		bcmdec->proc_in_flags |= 0x02;
 		guint32 dwSH = swap32(*(guint32 *)(pBuffer));
 		bcmdec->bRangered    = 0x00000080 & dwSH;
@@ -737,7 +711,7 @@ static guint32 process_VC1_Input_data(GstBcmDec *bcmdec, GstBuffer *buf,
 	if ((pBuffer[0] == 0x00) && (pBuffer[1] == 0x00) && (pBuffer[2] == 0x01) &&
 		  ((pBuffer[3] == 0x0F) || (pBuffer[3] == 0x0D) || (pBuffer[3] == 0xE0))) {
 		/* Just Send The Buffer TO Hardware Here */
-		GST_INFO_OBJECT(bcmdec, "Found Start Codes in the Stream..!ADD CODE TO SEND BUFF!");
+		GST_DEBUG_OBJECT(bcmdec, "Found Start Codes in the Stream..!ADD CODE TO SEND BUFF!");
 		return 1;
 	}
 
@@ -809,8 +783,6 @@ static guint32 process_VC1_Input_data(GstBcmDec *bcmdec, GstBuffer *buf,
 	return used_buff_sz;
 }
 
-#endif /* WMV_FILE_HANDLING */
-
 /* bcmdec signals and args */
 enum {
 	/* FILL ME */
@@ -860,7 +832,7 @@ static void gst_bcmdec_base_init(gpointer gclass)
 
 	element_details.klass = (gchar *)"Codec/Decoder/Video";
 	element_details.longname = (gchar *)"Generic Video Decoder";
-	element_details.description = (gchar *)"Decodes various Video Formats using BCM97010";
+	element_details.description = (gchar *)"Decodes various Video Formats using CrystalHD Decoders";
 	element_details.author = (gchar *)"BRCM";
 
 	GstElementClass *element_class = GST_ELEMENT_CLASS(gclass);
@@ -899,12 +871,11 @@ static void gst_bcmdec_class_init(GstBcmDecClass *klass)
  */
 static void gst_bcmdec_init(GstBcmDec *bcmdec, GstBcmDecClass *gclass)
 {
-	/*GstElementClass *klass = GST_ELEMENT_GET_CLASS(bcmdec); */
 	pid_t pid;
 	BC_STATUS sts = BC_STS_SUCCESS;
 	int shmid = 0;
 
-	GST_INFO_OBJECT(bcmdec, "gst_bcmdec_init");
+	GST_DEBUG_OBJECT(bcmdec, "gst_bcmdec_init");
 
 	bcmdec_reset(bcmdec);
 
@@ -913,14 +884,12 @@ static void gst_bcmdec_init(GstBcmDec *bcmdec, GstBcmDecClass *gclass)
 	gst_pad_set_event_function(bcmdec->sinkpad, GST_DEBUG_FUNCPTR(gst_bcmdec_sink_event));
 
 	gst_pad_set_setcaps_function(bcmdec->sinkpad, GST_DEBUG_FUNCPTR(gst_bcmdec_sink_set_caps));
-	/* FIXME: jarod: is this needed for newer gstreamer? */
-	//gst_pad_set_getcaps_function(bcmdec->sinkpad, GST_DEBUG_FUNCPTR(gst_pad_proxy_getcaps));
+	gst_pad_set_getcaps_function(bcmdec->sinkpad, GST_DEBUG_FUNCPTR(gst_bcmdec_getcaps));
 	gst_pad_set_chain_function(bcmdec->sinkpad, GST_DEBUG_FUNCPTR(gst_bcmdec_chain));
 
 	bcmdec->srcpad = gst_pad_new_from_static_template (&src_factory, "src");
 
-	/* FIXME: jarod: is this needed for newer gstreamer? */
-	//gst_pad_set_getcaps_function(bcmdec->srcpad, GST_DEBUG_FUNCPTR(gst_pad_proxy_getcaps));
+	gst_pad_set_getcaps_function(bcmdec->srcpad, GST_DEBUG_FUNCPTR(gst_bcmdec_getcaps));
 
 	gst_pad_set_event_function(bcmdec->srcpad, GST_DEBUG_FUNCPTR(gst_bcmdec_src_event));
 
@@ -929,13 +898,13 @@ static void gst_bcmdec_init(GstBcmDec *bcmdec, GstBcmDecClass *gclass)
 
 	gst_element_add_pad(GST_ELEMENT(bcmdec), bcmdec->sinkpad);
 	gst_element_add_pad(GST_ELEMENT(bcmdec), bcmdec->srcpad);
-	bcmdec->silent = TRUE;
+	bcmdec->silent = FALSE;
 	pid = getpid();
-	GST_INFO_OBJECT(bcmdec, "gst_bcmdec_init _-- PID = %x",pid);
+	GST_DEBUG_OBJECT(bcmdec, "gst_bcmdec_init _-- PID = %x",pid);
 
 	sts = bcmdec_create_shmem(bcmdec, &shmid);
 
-	GST_INFO_OBJECT(bcmdec, "bcmdec_create_shmem _-- Sts = %x",sts);
+	GST_DEBUG_OBJECT(bcmdec, "bcmdec_create_shmem _-- Sts = %x",sts);
 }
 
 /* plugin close function*/
@@ -945,7 +914,7 @@ static void gst_bcmdec_finalize(GObject *object)
 
 	bcmdec_del_shmem(bcmdec);
 	/*gst_bcmdec_cleanup(bcmdec);*/
-	GST_INFO_OBJECT(bcmdec, "gst_bcmdec_finalize");
+	GST_DEBUG_OBJECT(bcmdec, "gst_bcmdec_finalize");
 	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
 
@@ -957,7 +926,7 @@ static void gst_bcmdec_set_property(GObject *object, guint prop_id,
 	switch (prop_id) {
 	case PROP_SILENT:
 		bcmdec->silent = g_value_get_boolean (value);
-		GST_INFO_OBJECT(bcmdec, "gst_bcmdec_set_property PROP_SILENT");
+		GST_DEBUG_OBJECT(bcmdec, "gst_bcmdec_set_property PROP_SILENT");
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -965,7 +934,7 @@ static void gst_bcmdec_set_property(GObject *object, guint prop_id,
 	}
 
 	if (!bcmdec->silent)
-		GST_INFO_OBJECT(bcmdec, "gst_bcmdec_set_property");
+		GST_DEBUG_OBJECT(bcmdec, "gst_bcmdec_set_property");
 }
 
 static void gst_bcmdec_get_property(GObject *object, guint prop_id,
@@ -976,7 +945,7 @@ static void gst_bcmdec_get_property(GObject *object, guint prop_id,
 	switch (prop_id) {
 	case PROP_SILENT:
 		g_value_set_boolean (value, bcmdec->silent);
-		GST_INFO_OBJECT(bcmdec, "gst_bcmdec_get_property PROP_SILENT");
+		GST_DEBUG_OBJECT(bcmdec, "gst_bcmdec_get_property PROP_SILENT");
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -984,7 +953,7 @@ static void gst_bcmdec_get_property(GObject *object, guint prop_id,
 	}
 
 	if (!bcmdec->silent)
-		GST_INFO_OBJECT(bcmdec, "gst_bcmdec_get_property");
+		GST_DEBUG_OBJECT(bcmdec, "gst_bcmdec_get_property");
 }
 
 /* GstElement vmethod implementations */
@@ -1008,7 +977,7 @@ static gboolean gst_bcmdec_sink_event(GstPad* pad, GstEvent* event)
 		bcmdec->cur_stream_time = 0;
 
 		if (!bcmdec->silent)
-			GST_INFO_OBJECT(bcmdec, "new segment");
+			GST_DEBUG_OBJECT(bcmdec, "new segment");
 
 		bcmdec->avcc_params.inside_buffer = TRUE;
 		bcmdec->avcc_params.consumed_offset = 0;
@@ -1022,16 +991,11 @@ static gboolean gst_bcmdec_sink_event(GstPad* pad, GstEvent* event)
 		bcmdec->last_output_spes_time = 0;
 		bcmdec->last_spes_time = 0;
 
-#if 0
-		bcmdec->gst_clock = gst_element_get_clock((GstElement *)bcmdec);
-		if (bcmdec->gst_clock)
-			GST_INFO_OBJECT(bcmdec, "clock available %p",bcmdec->gst_clock);
-#endif
 		result = gst_pad_push_event(bcmdec->srcpad, event);
 		break;
 
 	case GST_EVENT_FLUSH_START:
-		GST_INFO_OBJECT(bcmdec, "Flush Start");
+		GST_DEBUG_OBJECT(bcmdec, "Flush Start");
 
 #if 0
 		pthread_mutex_lock(&bcmdec->fn_lock);
@@ -1045,7 +1009,7 @@ static gboolean gst_bcmdec_sink_event(GstPad* pad, GstEvent* event)
 
 	case GST_EVENT_FLUSH_STOP:
 		if (!bcmdec->silent)
-			GST_INFO_OBJECT(bcmdec, "Flush Stop");
+			GST_DEBUG_OBJECT(bcmdec, "Flush Stop");
 		//if (!g_inst_sts->waiting)
 		//	bcmdec_process_flush_stop(bcmdec);
 		bcmdec_process_flush_stop(bcmdec);
@@ -1054,23 +1018,34 @@ static gboolean gst_bcmdec_sink_event(GstPad* pad, GstEvent* event)
 
 	case GST_EVENT_EOS:
 		if (!bcmdec->silent)
-			GST_INFO_OBJECT(bcmdec, "EOS on sink pad");
+			GST_DEBUG_OBJECT(bcmdec, "EOS on sink pad");
 		sts = decif_flush_dec(&bcmdec->decif, 0);
-		GST_INFO_OBJECT(bcmdec, "dec_flush ret = %d", sts);
+		GST_DEBUG_OBJECT(bcmdec, "dec_flush ret = %d", sts);
 		bcmdec->ev_eos = event;
 		gst_event_ref(bcmdec->ev_eos);
 		break;
 
 	default:
 		result = gst_pad_push_event(bcmdec->srcpad, event);
-		GST_INFO_OBJECT(bcmdec, "unhandled event on sink pad");
+		GST_DEBUG_OBJECT(bcmdec, "unhandled event on sink pad");
 		break;
 	}
 
 	gst_object_unref(bcmdec);
 	if (!bcmdec->silent)
-		GST_INFO_OBJECT(bcmdec, "gst_bcmdec_sink_event");
+		GST_DEBUG_OBJECT(bcmdec, "gst_bcmdec_sink_event");
 	return result;
+}
+
+static GstCaps *gst_bcmdec_getcaps (GstPad * pad)
+{
+	GstBcmDec *bcmdec;
+  	GstCaps *caps;
+	bcmdec = GST_BCMDEC(gst_pad_get_parent(pad));
+
+	caps = gst_caps_copy (gst_pad_get_pad_template_caps (pad));
+
+	return caps;
 }
 
 /* this function handles the link with other elements */
@@ -1085,8 +1060,10 @@ static gboolean gst_bcmdec_sink_set_caps(GstPad *pad, GstCaps *caps)
 	guint den = 0;
 	const GValue *g_value;
 
+	GST_DEBUG_OBJECT (pad, "setcaps called");
+
 	intersection = gst_caps_intersect(gst_pad_get_pad_template_caps(pad), caps);
-	GST_INFO_OBJECT(bcmdec, "Intersection return %", GST_PTR_FORMAT, intersection);
+	GST_DEBUG_OBJECT(bcmdec, "Intersection return %", GST_PTR_FORMAT, intersection);
 	if (gst_caps_is_empty(intersection)) {
 		GST_ERROR_OBJECT(bcmdec, "setscaps:caps empty");
 		gst_object_unref(bcmdec);
@@ -1096,38 +1073,33 @@ static gboolean gst_bcmdec_sink_set_caps(GstPad *pad, GstCaps *caps)
 	structure = gst_caps_get_structure(caps, 0);
 	mime = gst_structure_get_name(structure);
 	if (!strcmp("video/x-h264", mime)) {
-		bcmdec->input_format = BC_VID_ALGO_H264;
-		GST_INFO_OBJECT(bcmdec, "InFmt H.264");
+		bcmdec->input_format = BC_MSUBTYPE_AVC1; // GStreamer uses the bit-stream format so have to add start codes
+		// We might override this later down below if the codec_data indicates otherwise
+		// So don't print codec type yet GST_DEBUG_OBJECT(bcmdec, "InFmt H.264");
 	} else if (!strcmp("video/mpeg", mime)) {
 		int version = 0;
 		gst_structure_get_int(structure, "mpegversion", &version);
 		if (version == 2) {
-			bcmdec->input_format = BC_VID_ALGO_MPEG2;
-			GST_INFO_OBJECT(bcmdec, "InFmt MPEG2");
+			bcmdec->input_format = BC_MSUBTYPE_MPEG1VIDEO;
+			GST_DEBUG_OBJECT(bcmdec, "InFmt MPEG2");
 		} else {
 			gst_object_unref(bcmdec);
 			return FALSE;
 		}
 	} else if (!strcmp("video/x-vc1", mime)) {
-		bcmdec->input_format = BC_VID_ALGO_VC1;
-		GST_INFO_OBJECT(bcmdec, "InFmt VC1");
-#ifdef WMV_FILE_HANDLING
+		bcmdec->input_format = BC_MSUBTYPE_VC1;
+		GST_DEBUG_OBJECT(bcmdec, "InFmt VC1");
 	} else if (!strcmp("video/x-wmv", mime)) {
-		GST_INFO_OBJECT(bcmdec, "Detected WMV File %s", mime);
+		GST_DEBUG_OBJECT(bcmdec, "Detected WMV File %s", mime);
 		if (BC_STS_SUCCESS != connect_wmv_file(bcmdec,structure)) {
-			GST_INFO_OBJECT(bcmdec, "WMV Connection Failure");
+			GST_DEBUG_OBJECT(bcmdec, "WMV Connection Failure");
 			gst_object_unref(bcmdec);
 			return FALSE;
 		}
-#endif
 	} else {
-		GST_INFO_OBJECT(bcmdec, "unknown mime %s", mime);
+		GST_DEBUG_OBJECT(bcmdec, "unknown mime %s", mime);
 		gst_object_unref(bcmdec);
 		return FALSE;
-	}
-	if (bcmdec->play_pending) {
-		bcmdec->play_pending = FALSE;
-		bcmdec_process_play(bcmdec);
 	}
 
 	g_value = gst_structure_get_value(structure, "framerate");
@@ -1139,7 +1111,7 @@ static gboolean gst_bcmdec_sink_set_caps(GstPad *pad, GstCaps *caps)
 		GST_LOG_OBJECT(bcmdec, "demux frame rate = %f ", bcmdec->input_framerate);
 
 	} else {
-		GST_INFO_OBJECT(bcmdec, "no demux framerate_value");
+		GST_DEBUG_OBJECT(bcmdec, "no demux framerate_value");
 	}
 
 	g_value = gst_structure_get_value(structure, "format");
@@ -1147,7 +1119,7 @@ static gboolean gst_bcmdec_sink_set_caps(GstPad *pad, GstCaps *caps)
 		guint32 fourcc;
 		//g_return_if_fail(G_VALUE_TYPE(g_value) == GST_TYPE_LIST);
 		fourcc = gst_value_get_fourcc(gst_value_list_get_value (g_value, 0));
-		GST_INFO_OBJECT(bcmdec, "fourcc = %d", fourcc);
+		GST_DEBUG_OBJECT(bcmdec, "fourcc = %d", fourcc);
 	}
 
 	g_value = gst_structure_get_value(structure, "pixel-aspect-ratio");
@@ -1159,45 +1131,78 @@ static gboolean gst_bcmdec_sink_set_caps(GstPad *pad, GstCaps *caps)
 		if (bcmdec->input_par_x > 5 * bcmdec->input_par_y) {
 			bcmdec->input_par_x = 1;
 			bcmdec->input_par_y = 1;
-			GST_INFO_OBJECT(bcmdec, "demux par reset");
+			GST_DEBUG_OBJECT(bcmdec, "demux par reset");
 		}
 
 	} else {
 		GST_DEBUG_OBJECT (bcmdec, "no par from demux");
 	}
 
-	g_value = gst_structure_get_value(structure, "codec_data");
-	if (g_value != NULL) {
+	// Determine if this is bitstream video (AVC1 or no start codes) or Byte stream video (H264)
+	if ((g_value = gst_structure_get_value (structure, "codec_data"))) {
 		if (G_VALUE_TYPE(g_value) == GST_TYPE_BUFFER) {
 			GstBuffer *buffer;
 			guint8 *data;
 			guint size;
 
+			GST_DEBUG_OBJECT (bcmdec, "Don't have start codes'");
+			if (!strcmp("video/x-h264", mime)) {
+				bcmdec->input_format = BC_MSUBTYPE_AVC1;
+				GST_DEBUG_OBJECT(bcmdec, "InFmt H.264 (AVC1)");;
+			}
+
 			buffer = gst_value_get_buffer(g_value);
 			data = GST_BUFFER_DATA(buffer);
 			size = GST_BUFFER_SIZE(buffer);
 
-			GST_INFO_OBJECT(bcmdec, "codec_data size = %d", size);
+			GST_DEBUG_OBJECT(bcmdec, "codec_data size = %d", size);
+
+			/* parse the avcC data */
+			if (size < 7) {
+				GST_ERROR_OBJECT(bcmdec, "avcC size %u < 7", size);
+				goto avcc_error;
+			}
+			/* parse the version, this must be 1 */
+			if (data[0] != 1)
+				goto wrong_version;
 
 			if (bcmdec->avcc_params.sps_pps_buf == NULL)
 				bcmdec->avcc_params.sps_pps_buf = (guint8 *)malloc(SPS_PPS_SIZE);
 			if (bcmdec_insert_sps_pps(bcmdec, buffer) != BC_STS_SUCCESS) {
 				bcmdec->avcc_params.pps_size = 0;
-			} else if (bcmdec->dest_buf == NULL) {
-				bcmdec->dest_buf = (guint8 *)malloc(ALIGN_BUF_SIZE);
-				if (bcmdec->dest_buf == NULL) {
-					GST_ERROR_OBJECT(bcmdec, "dest_buf malloc failed");
-					return FALSE;
-				}
 			}
 		}
 	} else {
-		GST_INFO_OBJECT(bcmdec, "failed to get codec_data");
+		GST_DEBUG_OBJECT (bcmdec, "Have start codes'");
+		if (!strcmp("video/x-h264", mime)) {
+			bcmdec->input_format = BC_MSUBTYPE_H264;
+			GST_DEBUG_OBJECT(bcmdec, "InFmt H.264 (H264)");;
+		}
+		bcmdec->avcc_params.nal_size_bytes = 4; // 4 sync bytes used
+	}
+
+    if (bcmdec->play_pending) {
+		bcmdec->play_pending = FALSE;
+		bcmdec_process_play(bcmdec);
 	}
 
 	gst_object_unref(bcmdec);
 
 	return TRUE;
+
+	/* ERRORS */
+avcc_error:
+	{
+		gst_object_unref(bcmdec);
+		return FALSE;
+	}
+
+wrong_version:
+	{
+		GST_ERROR_OBJECT(bcmdec, "wrong avcC version");
+		gst_object_unref(bcmdec);
+		return FALSE;
+	}
 }
 
 void bcmdec_msleep(gint msec)
@@ -1217,15 +1222,13 @@ void bcmdec_msleep(gint msec)
 static GstFlowReturn gst_bcmdec_chain(GstPad *pad, GstBuffer *buf)
 {
 	GstBcmDec *bcmdec;
-	BC_STATUS sts = BC_STS_SUCCESS;
+//	BC_STATUS sts = BC_STS_SUCCESS;
 	guint32 buf_sz = 0;
 	guint32 offset = 0;
 	GstClockTime tCurrent = 0;
 	guint8 *pbuffer;
 	guint32 size = 0;
-#ifdef WMV_FILE_HANDLING
 	guint32 vc1_buff_sz = 0;
-#endif
 
 
 #ifdef FILE_DUMP__
@@ -1239,28 +1242,17 @@ static GstFlowReturn gst_bcmdec_chain(GstPad *pad, GstBuffer *buf)
 #endif
 
 	if (bcmdec->flushing) {
-		GST_INFO_OBJECT(bcmdec, "input while flushing");
+		GST_DEBUG_OBJECT(bcmdec, "input while flushing");
 		gst_buffer_unref(buf);
 		return GST_FLOW_OK;
 	}
 
-#if 0
-	if (buf) {
-		GST_INFO_OBJECT(bcmdec, "Chain: timeStamp = %llu size = %d data = %p",
-			   GST_BUFFER_TIMESTAMP(buf), GST_BUFFER_SIZE(buf),
-			   GST_BUFFER_DATA (buf));
-		printf("buf sz = %d\n",GST_BUFFER_SIZE(buf));
-	}
-#endif
-
 	if (GST_CLOCK_TIME_NONE != GST_BUFFER_TIMESTAMP(buf)) {
 		if (bcmdec->base_time == 0) {
 			bcmdec->base_time = GST_BUFFER_TIMESTAMP(buf);
-			GST_INFO_OBJECT(bcmdec, "base time is set to %llu", bcmdec->base_time / 1000000);
+			GST_DEBUG_OBJECT(bcmdec, "base time is set to %llu", bcmdec->base_time / 1000000);
 		}
 		tCurrent = GST_BUFFER_TIMESTAMP(buf);
-		//printf("intime %llu\n", GST_BUFFER_TIMESTAMP(buf) / 1000000);
-
 	}
 	buf_sz = GST_BUFFER_SIZE(buf);
 
@@ -1268,12 +1260,11 @@ static GstFlowReturn gst_bcmdec_chain(GstPad *pad, GstBuffer *buf)
 		bcmdec->play_pending = FALSE;
 		bcmdec_process_play(bcmdec);
 	} else if (!bcmdec->streaming) {
-		GST_INFO_OBJECT(bcmdec, "input while streaming is false");
+		GST_DEBUG_OBJECT(bcmdec, "input while streaming is false");
 		gst_buffer_unref(buf);
 		return GST_FLOW_OK;
 	}
 
-#ifdef WMV_FILE_HANDLING
 	if (bcmdec->wmv_file) {
 		vc1_buff_sz = process_VC1_Input_data(bcmdec, buf, tCurrent);
 		gst_buffer_unref(buf);
@@ -1284,44 +1275,10 @@ static GstFlowReturn gst_bcmdec_chain(GstPad *pad, GstBuffer *buf)
 			return GST_FLOW_OK;
 		}
 	}
-#endif
 
-	if (bcmdec->avcc_params.pps_size && bcmdec->insert_pps) {
-		sts = decif_send_buffer(&bcmdec->decif, bcmdec->avcc_params.sps_pps_buf,
-					bcmdec->avcc_params.pps_size, 0, bcmdec->proc_in_flags);
-#ifdef FILE_DUMP__
-		bytes_written = fwrite(bcmdec->avcc_params.sps_pps_buf, sizeof(unsigned char),
-				       bcmdec->avcc_params.pps_size, bcmdec->fhnd);
-#endif
-		bcmdec->insert_pps = FALSE;
-		bcmdec->insert_start_code = TRUE;
-	}
-	if (bcmdec->insert_start_code) {
-		sts = bcmdec_insert_startcode(bcmdec, buf, bcmdec->dest_buf, &size);
-		if (sts != BC_STS_SUCCESS) {
-			GST_ERROR_OBJECT(bcmdec, "startcode insertion failed sts = %d\n", sts);
-			bcmdec->avcc_params.inside_buffer = TRUE;
-			bcmdec->avcc_params.consumed_offset = 0;
-			bcmdec->avcc_params.strtcode_offset = 0;
-			bcmdec->avcc_params.nal_sz = 0;
-		}
-	}
-	if (bcmdec->dest_buf && bcmdec->avcc_params.nal_size_bytes == 2) {
-		pbuffer = bcmdec->dest_buf;
-	} else {
-		pbuffer = GST_BUFFER_DATA (buf);
-		size = GST_BUFFER_SIZE(buf);
-	}
+	pbuffer = GST_BUFFER_DATA (buf);
+	size = GST_BUFFER_SIZE(buf);
 
-	if (bcmdec->enable_spes) {
-		/* FIXME: jarod: um... do nothing if true? odd... */
-		if (parse_find_strt_code(&bcmdec->parse, bcmdec->input_format, pbuffer, size, &offset)) {
-
-		} else {
-			offset = 0;
-			tCurrent = 0;
-		}
-	}
 	if (GST_FLOW_OK != bcmdec_send_buff_detect_error(bcmdec, buf, pbuffer, size, offset, tCurrent, bcmdec->proc_in_flags)) {
 		gst_buffer_unref(buf);
 		return GST_FLOW_ERROR;
@@ -1362,7 +1319,7 @@ static gboolean bcmdec_negotiate_format(GstBcmDec *bcmdec)
 #else
 	fourcc = GST_STR_FOURCC("YUY2");
 #endif
-	GST_INFO_OBJECT(bcmdec, "framerate = %f", bcmdec->output_params.framerate);
+	GST_DEBUG_OBJECT(bcmdec, "framerate = %f", bcmdec->output_params.framerate);
 
 	caps = gst_caps_new_simple("video/x-raw-yuv",
 				   "format", GST_TYPE_FOURCC, fourcc,
@@ -1373,14 +1330,14 @@ static gboolean bcmdec_negotiate_format(GstBcmDec *bcmdec)
 				   "framerate", GST_TYPE_FRACTION, num, den, NULL);
 
 	result = gst_pad_set_caps(bcmdec->srcpad, caps);
-	GST_INFO_OBJECT(bcmdec, "gst_bcmdec_negotiate_format %d", result);
+	GST_DEBUG_OBJECT(bcmdec, "gst_bcmdec_negotiate_format %d", result);
 
 	if (bcmdec->output_params.clr_space == MODE422_YUY2) {
 		bcmdec->output_params.y_size = bcmdec->output_params.width * bcmdec->output_params.height * BUF_MULT;
 		if (bcmdec->interlace)
 			bcmdec->output_params.y_size /= 2;
 		bcmdec->output_params.uv_size = 0;
-		GST_INFO_OBJECT(bcmdec, "YUY2 set on caps");
+		GST_DEBUG_OBJECT(bcmdec, "YUY2 set on caps");
 	} else if (bcmdec->output_params.clr_space == MODE420) {
 		bcmdec->output_params.y_size = bcmdec->output_params.width * bcmdec->output_params.height;
 		bcmdec->output_params.uv_size = bcmdec->output_params.width * bcmdec->output_params.height / 2;
@@ -1390,7 +1347,7 @@ static gboolean bcmdec_negotiate_format(GstBcmDec *bcmdec)
 			bcmdec->output_params.uv_size = bcmdec->output_params.y_size / 2;
 		}
 #endif
-		GST_INFO_OBJECT(bcmdec, "420 set on caps");
+		GST_DEBUG_OBJECT(bcmdec, "420 set on caps");
 	}
 
 	s1 = gst_caps_get_structure(caps, 0);
@@ -1399,18 +1356,18 @@ static gboolean bcmdec_negotiate_format(GstBcmDec *bcmdec)
 	if (framerate_value != NULL) {
 		num = gst_value_get_fraction_numerator(framerate_value);
 		den = gst_value_get_fraction_denominator(framerate_value);
-		GST_INFO_OBJECT(bcmdec, "framerate = %f rate_num %d rate_den %d", bcmdec->output_params.framerate, num, den);
+		GST_DEBUG_OBJECT(bcmdec, "framerate = %f rate_num %d rate_den %d", bcmdec->output_params.framerate, num, den);
 	} else {
-		GST_INFO_OBJECT(bcmdec, "failed to get framerate_value");
+		GST_DEBUG_OBJECT(bcmdec, "failed to get framerate_value");
 	}
 
 	framerate_value = gst_structure_get_value (s1, "pixel-aspect-ratio");
 	if (framerate_value) {
 		num = gst_value_get_fraction_numerator(framerate_value);
 		den = gst_value_get_fraction_denominator(framerate_value);
-		GST_INFO_OBJECT(bcmdec, "pixel-aspect-ratio_x = %d y %d ", num, den);
+		GST_DEBUG_OBJECT(bcmdec, "pixel-aspect-ratio_x = %d y %d ", num, den);
 	} else {
-		GST_INFO_OBJECT(bcmdec, "failed to get par");
+		GST_DEBUG_OBJECT(bcmdec, "failed to get par");
 	}
 
 	gst_caps_unref(caps);
@@ -1422,20 +1379,59 @@ static gboolean bcmdec_process_play(GstBcmDec *bcmdec)
 {
 	BC_STATUS sts = BC_STS_SUCCESS;
 
-	sts = decif_prepare_play(&bcmdec->decif,bcmdec->input_format);
+	BC_INPUT_FORMAT bcInputFormat;
+
+	GST_DEBUG_OBJECT(bcmdec, "Starting Process Play");
+
+	bcInputFormat.OptFlags = 0; // NAREN - FIXME - Should we enable BD mode and max frame rate mode for LINK?
+	bcInputFormat.FGTEnable = FALSE;
+	bcInputFormat.MetaDataEnable = FALSE;
+	bcInputFormat.Progressive =  !(bcmdec->interlace);
+	bcInputFormat.mSubtype= bcmdec->input_format;
+
+	//Use Demux Image Size for VC-1 Simple/Main
+	if(bcInputFormat.mSubtype == BC_MSUBTYPE_WMV3)
+	{
+		//VC-1 Simple/Main
+		bcInputFormat.width = bcmdec->frame_width;
+		bcInputFormat.height = bcmdec->frame_height;
+	}
+	else
+	{
+		bcInputFormat.width = bcmdec->output_params.width;
+		bcInputFormat.height = bcmdec->output_params.height;
+	}
+
+	bcInputFormat.startCodeSz = bcmdec->avcc_params.nal_size_bytes;
+	bcInputFormat.pMetaData = bcmdec->avcc_params.sps_pps_buf;
+	bcInputFormat.metaDataSz = bcmdec->avcc_params.pps_size;
+	bcInputFormat.OptFlags = 0x80000000 | vdecFrameRate23_97;
+
+	sts = decif_setinputformat(&bcmdec->decif, bcInputFormat);
 	if (sts == BC_STS_SUCCESS) {
-		GST_INFO_OBJECT(bcmdec, "prepare play success");
+		GST_DEBUG_OBJECT(bcmdec, "set input format success");
+	} else {
+		GST_ERROR_OBJECT(bcmdec, "set input format failed");
+		bcmdec->streaming = FALSE;
+		return FALSE;
+	}
+
+	sts = decif_prepare_play(&bcmdec->decif);
+	if (sts == BC_STS_SUCCESS) {
+		GST_DEBUG_OBJECT(bcmdec, "prepare play success");
 	} else {
 		GST_ERROR_OBJECT(bcmdec, "prepare play failed");
 		bcmdec->streaming = FALSE;
 		return FALSE;
 	}
 
-	decif_set422_mode(&bcmdec->decif, BUF_MODE);
+	GST_DEBUG_OBJECT(bcmdec, "Setting color space %d", BUF_MODE);
+
+	decif_setcolorspace(&bcmdec->decif, BUF_MODE);
 
 	sts = decif_start_play(&bcmdec->decif);
 	if (sts == BC_STS_SUCCESS) {
-		GST_INFO_OBJECT(bcmdec, "start play success");
+		GST_DEBUG_OBJECT(bcmdec, "start play success");
 		bcmdec->streaming = TRUE;
 	} else {
 		GST_ERROR_OBJECT(bcmdec, "start play failed");
@@ -1466,7 +1462,7 @@ static GstStateChangeReturn gst_bcmdec_change_state(GstElement *element, GstStat
 		if (bcmdec_mul_inst_cor(bcmdec)) {
 			sts = decif_open(&bcmdec->decif);
 			if (sts == BC_STS_SUCCESS) {
-				GST_INFO_OBJECT(bcmdec, "dev open success");
+				GST_DEBUG_OBJECT(bcmdec, "dev open success");
 				printf("OPEN success\n");
 				parse_init(&bcmdec->parse);
 			} else {
@@ -1496,10 +1492,10 @@ static GstStateChangeReturn gst_bcmdec_change_state(GstElement *element, GstStat
 
 	case GST_STATE_CHANGE_READY_TO_PAUSED:
 		bcmdec->play_pending = TRUE;
-		GST_INFO_OBJECT(bcmdec, "GST_STATE_CHANGE_READY_TO_PAUSED");
+		GST_DEBUG_OBJECT(bcmdec, "GST_STATE_CHANGE_READY_TO_PAUSED");
 		break;
 	case GST_STATE_CHANGE_PAUSED_TO_PLAYING:
-		GST_INFO_OBJECT(bcmdec, "GST_STATE_CHANGE_PAUSED_TO_PLAYING");
+		GST_DEBUG_OBJECT(bcmdec, "GST_STATE_CHANGE_PAUSED_TO_PLAYING");
 		bcmdec->gst_clock = gst_element_get_clock(element);
 		if (bcmdec->gst_clock) {
 			//printf("clock available %p\n",bcmdec->gst_clock);
@@ -1511,7 +1507,7 @@ static GstStateChangeReturn gst_bcmdec_change_state(GstElement *element, GstStat
 		break;
 
 	case GST_STATE_CHANGE_PAUSED_TO_READY:
-		GST_INFO_OBJECT(bcmdec, "GST_STATE_CHANGE_PAUSED_TO_READY");
+		GST_DEBUG_OBJECT(bcmdec, "GST_STATE_CHANGE_PAUSED_TO_READY");
 		bcmdec->streaming = FALSE;
 		sts = decif_flush_dec(&bcmdec->decif, 2);
 		if (sts != BC_STS_SUCCESS)
@@ -1519,7 +1515,7 @@ static GstStateChangeReturn gst_bcmdec_change_state(GstElement *element, GstStat
 		break;
 
 	default:
-		GST_INFO_OBJECT(bcmdec, "default %d", transition);
+		GST_DEBUG_OBJECT(bcmdec, "default %d", transition);
 		break;
 	}
 	result = GST_ELEMENT_CLASS(parent_class)->change_state(element, transition);
@@ -1535,10 +1531,10 @@ static GstStateChangeReturn gst_bcmdec_change_state(GstElement *element, GstStat
 			sts = decif_stop(&bcmdec->decif);
 			if (sts == BC_STS_SUCCESS) {
 				if (!bcmdec->silent)
-					GST_INFO_OBJECT(bcmdec, "stop play success");
+					GST_DEBUG_OBJECT(bcmdec, "stop play success");
 				g_inst_sts->cur_decode = UNKNOWN;
 				g_inst_sts->rendered_frames = 0;
-				GST_INFO_OBJECT(bcmdec, "cur_dec set to UNKNOWN");
+				GST_DEBUG_OBJECT(bcmdec, "cur_dec set to UNKNOWN");
 
 			} else {
 				GST_ERROR_OBJECT(bcmdec, "stop play failed %d", sts);
@@ -1547,19 +1543,19 @@ static GstStateChangeReturn gst_bcmdec_change_state(GstElement *element, GstStat
 		break;
 
 	case GST_STATE_CHANGE_READY_TO_NULL:
-		GST_INFO_OBJECT(bcmdec, "GST_STATE_CHANGE_READY_TO_NULL");
+		GST_DEBUG_OBJECT(bcmdec, "GST_STATE_CHANGE_READY_TO_NULL");
 		sts = gst_bcmdec_cleanup(bcmdec);
 		if (sts == BC_STS_SUCCESS)
-			GST_INFO_OBJECT(bcmdec, "dev close success");
+			GST_DEBUG_OBJECT(bcmdec, "dev close success");
 		else
 			GST_ERROR_OBJECT(bcmdec, "dev close failed %d", sts);
 		break;
 	case GST_STATE_CHANGE_PLAYING_TO_PAUSED:
-		GST_INFO_OBJECT(bcmdec, "GST_STATE_CHANGE_PLAYING_TO_PAUSED");
+		GST_DEBUG_OBJECT(bcmdec, "GST_STATE_CHANGE_PLAYING_TO_PAUSED");
 		break;
 
 	default:
-		GST_INFO_OBJECT(bcmdec, "default %d", transition);
+		GST_DEBUG_OBJECT(bcmdec, "default %d", transition);
 		break;
 	}
 
@@ -1584,6 +1580,7 @@ clock_t bcm_get_tick_count()
 static gboolean bcmdec_get_buffer(GstBcmDec *bcmdec, GstBuffer **obuf)
 {
 	GstFlowReturn ret;
+	GST_DEBUG_OBJECT(bcmdec, "gst_pad_alloc_buffer_and_set_caps ");
 
 	ret = gst_pad_alloc_buffer_and_set_caps(bcmdec->srcpad,
 						GST_BUFFER_OFFSET_NONE,
@@ -1595,7 +1592,7 @@ static gboolean bcmdec_get_buffer(GstBcmDec *bcmdec, GstBuffer **obuf)
 	}
 
 	if (((uintptr_t)GST_BUFFER_DATA(*obuf)) % 4)
-		GST_INFO_OBJECT(bcmdec, "buf is not aligned");
+		GST_DEBUG_OBJECT(bcmdec, "buf is not aligned");
 
 	return TRUE;
 }
@@ -1658,28 +1655,28 @@ static void bcmdec_set_framerate(GstBcmDec * bcmdec,guint32 resolution)
 
 	switch (resolution) {
 	case vdecRESOLUTION_480p0:
-		GST_INFO_OBJECT(bcmdec, "host frame rate 480p0");
+		GST_DEBUG_OBJECT(bcmdec, "host frame rate 480p0");
 		framerate = bcmdec->input_framerate ? bcmdec->input_framerate : 60;
 		break;
 	case vdecRESOLUTION_576p0:
-		GST_INFO_OBJECT(bcmdec, "host frame rate 576p0");
+		GST_DEBUG_OBJECT(bcmdec, "host frame rate 576p0");
 		framerate = bcmdec->input_framerate ? bcmdec->input_framerate : 25;
 		break;
 	case vdecRESOLUTION_720p0:
-		GST_INFO_OBJECT(bcmdec, "host frame rate 720p0");
+		GST_DEBUG_OBJECT(bcmdec, "host frame rate 720p0");
 		framerate = bcmdec->input_framerate ? bcmdec->input_framerate : 60;
 		break;
 	case vdecRESOLUTION_1080p0:
-		GST_INFO_OBJECT(bcmdec, "host frame rate 1080p0");
+		GST_DEBUG_OBJECT(bcmdec, "host frame rate 1080p0");
 		framerate = bcmdec->input_framerate ? bcmdec->input_framerate : 23.976;
 		break;
 	case vdecRESOLUTION_480i0:
-		GST_INFO_OBJECT(bcmdec, "host frame rate 480i0");
+		GST_DEBUG_OBJECT(bcmdec, "host frame rate 480i0");
 		framerate = bcmdec->input_framerate ? bcmdec->input_framerate : 59.94;
 		bcmdec->interlace = TRUE;
 		break;
 	case vdecRESOLUTION_1080i0:
-		GST_INFO_OBJECT(bcmdec, "host frame rate 1080i0");
+		GST_DEBUG_OBJECT(bcmdec, "host frame rate 1080i0");
 		framerate = bcmdec->input_framerate ? bcmdec->input_framerate : 59.94;
 		bcmdec->interlace = TRUE;
 		break;
@@ -1753,7 +1750,7 @@ static void bcmdec_set_framerate(GstBcmDec * bcmdec,guint32 resolution)
 		framerate = 25;
 		break;
 	default:
-		GST_INFO_OBJECT(bcmdec, "default frame rate %d",resolution);
+		GST_DEBUG_OBJECT(bcmdec, "default frame rate %d",resolution);
 		framerate = 23.976;
 		break;
 	}
@@ -1763,7 +1760,7 @@ static void bcmdec_set_framerate(GstBcmDec * bcmdec,guint32 resolution)
 	if (bcmdec->interlace)
 		bcmdec->output_params.framerate /= 2;
 
-	GST_INFO_OBJECT(bcmdec, "resolution = %x  interlace = %d", resolution, bcmdec->interlace);
+	GST_DEBUG_OBJECT(bcmdec, "resolution = %x  interlace = %d", resolution, bcmdec->interlace);
 
 	return;
 }
@@ -1862,6 +1859,7 @@ static void bcmdec_set_aspect_ratio(GstBcmDec *bcmdec, BC_PIC_INFO_BLOCK *pic_in
 
 static gboolean bcmdec_format_change(GstBcmDec *bcmdec, BC_PIC_INFO_BLOCK *pic_info)
 {
+	GST_DEBUG_OBJECT(bcmdec, "Got format Change to %dx%d", pic_info->width, pic_info->height);
 	gboolean result = FALSE;
 	bcmdec_set_framerate(bcmdec, pic_info->frame_rate);
 	if (pic_info->height == 1088)
@@ -1875,7 +1873,7 @@ static gboolean bcmdec_format_change(GstBcmDec *bcmdec, BC_PIC_INFO_BLOCK *pic_i
 	result = bcmdec_negotiate_format(bcmdec);
 	if (!bcmdec->silent) {
 		if (result)
-			GST_INFO_OBJECT(bcmdec, "negotiate_format success");
+			GST_DEBUG_OBJECT(bcmdec, "negotiate_format success");
 		else
 			GST_ERROR_OBJECT(bcmdec, "negotiate_format failed");
 	}
@@ -1893,7 +1891,7 @@ static int bcmdec_wait_for_event(GstBcmDec *bcmdec)
 
 			ret = sem_trywait(event_list[i]);
 			if (ret == 0) {
-				GST_INFO_OBJECT(bcmdec, "event wait over in Rx thread ret = %d",i);
+				GST_DEBUG_OBJECT(bcmdec, "event wait over in Rx thread ret = %d",i);
 				return i;
 			} else if (errno == EINTR) {
 				break;
@@ -1917,7 +1915,7 @@ static void bcmdec_flush_gstbuf_queue(GstBcmDec *bcmdec)
 				bcmdec_put_que_mem_buf(bcmdec,gst_queue_element);
 			}
 		} else {
-			GST_INFO_OBJECT(bcmdec, "no gst_queue_element");
+			GST_DEBUG_OBJECT(bcmdec, "no gst_queue_element");
 		}
 	} while (gst_queue_element && gst_queue_element->gstbuf);
 }
@@ -1934,13 +1932,13 @@ static void * bcmdec_process_push(void *ctx)
 	ts.tv_nsec = 30 * 1000000;
 
 	if (!bcmdec->silent)
-		GST_INFO_OBJECT(bcmdec, "process push starting ");
+		GST_DEBUG_OBJECT(bcmdec, "process push starting ");
 
 	while (1) {
 
 		if (!bcmdec->recv_thread && !bcmdec->streaming) {
 			if (!bcmdec->silent)
-				GST_INFO_OBJECT(bcmdec, "process push exiting..");
+				GST_DEBUG_OBJECT(bcmdec, "process push exiting..");
 			break;
 		}
 
@@ -1951,7 +1949,7 @@ static void * bcmdec_process_push(void *ctx)
 			else if (errno == EINTR)
 				break;
 		} else {
-			GST_INFO_OBJECT(bcmdec, "push_start wait over");
+			GST_DEBUG_OBJECT(bcmdec, "push_start wait over");
 			done = FALSE;
 		}
 
@@ -1968,11 +1966,11 @@ static void * bcmdec_process_push(void *ctx)
 						continue;
 					} else {
 						done = TRUE;
-						GST_INFO_OBJECT(bcmdec, "TOB ");
+						GST_DEBUG_OBJECT(bcmdec, "TOB ");
 						break;
 					}
 				case EINTR:
-					GST_INFO_OBJECT(bcmdec, "Sig interrupt ");
+					GST_DEBUG_OBJECT(bcmdec, "Sig interrupt ");
 					done = TRUE;
 					break;
 
@@ -1983,21 +1981,21 @@ static void * bcmdec_process_push(void *ctx)
 				}
 			}
 			if (ret == 0) {
+				GST_DEBUG_OBJECT(bcmdec, "Starting to PUSH ");
 				gst_queue_element = bcmdec_rem_buf(bcmdec);
 				if (gst_queue_element) {
 					if (gst_queue_element->gstbuf) {
+						GST_DEBUG_OBJECT(bcmdec, "Trying to PUSH ");
 						result = gst_pad_push(bcmdec->srcpad, gst_queue_element->gstbuf);
 						if (result != GST_FLOW_OK) {
-							GST_INFO_OBJECT(bcmdec, "exiting, failed to push sts = %d", result);
+							GST_DEBUG_OBJECT(bcmdec, "exiting, failed to push sts = %d", result);
 							gst_buffer_unref(gst_queue_element->gstbuf);
 							done = TRUE;
 						} else {
-							if (g_inst_sts->rendered_frames < 5) {// || bcmdec->paused == TRUE
-								GST_INFO_OBJECT(bcmdec, "PUSHED, Qcnt:%d, Rcnt:%d", bcmdec->gst_que_cnt, bcmdec->gst_rbuf_que_cnt);
-							}
+							GST_DEBUG_OBJECT(bcmdec, "PUSHED, Qcnt:%d, Rcnt:%d", bcmdec->gst_que_cnt, bcmdec->gst_padbuf_que_cnt);
 							if ((g_inst_sts->rendered_frames++ > THUMBNAIL_FRAMES) && (g_inst_sts->cur_decode != PLAYBACK)) {
 								g_inst_sts->cur_decode = PLAYBACK;
-								GST_INFO_OBJECT(bcmdec, "cur_dec set to PLAYBACK");
+								GST_DEBUG_OBJECT(bcmdec, "cur_dec set to PLAYBACK");
 							}
 						}
 					} else {
@@ -2006,22 +2004,13 @@ static void * bcmdec_process_push(void *ctx)
 						gst_event_unref(bcmdec->ev_eos);
 						done = TRUE;
 						bcmdec->streaming = FALSE;
-						GST_INFO_OBJECT(bcmdec, "eos sent, cnt:%d", bcmdec->gst_que_cnt);
+						GST_DEBUG_OBJECT(bcmdec, "eos sent, cnt:%d", bcmdec->gst_que_cnt);
 					}
 					bcmdec_put_que_mem_buf(bcmdec, gst_queue_element);
-					//if ((bcmdec->gst_que_cnt < RESUME_THRESHOLD) && (bcmdec->paused )) {
-					if ((bcmdec->paused ) && (bcmdec->gst_que_cnt < RESUME_THRESHOLD) && (bcmdec->gst_rbuf_que_cnt > GST_RENDERER_BUF_NORMAL_THRESHOLD)) {
-						decif_pause(&bcmdec->decif, FALSE);
-						//if (!bcmdec->silent) {
-							//GST_INFO_OBJECT(bcmdec, "resumed %d", bcmdec->gst_que_cnt);
-							GST_INFO_OBJECT(bcmdec, "resumed by push thread que_cnt:%d, rbuf_que_cnt:%d", bcmdec->gst_que_cnt, bcmdec->gst_rbuf_que_cnt);
-						//}
-						bcmdec->paused = FALSE;
-					}
 				}
 			}
 			if (bcmdec->flushing && bcmdec->push_exit) {
-				GST_INFO_OBJECT(bcmdec, "push -flush exit");
+				GST_DEBUG_OBJECT(bcmdec, "push -flush exit");
 				break;
 			}
 		}
@@ -2043,7 +2032,7 @@ static void * bcmdec_process_output(void *ctx)
 	BC_STATUS sts = BC_STS_SUCCESS;
 	GstBcmDec *bcmdec = (GstBcmDec *)ctx;
 	GstBuffer *gstbuf = NULL;
-	gboolean rx_flush = FALSE;
+	gboolean rx_flush = FALSE, bEOS = FALSE;
 	const guint first_picture = 3;
 	guint32 pic_number = 0;
 	GstClockTime clock_time = 0;
@@ -2051,84 +2040,100 @@ static void * bcmdec_process_output(void *ctx)
 	GstClockTime cur_stream_time_diff = 0;
 	int wait_cnt = 0;
 
-	GSTBUF_LIST *gst_rqueue_element = NULL;
+	gboolean is_paused = FALSE;
+	
+	GSTBUF_LIST *gst_queue_element = NULL;
 
 	if (!bcmdec->silent)
-		GST_INFO_OBJECT(bcmdec, "Rx thread started");
+		GST_DEBUG_OBJECT(bcmdec, "Rx thread started");
 
 	while (1) {
 		if (1 == bcmdec_wait_for_event(bcmdec)) {
 			if (!bcmdec->silent)
-				GST_INFO_OBJECT(bcmdec, "quit event set, exit");
+				GST_DEBUG_OBJECT(bcmdec, "quit event set, exit");
 			break;
 		}
 
-		GST_INFO_OBJECT(bcmdec, "wait over streaming = %d", bcmdec->streaming);
+		GST_DEBUG_OBJECT(bcmdec, "wait over streaming = %d", bcmdec->streaming);
 		while (bcmdec->streaming && !bcmdec->last_picture_set) {
+			// NAREN FIXME - This is HARDCODED right now till we get HW PAUSE and RESUME working from the driver
+			uint32_t rll;
+			gboolean tmp;
+			decif_get_drv_status(&(bcmdec->decif), &tmp, &rll);
+			if(rll >= 12 && !is_paused) {
+				GST_DEBUG_OBJECT(bcmdec, "HW PAUSE with RLL %u", rll);
+				decif_pause(&(bcmdec->decif), TRUE);
+				is_paused = TRUE;
+			}
+			else if (rll < 12 && is_paused) {
+				GST_DEBUG_OBJECT(bcmdec, "HW RESUME with RLL %u", rll);
+				decif_pause(&(bcmdec->decif), false);
+				is_paused = FALSE;
+			}
+			
 			guint8* data_ptr;
-
 			if (gstbuf == NULL) {
 				if (!bcmdec->rbuf_thread_running) {
 					if (!bcmdec_get_buffer(bcmdec, &gstbuf)) {
 						usleep(30 * 1000);
 						continue;
 					}
+					GST_DEBUG_OBJECT(bcmdec, "got default buffer, going to proc output");
 				} else {
-					if (gst_rqueue_element) {
-						if (gst_rqueue_element->gstbuf)
-							gst_buffer_unref(gst_rqueue_element->gstbuf);
-						bcmdec_put_que_mem_rbuf(bcmdec, gst_rqueue_element);
-						gst_rqueue_element = NULL;
+					if (gst_queue_element) {
+						if (gst_queue_element->gstbuf)
+							gst_buffer_unref(gst_queue_element->gstbuf);
+						bcmdec_put_que_mem_buf(bcmdec, gst_queue_element);
+						gst_queue_element = NULL;
 					}
 
-					gst_rqueue_element = bcmdec_rem_rbuf(bcmdec);
-					if (!gst_rqueue_element) {
-						GST_INFO_OBJECT(bcmdec, "rbuf queue empty");
-						usleep(30 * 1000);
+					gst_queue_element = bcmdec_rem_padbuf(bcmdec);
+					if (!gst_queue_element) {
+						GST_DEBUG_OBJECT(bcmdec, "rbuf queue empty");
+						usleep(10 * 1000);
 						continue;
 					}
 
-					gstbuf = gst_rqueue_element->gstbuf;
+					gstbuf = gst_queue_element->gstbuf;
 					if (!gstbuf) {
-						bcmdec_put_que_mem_rbuf(bcmdec, gst_rqueue_element);
-						gst_rqueue_element = NULL;
-						usleep(30 * 1000);
+						bcmdec_put_que_mem_buf(bcmdec, gst_queue_element);
+						gst_queue_element = NULL;
+						usleep(10 * 1000);
 						continue;
 					}
+					GST_DEBUG_OBJECT(bcmdec, "got rbuf, going to proc output");
 				}
 			}
+			else
+				GST_DEBUG_OBJECT(bcmdec, "re-using rbuf, going to proc output");
 
 			data_ptr = GST_BUFFER_DATA(gstbuf);
-			//GST_INFO_OBJECT(bcmdec, "process_output data_ptr:0x%0x", data_ptr);
 
 			bcmdec_init_procout(bcmdec, &pout, data_ptr);
 			rx_flush = TRUE;
 			pout.PicInfo.picture_number = 0;
 			sts = DtsProcOutput(bcmdec->decif.hdev, PROC_TIMEOUT,&pout);
-
+			GST_DEBUG_OBJECT(bcmdec, "procoutput status %d", sts);
 			switch (sts) {
 			case BC_STS_FMT_CHANGE:
 				if (!bcmdec->silent)
-					GST_INFO_OBJECT(bcmdec, "procout ret FMT");
+					GST_DEBUG_OBJECT(bcmdec, "procout ret FMT");
 				if ((pout.PoutFlags & BC_POUT_FLAGS_PIB_VALID) &&
 				    (pout.PoutFlags & BC_POUT_FLAGS_FMT_CHANGE)) {
 					if (bcmdec_format_change(bcmdec, &pout.PicInfo)) {
-						GST_INFO_OBJECT(bcmdec, "format chnage success");
+						GST_DEBUG_OBJECT(bcmdec, "format change success");
 						bcmdec->frame_time = (GstClockTime)(UNITS / bcmdec->output_params.framerate);
 						bcmdec->last_spes_time  = 0;
 						bcmdec->prev_clock_time = 0;
 						cur_stream_time_diff    = 0;
 						first_frame_after_seek  = TRUE;
 					} else {
-						GST_INFO_OBJECT(bcmdec, "format chnage failed");
+						GST_DEBUG_OBJECT(bcmdec, "format change failed");
 					}
 				}
 				gst_buffer_unref(gstbuf);
 				gstbuf = NULL;
 				bcmdec->sec_field = FALSE;
-
-				decif_pause(&bcmdec->decif, TRUE);
-				bcmdec->paused = TRUE;
 
 				if (sem_post(&bcmdec->rbuf_start_event) == -1)
 					GST_ERROR_OBJECT(bcmdec, "rbuf sem_post failed");
@@ -2139,43 +2144,46 @@ static void * bcmdec_process_output(void *ctx)
 					usleep(1000);
 					wait_cnt++;
 				}
-				GST_INFO_OBJECT(bcmdec, "format chnage start wait_cnt:%d", wait_cnt);
+				GST_DEBUG_OBJECT(bcmdec, "format change wait for rbuf thread start wait_cnt:%d", wait_cnt);
 
 				break;
 			case BC_STS_SUCCESS:
 				if (!(pout.PoutFlags & BC_POUT_FLAGS_PIB_VALID)) {
 					if (!bcmdec->silent)
-						GST_INFO_OBJECT(bcmdec, "procout ret PIB miss %d", pout.PicInfo.picture_number - 3);
+						GST_DEBUG_OBJECT(bcmdec, "procout ret PIB miss %d", pout.PicInfo.picture_number - 3);
 					continue;
 				}
 
 				pic_number = pout.PicInfo.picture_number - first_picture;
 
+				if (!bcmdec->silent)
+					GST_DEBUG_OBJECT(bcmdec, "pic_number is %u", pic_number);
+				
 				if (bcmdec->flushing) {
-					GST_INFO_OBJECT(bcmdec, "flushing discard, pic = %d",pout.PicInfo.picture_number - 3);
+					GST_DEBUG_OBJECT(bcmdec, "flushing discard, pic = %d", pic_number);
 					continue;
 				}
 				if (bcmdec->prev_pic + 1 < pic_number) {
 					if (!bcmdec->silent)
-						GST_INFO_OBJECT(bcmdec, "pic_no = %d, prev = %d", pic_number, bcmdec->prev_pic);
+						GST_DEBUG_OBJECT(bcmdec, "LOST PICTURE pic_no = %d, prev = %d", pic_number, bcmdec->prev_pic);
 				}
-				//printf("pic_no = %d\n", pout.PicInfo.picture_number - 3);
-				if ((bcmdec->prev_pic == pic_number) && (bcmdec->ses_nbr  == pout.PicInfo.sess_num) && !bcmdec->interlace) {
-					if (!bcmdec->silent)
-						GST_INFO_OBJECT(bcmdec, "rp");
 
-					//printf("rp ses_nbr = %d, pic = %d\n",pout.PicInfo.sess_num,pout.PicInfo.picture_number - 3);
+/*				if ((bcmdec->prev_pic == pic_number) && (bcmdec->ses_nbr  == pout.PicInfo.sess_num) && !bcmdec->interlace) {
+					if (!bcmdec->silent)
+						GST_DEBUG_OBJECT(bcmdec, "rp");
+
 					if (!(pout.PicInfo.flags &  VDEC_FLAG_LAST_PICTURE))
 						continue;
-				}
+				}*/
+				
 				if (bcmdec->ses_nbr  == pout.PicInfo.sess_num) {
 					if (bcmdec->ses_change) {
-						GST_INFO_OBJECT(bcmdec, "discard old ses nbr picture , old = %d new = %d pic = %d",
+						GST_DEBUG_OBJECT(bcmdec, "discard old ses nbr picture , old = %d new = %d pic = %d",
 								bcmdec->ses_nbr, pout.PicInfo.sess_num, pic_number);
 						continue;
 					}
 				} else {
-					GST_INFO_OBJECT(bcmdec, "session changed old ses nbr picture , old = %d new = %d pic = %d",
+					GST_DEBUG_OBJECT(bcmdec, "session changed old ses nbr picture , old = %d new = %d pic = %d",
 							bcmdec->ses_nbr, pout.PicInfo.sess_num, pic_number);
 					bcmdec->ses_nbr = pout.PicInfo.sess_num;
 					bcmdec->ses_change = FALSE;
@@ -2184,7 +2192,6 @@ static void * bcmdec_process_output(void *ctx)
 
 				if (!bcmdec->interlace || bcmdec->sec_field) {
 					GST_BUFFER_OFFSET(gstbuf) = 0;
-
 					GST_BUFFER_TIMESTAMP(gstbuf) = bcmdec_get_time_stamp(bcmdec, pic_number, pout.PicInfo.timeStamp);
 					GST_BUFFER_DURATION(gstbuf)  = bcmdec->frame_time;
 					if (bcmdec->gst_clock) {
@@ -2199,8 +2206,6 @@ static void * bcmdec_process_output(void *ctx)
 						cur_stream_time_diff += clock_time - bcmdec->prev_clock_time;
 						bcmdec->cur_stream_time = cur_stream_time_diff + bcmdec->base_clock_time;
 						bcmdec->prev_clock_time = clock_time;
-						//printf("spes ts = %lld  clo = %lld  sttime = %lld picno = %d\n",pout.PicInfo.timeStamp/1000000,clock_time/1000000,
-							//  bcmdec->cur_stream_time/1000000,pic_number );
 						if ((bcmdec->last_spes_time < bcmdec->cur_stream_time) &&
 						    (!bcmdec->catchup_on) && (pout.PicInfo.timeStamp)) {
 							bcmdec->catchup_on = TRUE;
@@ -2215,69 +2220,61 @@ static void * bcmdec_process_output(void *ctx)
 				GST_BUFFER_SIZE(gstbuf) = bcmdec->output_params.width * bcmdec->output_params.height * BUF_MULT;
 
 				if (!bcmdec->interlace || bcmdec->sec_field) {
-					GSTBUF_LIST *gst_queue_element = bcmdec_get_que_mem_buf(bcmdec);
 					if (gst_queue_element) {
 						gst_queue_element->gstbuf = gstbuf;
 						bcmdec_ins_buf(bcmdec, gst_queue_element);
 						bcmdec->prev_pic = pic_number;
-
-						if (gst_rqueue_element) {
-							gst_rqueue_element->gstbuf = NULL;
-							bcmdec_put_que_mem_rbuf(bcmdec, gst_rqueue_element);
-							gst_rqueue_element = NULL;
-						}
-
 					} else {
-						GST_ERROR_OBJECT(bcmdec, "mem pool is full");//pending error recovery
-					}
-					if ((bcmdec->gst_que_cnt > PAUSE_THRESHOLD || bcmdec->gst_rbuf_que_cnt < GST_RENDERER_BUF_LOW_THRESHOLD ) &&
-					    !(bcmdec->paused) && !bcmdec->flushing) {
-						decif_pause(&bcmdec->decif, TRUE);
-						bcmdec->paused = TRUE;
-						//if (!bcmdec->silent)
-							GST_DEBUG_OBJECT(bcmdec, "paused frame_que:%d, rbuf_que:%d",
-									 bcmdec->gst_que_cnt, bcmdec->gst_rbuf_que_cnt);
+						GST_ERROR_OBJECT(bcmdec, "This CANNOT HAPPEN");//pending error recovery
 					}
 					gstbuf = NULL;
 					bcmdec->sec_field = FALSE;
-		    			if (!(bcmdec->prev_pic % 100))
+		    		if (!(bcmdec->prev_pic % 100))
 						GST_DEBUG_OBJECT(bcmdec, ".");
 				} else {
 					bcmdec->sec_field = TRUE;
 				}
-				if (pout.PicInfo.flags & VDEC_FLAG_LAST_PICTURE) {
-					GSTBUF_LIST *gst_queue_element = bcmdec_get_que_mem_buf(bcmdec);
-					if (gst_queue_element) {
-						gst_queue_element->gstbuf = NULL;
-						bcmdec_ins_buf(bcmdec, gst_queue_element);
-					} else {
-						GST_INFO_OBJECT(bcmdec, "queue elemnt get failed");
-					}
-					GST_INFO_OBJECT(bcmdec, "last picture set ");
-					bcmdec->last_picture_set = TRUE;
-				}
+				gst_queue_element = NULL;
 				break;
 
 			case BC_STS_TIMEOUT:
-				GST_INFO_OBJECT(bcmdec, "procout timeout QCnt:%d, RCnt:%d, Paused:%d",
-						bcmdec->gst_que_cnt, bcmdec->gst_rbuf_que_cnt, bcmdec->paused);
-				continue;
+				GST_DEBUG_OBJECT(bcmdec, "procout timeout QCnt:%d, RCnt:%d, Paused:%d",
+						bcmdec->gst_que_cnt, bcmdec->gst_padbuf_que_cnt, bcmdec->paused);
 				break;
 			case BC_STS_IO_XFR_ERROR:
-				GST_INFO_OBJECT(bcmdec, "procout xfer error");
-				continue;
+				GST_DEBUG_OBJECT(bcmdec, "procout xfer error");
 				break;
 			case BC_STS_IO_USER_ABORT:
 			case BC_STS_IO_ERROR:
 				bcmdec->streaming = FALSE;
-				GST_INFO_OBJECT(bcmdec, "ABORT sts = %d", sts);
+				GST_DEBUG_OBJECT(bcmdec, "ABORT sts = %d", sts);
 				if (gstbuf) {
 					gst_buffer_unref(gstbuf);
 					gstbuf = NULL;
 				}
 				break;
+			case BC_STS_NO_DATA:
+				GST_DEBUG_OBJECT(bcmdec, "procout no data");
+				// Check for EOS
+				decif_get_eos(&bcmdec->decif, &bEOS);
+				if (bEOS) {
+					if (gstbuf) {
+						gst_buffer_unref(gstbuf);
+						gstbuf = NULL;
+					}
+					if (gst_queue_element) {
+						gst_queue_element->gstbuf = NULL;
+						bcmdec_ins_buf(bcmdec, gst_queue_element);
+						gst_queue_element = NULL;
+					} else {
+						GST_DEBUG_OBJECT(bcmdec, "queue element failed");
+					}
+					GST_DEBUG_OBJECT(bcmdec, "last picture set ");
+					bcmdec->last_picture_set = TRUE;
+				}
+				break;
 			default:
-				GST_INFO_OBJECT(bcmdec, "unhandled status from Procout sts %d",sts);
+				GST_DEBUG_OBJECT(bcmdec, "unhandled status from Procout sts %d",sts);
 				if (gstbuf) {
 					gst_buffer_unref(gstbuf);
 					gstbuf = NULL;
@@ -2289,16 +2286,16 @@ static void * bcmdec_process_output(void *ctx)
 			gst_buffer_unref(gstbuf);
 			gstbuf = NULL;
 		}
-		if (gst_rqueue_element) {
-			bcmdec_put_que_mem_rbuf(bcmdec, gst_rqueue_element);
-			gst_rqueue_element = NULL;
+		if (gst_queue_element) {
+			bcmdec_put_que_mem_buf(bcmdec, gst_queue_element);
+			gst_queue_element = NULL;
 		}
 		if (rx_flush) {
 			if (!bcmdec->flushing) {
-				GST_INFO_OBJECT(bcmdec, "DtsFlushRxCapture called");
+				GST_DEBUG_OBJECT(bcmdec, "DtsFlushRxCapture called");
 				sts = decif_flush_rxbuf(&bcmdec->decif, FALSE);
 				if (sts != BC_STS_SUCCESS)
-					GST_INFO_OBJECT(bcmdec, "DtsFlushRxCapture failed");
+					GST_DEBUG_OBJECT(bcmdec, "DtsFlushRxCapture failed");
 			}
 			rx_flush = FALSE;
 			if (bcmdec->flushing) {
@@ -2307,7 +2304,7 @@ static void * bcmdec_process_output(void *ctx)
 			}
 		}
 	}
-	GST_INFO_OBJECT(bcmdec, "Rx thread exiting ..");
+	GST_DEBUG_OBJECT(bcmdec, "Rx thread exiting ..");
 	pthread_exit((void*)&sts);
 }
 
@@ -2326,7 +2323,7 @@ static gboolean bcmdec_start_push_thread(GstBcmDec *bcmdec)
 		GST_ERROR_OBJECT(bcmdec, "Failed to create PushThread");
 		result = FALSE;
 	} else {
-		GST_INFO_OBJECT(bcmdec, "Success to create PushThread");
+		GST_DEBUG_OBJECT(bcmdec, "Success to create PushThread");
 	}
 
 	ret = sem_init(&bcmdec->buf_event, 0, 0);
@@ -2386,7 +2383,7 @@ static gboolean bcmdec_start_recv_thread(GstBcmDec *bcmdec)
 		GST_ERROR_OBJECT(bcmdec, "Failed to create RxThread");
 		result = FALSE;
 	} else {
-		GST_INFO_OBJECT(bcmdec, "Success to create RxThread");
+		GST_DEBUG_OBJECT(bcmdec, "Success to create RxThread");
 	}
 
 	return result;
@@ -2409,6 +2406,8 @@ static GstClockTime bcmdec_get_time_stamp(GstBcmDec *bcmdec, guint32 pic_no, Gst
 			bcmdec->spes_frame_cnt++;
 			bcmdec->last_output_spes_time = bcmdec->last_spes_time = time_stamp;
 		} else {
+			if (bcmdec->frame_time > 0)
+				frame_time = bcmdec->frame_time;
 			bcmdec->last_spes_time += frame_time;
 			time_stamp = bcmdec->last_spes_time;
 			bcmdec->spes_frame_cnt++;
@@ -2424,15 +2423,12 @@ static GstClockTime bcmdec_get_time_stamp(GstBcmDec *bcmdec, guint32 pic_no, Gst
 			time_stamp += bcmdec->rpt_pic_cnt * frame_time;
 		}
 	}
-	//printf("output ts %llu  picn = %d  rp_cnt = %d\n",time_stamp/1000000,pic_no,bcmdec->rpt_pic_cnt);
 
 	return time_stamp;
 }
 
 static void bcmdec_process_flush_stop(GstBcmDec *bcmdec)
 {
-	BC_STATUS sts = BC_STS_SUCCESS;
-
 	bcmdec->ses_change  = TRUE;
 	bcmdec->base_time   = 0;
 	bcmdec->flushing    = FALSE;
@@ -2441,12 +2437,7 @@ static void bcmdec_process_flush_stop(GstBcmDec *bcmdec)
 
 	if (sem_post(&bcmdec->play_event) == -1)
 		GST_ERROR_OBJECT(bcmdec, "sem_post failed");
-	sts = decif_pause(&bcmdec->decif, FALSE);
-#if 0
-	/* FIXME: jarod: why check if not actually doing anything? */
-	if (sts != BC_STS_SUCCESS) {
-	}
-#endif
+
 	bcmdec->push_exit = FALSE;
 
 	if (sem_post(&bcmdec->push_start_event) == -1)
@@ -2470,10 +2461,10 @@ static void bcmdec_process_flush_start(GstBcmDec *bcmdec)
 	if (ret < 0) {
 		switch (errno) {
 		case ETIMEDOUT:
-			GST_INFO_OBJECT(bcmdec, "recv_stop_event sig timed out ");
+			GST_DEBUG_OBJECT(bcmdec, "recv_stop_event sig timed out ");
 			break;
 		case EINTR:
-			GST_INFO_OBJECT(bcmdec, "Sig interrupt ");
+			GST_DEBUG_OBJECT(bcmdec, "Sig interrupt ");
 			break;
 		default:
 			GST_ERROR_OBJECT(bcmdec, "sem wait failed %d ",errno);
@@ -2483,21 +2474,14 @@ static void bcmdec_process_flush_start(GstBcmDec *bcmdec)
 
 	bcmdec->push_exit = TRUE;
 
-	sts = decif_pause(&bcmdec->decif, TRUE);
-#if 0
-	/* FIXME: jarod: why check if not actually doing anything? */
-	if (sts != BC_STS_SUCCESS) {
-	}
-#endif
-
 	ret = sem_timedwait(&bcmdec->push_stop_event, &ts);
 	if (ret < 0) {
 		switch (errno) {
 		case ETIMEDOUT:
-			GST_INFO_OBJECT(bcmdec, "push_stop_event sig timed out ");
+			GST_DEBUG_OBJECT(bcmdec, "push_stop_event sig timed out ");
 			break;
 		case EINTR:
-			GST_INFO_OBJECT(bcmdec, "Sig interrupt ");
+			GST_DEBUG_OBJECT(bcmdec, "Sig interrupt ");
 			break;
 		default:
 			GST_ERROR_OBJECT(bcmdec, "sem wait failed %d ",errno);
@@ -2514,38 +2498,38 @@ static BC_STATUS gst_bcmdec_cleanup(GstBcmDec *bcmdec)
 	BC_STATUS sts = BC_STS_SUCCESS;
 	int ret = 1;
 
-	GST_INFO_OBJECT(bcmdec, "gst_bcmdec_cleanup - enter");
+	GST_DEBUG_OBJECT(bcmdec, "gst_bcmdec_cleanup - enter");
 	bcmdec->streaming = FALSE;
 
 	if (bcmdec->get_rbuf_thread) {
-		GST_INFO_OBJECT(bcmdec, "gst_bcmdec_cleanup - post quit_event");
+		GST_DEBUG_OBJECT(bcmdec, "gst_bcmdec_cleanup - post quit_event");
 		if (sem_post(&bcmdec->rbuf_stop_event) == -1)
 			GST_ERROR_OBJECT(bcmdec, "sem_post failed");
-		GST_INFO_OBJECT(bcmdec, "waiting for get_rbuf_thread exit");
+		GST_DEBUG_OBJECT(bcmdec, "waiting for get_rbuf_thread exit");
 		ret = pthread_join(bcmdec->get_rbuf_thread, NULL);
-		GST_INFO_OBJECT(bcmdec, "get_rbuf_thread exit - %d errno = %d", ret, errno);
+		GST_DEBUG_OBJECT(bcmdec, "get_rbuf_thread exit - %d errno = %d", ret, errno);
 		bcmdec->get_rbuf_thread = 0;
 	}
 
 	if (bcmdec->recv_thread) {
-		GST_INFO_OBJECT(bcmdec, "gst_bcmdec_cleanup - post quit_event");
+		GST_DEBUG_OBJECT(bcmdec, "gst_bcmdec_cleanup - post quit_event");
 		if (sem_post(&bcmdec->quit_event) == -1)
 			GST_ERROR_OBJECT(bcmdec, "sem_post failed");
-		GST_INFO_OBJECT(bcmdec, "waiting for rec_thread exit");
+		GST_DEBUG_OBJECT(bcmdec, "waiting for rec_thread exit");
 		ret = pthread_join(bcmdec->recv_thread, NULL);
-		GST_INFO_OBJECT(bcmdec, "thread exit - %d errno = %d", ret, errno);
+		GST_DEBUG_OBJECT(bcmdec, "thread exit - %d errno = %d", ret, errno);
 		bcmdec->recv_thread = 0;
 	}
 
 	if (bcmdec->push_thread) {
-		GST_INFO_OBJECT(bcmdec, "waiting for push_thread exit");
+		GST_DEBUG_OBJECT(bcmdec, "waiting for push_thread exit");
 		ret = pthread_join(bcmdec->push_thread, NULL);
-		GST_INFO_OBJECT(bcmdec, "push_thread exit - %d errno = %d", ret, errno);
+		GST_DEBUG_OBJECT(bcmdec, "push_thread exit - %d errno = %d", ret, errno);
 		bcmdec->push_thread = 0;
 	}
 
 	bcmdec_release_mem_buf_que_pool(bcmdec);
-	bcmdec_release_mem_rbuf_que_pool(bcmdec);
+//	bcmdec_release_mem_rbuf_que_pool(bcmdec);
 
 	if (bcmdec->decif.hdev)
 		sts = decif_close(&bcmdec->decif);
@@ -2561,7 +2545,7 @@ static BC_STATUS gst_bcmdec_cleanup(GstBcmDec *bcmdec)
 	sem_destroy(&bcmdec->recv_stop_event);
 
 	pthread_mutex_destroy(&bcmdec->gst_buf_que_lock);
-	pthread_mutex_destroy(&bcmdec->gst_rbuf_que_lock);
+	pthread_mutex_destroy(&bcmdec->gst_padbuf_que_lock);
 	//pthread_mutex_destroy(&bcmdec->fn_lock);
 	if (bcmdec->avcc_params.sps_pps_buf) {
 		free(bcmdec->avcc_params.sps_pps_buf);
@@ -2573,12 +2557,11 @@ static BC_STATUS gst_bcmdec_cleanup(GstBcmDec *bcmdec)
 		bcmdec->dest_buf = NULL;
 	}
 
-#ifdef _WMV_FILE_HANDLING
 	if (bcmdec->vc1_dest_buffer) {
 		free(bcmdec->vc1_dest_buffer);
 		bcmdec->vc1_dest_buffer = NULL;
 	}
-#endif
+
 	if (bcmdec->gst_clock) {
 		gst_object_unref(bcmdec->gst_clock);
 		bcmdec->gst_clock = NULL;
@@ -2587,7 +2570,7 @@ static BC_STATUS gst_bcmdec_cleanup(GstBcmDec *bcmdec)
 	if (sem_post(&g_inst_sts->inst_ctrl_event) == -1)
 		GST_ERROR_OBJECT(bcmdec, "inst_ctrl_event post failed");
 	else
-		GST_INFO_OBJECT(bcmdec, "inst_ctrl_event posted");
+		GST_DEBUG_OBJECT(bcmdec, "inst_ctrl_event posted");
 
 	return sts;
 }
@@ -2625,7 +2608,7 @@ static void bcmdec_reset(GstBcmDec * bcmdec)
 	bcmdec->gst_que_cnt = 0;
 	bcmdec->last_picture_set = FALSE;
 	bcmdec->gst_buf_que_sz = GST_BUF_LIST_POOL_SZ;
-	bcmdec->gst_rbuf_que_sz = GST_RENDERER_BUF_POOL_SZ;
+	bcmdec->gst_padbuf_que_sz = GST_RENDERER_BUF_POOL_SZ;
 	bcmdec->rbuf_thread_running = FALSE;
 
 	bcmdec->insert_start_code = FALSE;
@@ -2663,7 +2646,7 @@ static void bcmdec_reset(GstBcmDec * bcmdec)
 	bcmdec->last_output_spes_time = 0;
 
 	pthread_mutex_init(&bcmdec->gst_buf_que_lock, NULL);
-	pthread_mutex_init(&bcmdec->gst_rbuf_que_lock, NULL);
+	pthread_mutex_init(&bcmdec->gst_padbuf_que_lock, NULL);
 	//pthread_mutex_init(&bcmdec->fn_lock,NULL);
 }
 
@@ -2674,6 +2657,9 @@ static void bcmdec_put_que_mem_buf(GstBcmDec *bcmdec, GSTBUF_LIST *gst_queue_ele
 	gst_queue_element->next = bcmdec->gst_mem_buf_que_hd;
 	bcmdec->gst_mem_buf_que_hd = gst_queue_element;
 
+	bcmdec->gst_que_cnt++;
+	GST_DEBUG_OBJECT(bcmdec, "mem pool inc is %u", bcmdec->gst_que_cnt);
+	
 	pthread_mutex_unlock(&bcmdec->gst_buf_que_lock);
 }
 
@@ -2684,9 +2670,13 @@ static GSTBUF_LIST * bcmdec_get_que_mem_buf(GstBcmDec *bcmdec)
 	pthread_mutex_lock(&bcmdec->gst_buf_que_lock);
 
 	gst_queue_element = bcmdec->gst_mem_buf_que_hd;
-	if (gst_queue_element)
+	if (gst_queue_element) {
 		bcmdec->gst_mem_buf_que_hd = bcmdec->gst_mem_buf_que_hd->next;
-
+		bcmdec->gst_que_cnt--;
+	
+		GST_DEBUG_OBJECT(bcmdec, "mem pool dec is %u", bcmdec->gst_que_cnt);
+	}
+	
 	pthread_mutex_unlock(&bcmdec->gst_buf_que_lock);
 
 	return gst_queue_element;
@@ -2706,7 +2696,6 @@ static gboolean bcmdec_alloc_mem_buf_que_pool(GstBcmDec *bcmdec)
 		memset(gst_queue_element, 0, sizeof(GSTBUF_LIST));
 		bcmdec_put_que_mem_buf(bcmdec, gst_queue_element);
 	}
-
 	return TRUE;
 }
 
@@ -2723,8 +2712,9 @@ static gboolean bcmdec_release_mem_buf_que_pool(GstBcmDec *bcmdec)
 		}
 	} while (gst_queue_element);
 
+	bcmdec->gst_mem_buf_que_hd = NULL;
 	if (!bcmdec->silent)
-		GST_INFO_OBJECT(bcmdec, "mem_buf_que_pool released...  %d", i);
+		GST_DEBUG_OBJECT(bcmdec, "mem_buf_que_pool released...  %d", i);
 
 	return TRUE;
 }
@@ -2741,7 +2731,6 @@ static void bcmdec_ins_buf(GstBcmDec *bcmdec,GSTBUF_LIST	*gst_queue_element)
 		gst_queue_element->next = NULL;
 	}
 
-	bcmdec->gst_que_cnt++;
 	if (sem_post(&bcmdec->buf_event) == -1)
 		GST_ERROR_OBJECT(bcmdec, "buf sem_post failed");
 
@@ -2762,9 +2751,6 @@ static GSTBUF_LIST * bcmdec_rem_buf(GstBcmDec *bcmdec)
 		bcmdec->gst_buf_que_hd = temp->next;
 	}
 
-	if (temp)
-		bcmdec->gst_que_cnt--;
-
 	pthread_mutex_unlock(&bcmdec->gst_buf_que_lock);
 
 	return temp;
@@ -2781,30 +2767,15 @@ static BC_STATUS bcmdec_insert_sps_pps(GstBcmDec *bcmdec, GstBuffer* gstbuf)
 
 	bcmdec->avcc_params.pps_size = 0;
 
-	if (data_size < 7) {
-		if (!bcmdec->silent)
-			GST_INFO_OBJECT(bcmdec, "too small");
-		return BC_STS_ERROR;
-	}
-
-	if (data[0] != 1) {
-		if (!bcmdec->silent)
-			GST_INFO_OBJECT(bcmdec, "wrong version");
-		return BC_STS_ERROR;
-	}
-
 	profile = (data[1] << 16) | (data[2] << 8) | data[3];
-	if (!bcmdec->silent)
-		GST_INFO_OBJECT(bcmdec, "profile %06x",profile);
+	GST_DEBUG_OBJECT(bcmdec, "profile %06x",profile);
 
 	bcmdec->avcc_params.nal_size_bytes = (data[4] & 0x03) + 1;
 
-	if (!bcmdec->silent)
-		GST_INFO_OBJECT(bcmdec, "nal size %d",bcmdec->avcc_params.nal_size_bytes);
+	GST_DEBUG_OBJECT(bcmdec, "nal size %d",bcmdec->avcc_params.nal_size_bytes);
 
 	num_sps = data[5] & 0x1f;
-	if (!bcmdec->silent)
-		GST_INFO_OBJECT(bcmdec, "num sps %d",num_sps);
+	GST_DEBUG_OBJECT(bcmdec, "num sps %d",num_sps);
 
 	data += 6;
 	data_size -= 6;
@@ -2813,7 +2784,7 @@ static BC_STATUS bcmdec_insert_sps_pps(GstBcmDec *bcmdec, GstBuffer* gstbuf)
 
 		if (data_size < 2) {
 			if (!bcmdec->silent)
-				GST_INFO_OBJECT(bcmdec, "too small 2");
+				GST_DEBUG_OBJECT(bcmdec, "too small 2");
 			return BC_STS_ERROR;
 		}
 
@@ -2823,7 +2794,7 @@ static BC_STATUS bcmdec_insert_sps_pps(GstBcmDec *bcmdec, GstBuffer* gstbuf)
 
 		if (data_size < nal_size) {
 			if (!bcmdec->silent)
-				GST_INFO_OBJECT(bcmdec, "too small 3");
+				GST_DEBUG_OBJECT(bcmdec, "too small 3");
 			return BC_STS_ERROR;
 		}
 
@@ -2843,7 +2814,7 @@ static BC_STATUS bcmdec_insert_sps_pps(GstBcmDec *bcmdec, GstBuffer* gstbuf)
 
 	if (data_size < 1) {
 		if (!bcmdec->silent)
-			GST_INFO_OBJECT(bcmdec, "too small 4");
+			GST_DEBUG_OBJECT(bcmdec, "too small 4");
 		return BC_STS_ERROR;
 	}
 
@@ -2855,7 +2826,7 @@ static BC_STATUS bcmdec_insert_sps_pps(GstBcmDec *bcmdec, GstBuffer* gstbuf)
 
 		if (data_size < 2) {
 			if (!bcmdec->silent)
-				GST_INFO_OBJECT(bcmdec, "too small 5");
+				GST_DEBUG_OBJECT(bcmdec, "too small 5");
 			return BC_STS_ERROR;
 		}
 
@@ -2865,7 +2836,7 @@ static BC_STATUS bcmdec_insert_sps_pps(GstBcmDec *bcmdec, GstBuffer* gstbuf)
 
 		if (data_size < nal_size) {
 			if (!bcmdec->silent)
-				GST_INFO_OBJECT(bcmdec, "too small 6");
+				GST_DEBUG_OBJECT(bcmdec, "too small 6");
 			return BC_STS_ERROR;
 		}
 
@@ -2883,12 +2854,12 @@ static BC_STATUS bcmdec_insert_sps_pps(GstBcmDec *bcmdec, GstBuffer* gstbuf)
 		data_size -= nal_size;
 	}
 
-	if (!bcmdec->silent)
-		GST_INFO_OBJECT(bcmdec, "data size at end = %d ",data_size);
+	GST_DEBUG_OBJECT(bcmdec, "data size at end = %d ",data_size);
 
 	return sts;
 }
 
+#if 0
 static guint32 insert_strtcode(GstBcmDec *bcmdec, guint8 *data_buf, guint32 offset)
 {
 	guint32 nal_sz = 0;
@@ -3024,7 +2995,7 @@ static BC_STATUS bcmdec_insert_startcode(GstBcmDec *bcmdec, GstBuffer *gst_buf,
 
 	return BC_STS_SUCCESS;
 }
-
+#endif
 static BC_STATUS bcmdec_suspend_callback(GstBcmDec *bcmdec)
 {
 	BC_STATUS sts = BC_STS_SUCCESS;
@@ -3045,29 +3016,63 @@ static BC_STATUS bcmdec_suspend_callback(GstBcmDec *bcmdec)
 static BC_STATUS bcmdec_resume_callback(GstBcmDec *bcmdec)
 {
 	BC_STATUS sts = BC_STS_SUCCESS;
+	BC_INPUT_FORMAT bcInputFormat;
 
 	sts = decif_open(&bcmdec->decif);
 	if (sts == BC_STS_SUCCESS) {
-		GST_INFO_OBJECT(bcmdec, "dev open success");
+		GST_DEBUG_OBJECT(bcmdec, "dev open success");
 	} else {
 		GST_ERROR_OBJECT(bcmdec, "dev open failed %d", sts);
 		return sts;
 	}
 
-	sts = decif_prepare_play(&bcmdec->decif, bcmdec->input_format);
+	bcInputFormat.OptFlags = 0; // NAREN - FIXME - Should we enable BD mode and max frame rate mode for LINK?
+	bcInputFormat.FGTEnable = FALSE;
+	bcInputFormat.MetaDataEnable = FALSE;
+	bcInputFormat.Progressive =  !(bcmdec->interlace);
+	bcInputFormat.mSubtype= bcmdec->input_format;
+
+	//Use Demux Image Size for VC-1 Simple/Main
+	if(bcInputFormat.mSubtype == BC_MSUBTYPE_WMV3)
+	{
+		//VC-1 Simple/Main
+		bcInputFormat.width = bcmdec->frame_width;
+		bcInputFormat.height = bcmdec->frame_height;
+	}
+	else
+	{
+		bcInputFormat.width = bcmdec->output_params.width;
+		bcInputFormat.height = bcmdec->output_params.height;
+	}
+
+	bcInputFormat.startCodeSz = bcmdec->avcc_params.nal_size_bytes;
+	bcInputFormat.pMetaData = bcmdec->avcc_params.sps_pps_buf;
+	bcInputFormat.metaDataSz = bcmdec->avcc_params.pps_size;
+	bcInputFormat.OptFlags = 0x80000000 | vdecFrameRate23_97;
+
+	sts = decif_setinputformat(&bcmdec->decif, bcInputFormat);
 	if (sts == BC_STS_SUCCESS) {
-		GST_INFO_OBJECT(bcmdec, "prepare play success");
+		GST_DEBUG_OBJECT(bcmdec, "set input format success");
+	} else {
+		GST_ERROR_OBJECT(bcmdec, "set input format failed");
+		bcmdec->streaming = FALSE;
+		return sts;
+	}
+
+	sts = decif_prepare_play(&bcmdec->decif);
+	if (sts == BC_STS_SUCCESS) {
+		GST_DEBUG_OBJECT(bcmdec, "prepare play success");
 	} else {
 		GST_ERROR_OBJECT(bcmdec, "prepare play failed %d", sts);
 		bcmdec->streaming = FALSE;
 		return sts;
 	}
 
-	decif_set422_mode(&bcmdec->decif, BUF_MODE);
+	decif_setcolorspace(&bcmdec->decif, BUF_MODE);
 
 	sts = decif_start_play(&bcmdec->decif);
 	if (sts == BC_STS_SUCCESS) {
-		GST_INFO_OBJECT(bcmdec, "start play success");
+		GST_DEBUG_OBJECT(bcmdec, "start play success");
 		bcmdec->streaming = TRUE;
 	} else {
 		GST_ERROR_OBJECT(bcmdec, "start play failed %d", sts);
@@ -3096,7 +3101,7 @@ static gboolean bcmdec_mul_inst_cor(GstBcmDec *bcmdec)
 	}
 
 	if (g_inst_sts->cur_decode == PLAYBACK) {
-		GST_INFO_OBJECT(bcmdec, "mul_inst_cor : ret false %d", g_inst_sts->cur_decode);
+		GST_DEBUG_OBJECT(bcmdec, "mul_inst_cor : ret false %d", g_inst_sts->cur_decode);
 		return FALSE;
 	}
 
@@ -3107,21 +3112,21 @@ static gboolean bcmdec_mul_inst_cor(GstBcmDec *bcmdec)
 		if (ret < 0) {
 			if (errno == ETIMEDOUT) {
 				if (g_inst_sts->cur_decode == PLAYBACK) {
-					GST_INFO_OBJECT(bcmdec, "mul_inst_cor :playback is set , exit");
+					GST_DEBUG_OBJECT(bcmdec, "mul_inst_cor :playback is set , exit");
 					return FALSE;
 				} else {
-					GST_INFO_OBJECT(bcmdec, "mul_inst_cor :wait for thumb nail decode finish");
+					GST_DEBUG_OBJECT(bcmdec, "mul_inst_cor :wait for thumb nail decode finish");
 					continue;
 				}
 			} else if (errno == EINTR) {
 				return FALSE;
 			}
 		} else {
-			GST_INFO_OBJECT(bcmdec, "mul_inst_cor :ctrl_event is given");
+			GST_DEBUG_OBJECT(bcmdec, "mul_inst_cor :ctrl_event is given");
 			return TRUE;
 		}
 	}
-	GST_INFO_OBJECT(bcmdec, "mul_inst_cor : ret false cur_dec = %d wait = %d", g_inst_sts->cur_decode, g_inst_sts->waiting);
+	GST_DEBUG_OBJECT(bcmdec, "mul_inst_cor : ret false cur_dec = %d wait = %d", g_inst_sts->cur_decode, g_inst_sts->waiting);
 
 	return FALSE;
 }
@@ -3143,7 +3148,7 @@ static BC_STATUS bcmdec_create_shmem(GstBcmDec *bcmdec, int *shmem_id)
 	shmid = shmget(shmkey, 1024, 0644 | IPC_CREAT | IPC_EXCL);
 	if (shmid == -1) {
 		if (errno == EEXIST) {
-			GST_INFO_OBJECT(bcmdec, "bcmdec_create_shmem:shmem already exists :%d", errno);
+			GST_DEBUG_OBJECT(bcmdec, "bcmdec_create_shmem:shmem already exists :%d", errno);
 			shmid = shmget(shmkey, 1024, 0644);
 			if (shmid == -1) {
 				GST_ERROR_OBJECT(bcmdec, "bcmdec_create_shmem:unable to get shmid :%d", errno);
@@ -3160,7 +3165,7 @@ static BC_STATUS bcmdec_create_shmem(GstBcmDec *bcmdec, int *shmem_id)
 				sem_destroy(&g_inst_sts->inst_ctrl_event);
 				//No process is currently attached to the shmem seg. go ahead and delete it as its contents are stale.
 				if (shmctl(shmid, IPC_RMID, NULL) != -1)
-						GST_INFO_OBJECT(bcmdec, "bcmdec_create_shmem:deleted shmem segment and creating a new one ...");
+						GST_DEBUG_OBJECT(bcmdec, "bcmdec_create_shmem:deleted shmem segment and creating a new one ...");
 				//create a new shmem
 				shmid = shmget(shmkey, 1024, 0644 | IPC_CREAT | IPC_EXCL);
 				if (shmid == -1) {
@@ -3250,17 +3255,17 @@ static void bcmdec_flush_gstrbuf_queue(GstBcmDec *bcmdec)
 	GSTBUF_LIST *gst_queue_element = NULL;
 
 	while (1) {
-		gst_queue_element = bcmdec_rem_rbuf(bcmdec);
+		gst_queue_element = bcmdec_rem_padbuf(bcmdec);
 		if (gst_queue_element) {
 			if (gst_queue_element->gstbuf) {
 				gst_buffer_unref (gst_queue_element->gstbuf);
-				bcmdec_put_que_mem_rbuf(bcmdec, gst_queue_element);
+				bcmdec_put_que_mem_buf(bcmdec, gst_queue_element);
 			} else {
 				break;
 			}
 		}
 		else {
-			GST_INFO_OBJECT(bcmdec, "no gst_queue_element");
+			GST_DEBUG_OBJECT(bcmdec, "no gst_queue_element");
 			break;
 		}
 	}
@@ -3274,7 +3279,6 @@ static void * bcmdec_process_get_rbuf(void *ctx)
 	gboolean result = FALSE, done = FALSE;
 	GstBuffer *gstbuf = NULL;
 	guint bufSz = 0;
-	guint8 *data_ptr;
 	gboolean get_buf_start = FALSE;
 	int revent = -1;
 
@@ -3282,7 +3286,7 @@ static void * bcmdec_process_get_rbuf(void *ctx)
 		revent = sem_trywait(&bcmdec->rbuf_start_event);
 		if (revent == 0) {
 			if (!bcmdec->silent)
-				GST_INFO_OBJECT(bcmdec, "got start get buf event ");
+				GST_DEBUG_OBJECT(bcmdec, "got start get buf event ");
 			get_buf_start = TRUE;
 			bcmdec->rbuf_thread_running = TRUE;
 		}
@@ -3290,7 +3294,7 @@ static void * bcmdec_process_get_rbuf(void *ctx)
 		revent = sem_trywait(&bcmdec->rbuf_stop_event);
 		if (revent == 0) {
 			if (!bcmdec->silent)
-				GST_INFO_OBJECT(bcmdec, "quit event set, exit");
+				GST_DEBUG_OBJECT(bcmdec, "quit event set, exit");
 			break;
 		}
 
@@ -3299,29 +3303,36 @@ static void * bcmdec_process_get_rbuf(void *ctx)
 
 		while (bcmdec->streaming && get_buf_start)
 		{
-			//GST_INFO_OBJECT(bcmdec, "process get rbuf start....");
+			//GST_DEBUG_OBJECT(bcmdec, "process get rbuf start....");
 			gstbuf = NULL;
 
 			if (!bcmdec->recv_thread && !bcmdec->streaming) {
 				if (!bcmdec->silent)
-					GST_INFO_OBJECT(bcmdec, "process get rbuf prepare exiting..");
+					GST_DEBUG_OBJECT(bcmdec, "process get rbuf prepare exiting..");
 				done = TRUE;
 				break;
 			}
 
+			// If we have enough buffers from the renderer then don't get any more
+			if(bcmdec->gst_padbuf_que_cnt >= GST_RENDERER_BUF_POOL_SZ) {
+				usleep(100 * 1000);
+				continue;
+			}
+			
 			if (gst_queue_element == NULL)
-				gst_queue_element = bcmdec_get_que_mem_rbuf(bcmdec);
+				gst_queue_element = bcmdec_get_que_mem_buf(bcmdec);
+			
 			if (!gst_queue_element) {
 				if (!bcmdec->silent)
-					GST_INFO_OBJECT(bcmdec, "rbuf_full == TRUE RCnt:%d", bcmdec->gst_rbuf_que_cnt);
+					GST_DEBUG_OBJECT(bcmdec, "mbuf full == TRUE %u", bcmdec->gst_buf_que_sz);
 
-				usleep(100 * 1000);
+				usleep(1000 * 1000); // Sleep for a second since we have 350 buffers queued up
 				continue;
 			}
 
 			bufSz = bcmdec->output_params.width * bcmdec->output_params.height * BUF_MULT;
 
-			//GST_INFO_OBJECT(bcmdec, "process get rbuf gst_pad_alloc_buffer_and_set_caps ....");
+			//GST_DEBUG_OBJECT(bcmdec, "process get rbuf gst_pad_alloc_buffer_and_set_caps ....");
 			ret = gst_pad_alloc_buffer_and_set_caps(bcmdec->srcpad, GST_BUFFER_OFFSET_NONE,
 								bufSz, GST_PAD_CAPS(bcmdec->srcpad), &gstbuf);
 			if (ret != GST_FLOW_OK) {
@@ -3331,33 +3342,17 @@ static void * bcmdec_process_get_rbuf(void *ctx)
 				continue;
 			}
 
-			data_ptr = GST_BUFFER_DATA(gstbuf);
-#if 0
-			if ((uintptr_t)data_ptr % 4 == 0) {
-				GST_INFO_OBJECT(bcmdec, "process get rbuf:0x%0x, bufSz:%d, data_ptr:0x%0x", gstbuf, bufSz, data_ptr);
-			} else {
-				GST_INFO_OBJECT(bcmdec, "process get rbuf is not aligned rbuf:0x%0x, bufSz:%d, data_ptr:0x%0x", gstbuf, bufSz, data_ptr);
-			}
-#endif
+			GST_DEBUG_OBJECT(bcmdec, "Got GST Buf RCnt:%d", bcmdec->gst_padbuf_que_cnt);
 
 			gst_queue_element->gstbuf = gstbuf;
-			bcmdec_ins_rbuf(bcmdec, gst_queue_element);
+			bcmdec_ins_padbuf(bcmdec, gst_queue_element);
 			gst_queue_element = NULL;
-			//GST_INFO_OBJECT(bcmdec, "rbuf inserted cn:%d rbuf:0x%0x, bufSz:%d, data_ptr:0x%0x", bcmdec->gst_rbuf_que_cnt, gstbuf, bufSz, data_ptr);
 
-			if (bcmdec->paused && (bcmdec->gst_que_cnt < RESUME_THRESHOLD) &&
-			    (bcmdec->gst_rbuf_que_cnt > GST_RENDERER_BUF_NORMAL_THRESHOLD)) {
-				decif_pause(&bcmdec->decif, FALSE);
-				//if (!bcmdec->silent)
-				GST_INFO_OBJECT(bcmdec, "resumed by get rbuf thread que_cnt:%d, rbuf_que_cnt:%d", bcmdec->gst_que_cnt, bcmdec->gst_rbuf_que_cnt);
-				bcmdec->paused = FALSE;
-			}
-
-			usleep(15 * 1000);
+			usleep(5 * 1000);
 		}
 
 		if (done) {
-			GST_INFO_OBJECT(bcmdec, "process get rbuf done ");
+			GST_DEBUG_OBJECT(bcmdec, "process get rbuf done ");
 			break;
 		}
 	}
@@ -3372,8 +3367,10 @@ static gboolean bcmdec_start_get_rbuf_thread(GstBcmDec *bcmdec)
 	gint ret = 0;
 	pthread_attr_t thread_attr;
 
-	if (!bcmdec_alloc_mem_rbuf_que_pool(bcmdec))
-		GST_ERROR_OBJECT(bcmdec, "rend pool alloc failed/n");
+// 	if (!bcmdec_alloc_mem_rbuf_que_pool(bcmdec))
+// 		GST_ERROR_OBJECT(bcmdec, "rend pool alloc failed/n");
+
+	bcmdec->gst_padbuf_que_hd = bcmdec->gst_padbuf_que_tl = NULL;
 
 	ret = sem_init(&bcmdec->rbuf_ins_event, 0, 0);
 	if (ret != 0) {
@@ -3403,113 +3400,117 @@ static gboolean bcmdec_start_get_rbuf_thread(GstBcmDec *bcmdec)
 		GST_ERROR_OBJECT(bcmdec, "Failed to create Renderer buffer Thread");
 		result = FALSE;
 	} else {
-		GST_INFO_OBJECT(bcmdec, "Success to create Renderer buffer Thread");
+		GST_DEBUG_OBJECT(bcmdec, "Success to create Renderer buffer Thread");
 	}
 
 	return result;
 }
 
-static void bcmdec_put_que_mem_rbuf(GstBcmDec *bcmdec, GSTBUF_LIST *gst_queue_element)
+// static void bcmdec_put_que_mem_padbuf(GstBcmDec *bcmdec, GSTBUF_LIST *gst_queue_element)
+// {
+// 	pthread_mutex_lock(&bcmdec->gst_padbuf_que_lock);
+// 
+// 	gst_queue_element->next = bcmdec->gst_mem_padbuf_que_hd;
+// 	bcmdec->gst_mem_padbuf_que_hd = gst_queue_element;
+// 
+// 	pthread_mutex_unlock(&bcmdec->gst_padbuf_que_lock);
+// }
+// 
+// static GSTBUF_LIST * bcmdec_get_que_mem_padbuf(GstBcmDec *bcmdec)
+// {
+// 	GSTBUF_LIST *gst_queue_element;
+// 
+// 	pthread_mutex_lock(&bcmdec->gst_padbuf_que_lock);
+// 
+// 	gst_queue_element = bcmdec->gst_mem_padbuf_que_hd;
+// 	if (gst_queue_element !=NULL)
+// 		bcmdec->gst_mem_padbuf_que_hd = bcmdec->gst_mem_padbuf_que_hd->next;
+// 
+// 	pthread_mutex_unlock(&bcmdec->gst_padbuf_que_lock);
+// 
+// 	return gst_queue_element;
+// }
+// 
+// static gboolean bcmdec_alloc_mem_rbuf_que_pool(GstBcmDec *bcmdec)
+// {
+// 	GSTBUF_LIST *gst_queue_element;
+// 	guint i;
+// 
+// 	bcmdec->gst_mem_padbuf_que_hd = NULL;
+// 	for (i = 1; i < bcmdec->gst_padbuf_que_sz; i++) {
+// 		gst_queue_element = (GSTBUF_LIST *)malloc(sizeof(GSTBUF_LIST));
+// 		if (!gst_queue_element) {
+// 			GST_ERROR_OBJECT(bcmdec, "mem_rbuf_que_pool malloc failed ");
+// 			return FALSE;
+// 		}
+// 		memset(gst_queue_element, 0, sizeof(GSTBUF_LIST));
+// 		bcmdec_put_que_mem_padbuf(bcmdec, gst_queue_element);
+// 	}
+// 
+// 	return TRUE;
+// }
+// 
+// static gboolean bcmdec_release_mem_rbuf_que_pool(GstBcmDec *bcmdec)
+// {
+// 	GSTBUF_LIST *gst_queue_element;
+// 	guint i = 0;
+// 
+// 	do {
+// 		gst_queue_element = bcmdec_get_que_mem_padbuf(bcmdec);
+// 		if (gst_queue_element) {
+// 			free(gst_queue_element);
+// 			i++;
+// 		}
+// 	} while (gst_queue_element);
+// 
+// 	bcmdec->gst_mem_padbuf_que_hd = NULL;
+// 	if (!bcmdec->silent)
+// 		GST_DEBUG_OBJECT(bcmdec, "rend_rbuf_que_pool released... %d", i);
+// 
+// 	return TRUE;
+// }
+
+static void bcmdec_ins_padbuf(GstBcmDec *bcmdec, GSTBUF_LIST *gst_queue_element)
 {
-	pthread_mutex_lock(&bcmdec->gst_rbuf_que_lock);
+	pthread_mutex_lock(&bcmdec->gst_padbuf_que_lock);
 
-	gst_queue_element->next = bcmdec->gst_mem_rbuf_que_hd;
-	bcmdec->gst_mem_rbuf_que_hd = gst_queue_element;
-
-	pthread_mutex_unlock(&bcmdec->gst_rbuf_que_lock);
-}
-
-static GSTBUF_LIST * bcmdec_get_que_mem_rbuf(GstBcmDec *bcmdec)
-{
-	GSTBUF_LIST *gst_queue_element;
-
-	pthread_mutex_lock(&bcmdec->gst_rbuf_que_lock);
-
-	gst_queue_element = bcmdec->gst_mem_rbuf_que_hd;
-	if (gst_queue_element !=NULL)
-		bcmdec->gst_mem_rbuf_que_hd = bcmdec->gst_mem_rbuf_que_hd->next;
-
-	pthread_mutex_unlock(&bcmdec->gst_rbuf_que_lock);
-
-	return gst_queue_element;
-}
-
-static gboolean bcmdec_alloc_mem_rbuf_que_pool(GstBcmDec *bcmdec)
-{
-	GSTBUF_LIST *gst_queue_element;
-	guint i;
-
-	bcmdec->gst_mem_rbuf_que_hd = NULL;
-	for (i = 1; i < bcmdec->gst_rbuf_que_sz; i++) {
-		gst_queue_element = (GSTBUF_LIST *)malloc(sizeof(GSTBUF_LIST));
-		if (!gst_queue_element) {
-			GST_ERROR_OBJECT(bcmdec, "mem_rbuf_que_pool malloc failed ");
-			return FALSE;
-		}
-		memset(gst_queue_element, 0, sizeof(GSTBUF_LIST));
-		bcmdec_put_que_mem_rbuf(bcmdec, gst_queue_element);
-	}
-
-	return TRUE;
-}
-
-static gboolean bcmdec_release_mem_rbuf_que_pool(GstBcmDec *bcmdec)
-{
-	GSTBUF_LIST *gst_queue_element;
-	guint i = 0;
-
-	do {
-		gst_queue_element = bcmdec_get_que_mem_rbuf(bcmdec);
-		if (gst_queue_element) {
-			free(gst_queue_element);
-			i++;
-		}
-	} while (gst_queue_element);
-
-	if (!bcmdec->silent)
-		GST_INFO_OBJECT(bcmdec, "rend_rbuf_que_pool released... %d", i);
-
-	return TRUE;
-}
-
-static void bcmdec_ins_rbuf(GstBcmDec *bcmdec, GSTBUF_LIST *gst_queue_element)
-{
-	pthread_mutex_lock(&bcmdec->gst_rbuf_que_lock);
-
-	if (!bcmdec->gst_rbuf_que_hd) {
-		bcmdec->gst_rbuf_que_hd = bcmdec->gst_rbuf_que_tl = gst_queue_element;
+	if (!bcmdec->gst_padbuf_que_hd) {
+		bcmdec->gst_padbuf_que_hd = bcmdec->gst_padbuf_que_tl = gst_queue_element;
 	} else {
-		bcmdec->gst_rbuf_que_tl->next = gst_queue_element;
-		bcmdec->gst_rbuf_que_tl = gst_queue_element;
+		bcmdec->gst_padbuf_que_tl->next = gst_queue_element;
+		bcmdec->gst_padbuf_que_tl = gst_queue_element;
 		gst_queue_element->next = NULL;
 	}
 
-	bcmdec->gst_rbuf_que_cnt++;
-
+	bcmdec->gst_padbuf_que_cnt++;
+	GST_DEBUG_OBJECT(bcmdec, "Inc rbuf:%d", bcmdec->gst_padbuf_que_cnt);
+	
 	if (sem_post(&bcmdec->rbuf_ins_event) == -1)
 		GST_ERROR_OBJECT(bcmdec, "rbuf sem_post failed");
 
-	pthread_mutex_unlock(&bcmdec->gst_rbuf_que_lock);
+	pthread_mutex_unlock(&bcmdec->gst_padbuf_que_lock);
 }
 
-static GSTBUF_LIST *bcmdec_rem_rbuf(GstBcmDec *bcmdec)
+static GSTBUF_LIST *bcmdec_rem_padbuf(GstBcmDec *bcmdec)
 {
 	GSTBUF_LIST *temp;
 
-	pthread_mutex_lock(&bcmdec->gst_rbuf_que_lock);
+	pthread_mutex_lock(&bcmdec->gst_padbuf_que_lock);
 
-	if (bcmdec->gst_rbuf_que_hd == bcmdec->gst_rbuf_que_tl) {
-		temp = bcmdec->gst_rbuf_que_hd;
-		bcmdec->gst_rbuf_que_hd = bcmdec->gst_rbuf_que_tl = NULL;
+	if (bcmdec->gst_padbuf_que_hd == bcmdec->gst_padbuf_que_tl) {
+		temp = bcmdec->gst_padbuf_que_hd;
+		bcmdec->gst_padbuf_que_hd = bcmdec->gst_padbuf_que_tl = NULL;
 	} else {
-		temp = bcmdec->gst_rbuf_que_hd;
-		bcmdec->gst_rbuf_que_hd = temp->next;
+		temp = bcmdec->gst_padbuf_que_hd;
+		bcmdec->gst_padbuf_que_hd = temp->next;
 	}
 
 	if (temp)
-		bcmdec->gst_rbuf_que_cnt--;
+		bcmdec->gst_padbuf_que_cnt--;
 
-	pthread_mutex_unlock(&bcmdec->gst_rbuf_que_lock);
+	GST_DEBUG_OBJECT(bcmdec, "Dec rbuf:%d", bcmdec->gst_padbuf_que_cnt);
+	
+	pthread_mutex_unlock(&bcmdec->gst_padbuf_que_lock);
 
 	return temp;
 }
