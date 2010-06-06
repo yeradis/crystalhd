@@ -13,7 +13,8 @@ EXTRA_CFLAGS  += -Wall -Wstrict-prototypes -Wno-trigraphs -Werror -O2
 OBJ :=  crystalhd_lnx.o	\
 	crystalhd_misc.o	\
 	crystalhd_cmds.o  \
-	crystalhd_hw.o
+	crystalhd_hw.o	\
+	crystalhd_linkfuncs.o
 
 
 PWD = $(shell pwd)

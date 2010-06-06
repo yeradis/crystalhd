@@ -52,10 +52,9 @@
 
 #define CRYSTAL_HD_NAME		"Broadcom Crystal HD Decoder Driver"
 
-
 /* OS specific PCI information structure and adapter information. */
 struct crystalhd_adp {
-	/* Hardware borad/PCI specifics */
+	/* Hardware board/PCI specifics */
 	char			name[32];
 	struct pci_dev		*pdev;
 

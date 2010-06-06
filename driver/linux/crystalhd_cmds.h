@@ -33,8 +33,11 @@
  *        from _dts_glob and dts_defs etc.. which are defined for
  *        windows.
  */
+
 #include "crystalhd_hw.h"
 #include "crystalhd_misc.h"
+
+extern struct device * chd_get_device(void);
 
 enum _crystalhd_state{
 	BC_LINK_INVALID		= 0x00,
@@ -63,7 +66,7 @@ struct crystalhd_cmd {
 	uint32_t		tx_list_id;
 	uint32_t		cin_wait_exit;
 	uint32_t		pwr_state_change;
-	struct crystalhd_hw	hw_ctx;
+	struct crystalhd_hw		*hw_ctx;
 };
 
 typedef BC_STATUS (*crystalhd_cmd_proc)(struct crystalhd_cmd *, crystalhd_ioctl_data *);

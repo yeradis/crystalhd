@@ -29,23 +29,6 @@
 #include "crystalhd_lnx.h"
 #include "crystalhd_misc.h"
 
-static inline uint32_t crystalhd_dram_rd(struct crystalhd_adp *adp, uint32_t mem_off)
-{
-	crystalhd_reg_wr(adp, DCI_DRAM_BASE_ADDR, (mem_off >> 19));
-	return bc_dec_reg_rd(adp, (0x00380000 | (mem_off & 0x0007FFFF)));
-}
-
-static inline void crystalhd_dram_wr(struct crystalhd_adp *adp, uint32_t mem_off, uint32_t val)
-{
-	crystalhd_reg_wr(adp, DCI_DRAM_BASE_ADDR, (mem_off >> 19));
-	bc_dec_reg_wr(adp, (0x00380000 | (mem_off & 0x0007FFFF)), val);
-}
-
-static inline BC_STATUS bc_chk_dram_range(struct crystalhd_adp *adp, uint32_t start_off, uint32_t cnt)
-{
-	return BC_STS_SUCCESS;
-}
-
 static crystalhd_dio_req *crystalhd_alloc_dio(struct crystalhd_adp *adp)
 {
 	unsigned long flags = 0;
@@ -140,198 +123,6 @@ static inline void crystalhd_init_sg(struct scatterlist *sg, unsigned int entrie
 }
 
 /*========================== Extern ========================================*/
-/**
- * bc_dec_reg_rd - Read 7412's device register.
- * @adp: Adapter instance
- * @reg_off: Register offset.
- *
- * Return:
- *	32bit value read
- *
- * 7412's device register read routine. This interface use
- * 7412's device access range mapped from BAR-2 (4M) of PCIe
- * configuration space.
- */
-uint32_t bc_dec_reg_rd(struct crystalhd_adp *adp, uint32_t reg_off)
-{
-	uint32_t val;
-
-	if (!adp) {
-		printk(KERN_ERR "%s: Invalid args\n", __func__);
-		return 0;
-	}
-
-	if (reg_off > adp->pci_mem_len) {
-		dev_err(&adp->pdev->dev, "%s: reg_off out of range: 0x%08x\n",
-			__func__, reg_off);
-		return 0;
-	}
-
-	val = readl(adp->addr + reg_off);
-	dev_dbg(&adp->pdev->dev, "%s: read(0x%p) = 0x%08x\n",
-		__func__, adp->addr + reg_off, val);
-
-	return val;
-}
-
-/**
- * bc_dec_reg_wr - Write 7412's device register
- * @adp: Adapter instance
- * @reg_off: Register offset.
- * @val: Dword value to be written.
- *
- * Return:
- *	none.
- *
- * 7412's device register write routine. This interface use
- * 7412's device access range mapped from BAR-2 (4M) of PCIe
- * configuration space.
- */
-void bc_dec_reg_wr(struct crystalhd_adp *adp, uint32_t reg_off, uint32_t val)
-{
-	if (!adp) {
-		printk(KERN_ERR "%s: Invalid args\n", __func__);
-		return;
-	}
-
-	if (reg_off > adp->pci_mem_len) {
-		dev_err(&adp->pdev->dev, "%s: reg_off out of range: 0x%08x\n",
-			__func__, reg_off);
-		return;
-	}
-
-	dev_dbg(&adp->pdev->dev, "%s: writel(0x%08x @ 0x%p).\n",
-		__func__, val, adp->addr + reg_off);
-	writel(val, adp->addr + reg_off);
-
-	/* the udelay require for latest 70012, not for others... :( */
-	udelay(8);
-}
-
-/**
- * crystalhd_reg_rd - Read Link's device register.
- * @adp: Adapter instance
- * @reg_off: Register offset.
- *
- * Return:
- *	32bit value read
- *
- * Link device register  read routine. This interface use
- * Link's device access range mapped from BAR-1 (64K) of PCIe
- * configuration space.
- *
- */
-uint32_t crystalhd_reg_rd(struct crystalhd_adp *adp, uint32_t reg_off)
-{
-	uint32_t val;
-
-	if (!adp) {
-		printk(KERN_ERR "%s: Invalid args\n", __func__);
-		return 0;
-	}
-
-	if (reg_off > adp->pci_i2o_len) {
-		dev_err(&adp->pdev->dev, "%s: reg_off out of range: 0x%08x\n",
-			__func__, reg_off);
-		return 0;
-	}
-
-	val = readl(adp->i2o_addr + reg_off);
-	dev_dbg(&adp->pdev->dev, "%s: read(0x%p) = 0x%08x\n",
-		__func__, adp->i2o_addr + reg_off, val);
-
-	return val;
-}
-
-/**
- * crystalhd_reg_wr - Write Link's device register
- * @adp: Adapter instance
- * @reg_off: Register offset.
- * @val: Dword value to be written.
- *
- * Return:
- *	none.
- *
- * Link device register  write routine. This interface use
- * Link's device access range mapped from BAR-1 (64K) of PCIe
- * configuration space.
- *
- */
-void crystalhd_reg_wr(struct crystalhd_adp *adp, uint32_t reg_off, uint32_t val)
-{
-	if (!adp) {
-		printk(KERN_ERR "%s: Invalid args\n", __func__);
-		return;
-	}
-
-	if (reg_off > adp->pci_i2o_len) {
-		dev_err(&adp->pdev->dev, "%s: reg_off out of range: 0x%08x\n",
-			__func__, reg_off);
-		return;
-	}
-
-	dev_dbg(&adp->pdev->dev, "%s: writel(0x%08x @ 0x%p).\n",
-		__func__, val, adp->i2o_addr + reg_off);
-
-	writel(val, adp->i2o_addr + reg_off);
-}
-
-/**
- * crystalhd_mem_rd - Read data from 7412's DRAM area.
- * @adp: Adapter instance
- * @start_off: Start offset.
- * @dw_cnt: Count in dwords.
- * @rd_buff: Buffer to copy the data from dram.
- *
- * Return:
- *	Status.
- *
- * 7412's Dram read routine.
- */
-BC_STATUS crystalhd_mem_rd(struct crystalhd_adp *adp, uint32_t start_off,
-			 uint32_t dw_cnt, uint32_t *rd_buff)
-{
-	uint32_t ix = 0;
-
-	if (!adp || !rd_buff ||
-	    (bc_chk_dram_range(adp, start_off, dw_cnt) != BC_STS_SUCCESS)) {
-		printk(KERN_ERR "%s: Invalid arg\n", __func__);
-		return BC_STS_INV_ARG;
-	}
-	for (ix = 0; ix < dw_cnt; ix++)
-		rd_buff[ix] = crystalhd_dram_rd(adp, (start_off + (ix * 4)));
-
-	return BC_STS_SUCCESS;
-}
-
-/**
- * crystalhd_mem_wr - Write data to 7412's DRAM area.
- * @adp: Adapter instance
- * @start_off: Start offset.
- * @dw_cnt: Count in dwords.
- * @wr_buff: Data Buffer to be written.
- *
- * Return:
- *	Status.
- *
- * 7412's Dram write routine.
- */
-BC_STATUS crystalhd_mem_wr(struct crystalhd_adp *adp, uint32_t start_off,
-			 uint32_t dw_cnt, uint32_t *wr_buff)
-{
-	uint32_t ix = 0;
-
-	if (!adp || !wr_buff ||
-	    (bc_chk_dram_range(adp, start_off, dw_cnt) != BC_STS_SUCCESS)) {
-		printk(KERN_ERR "%s: Invalid arg\n", __func__);
-		return BC_STS_INV_ARG;
-	}
-
-	for (ix = 0; ix < dw_cnt; ix++)
-		crystalhd_dram_wr(adp, (start_off + (ix * 4)), wr_buff[ix]);
-
-	return BC_STS_SUCCESS;
-}
 /**
  * crystalhd_pci_cfg_rd - PCIe config read
  * @adp: Adapter instance
@@ -717,7 +508,10 @@ void *crystalhd_dioq_fetch_wait(void *hw, uint32_t to_secs, uint32_t *sig_pend)
 			// If format change packet, then return with out checking anything
 			if(r_pkt->flags & (COMP_FLAG_PIB_VALID | COMP_FLAG_FMT_CHANGE))
 				return r_pkt;
-			picYcomp = GetRptDropParam(((struct crystalhd_hw *)hw)->PICHeight, ((struct crystalhd_hw *)hw)->PICWidth, (void *)r_pkt);
+			if(((struct crystalhd_hw *)hw)->adp->pdev->device == BC_PCI_DEVID_LINK)
+				picYcomp = link_GetRptDropParam(((struct crystalhd_hw *)hw)->PICHeight, ((struct crystalhd_hw *)hw)->PICWidth, (void *)r_pkt);
+			else
+				dev_info(dev,"FLEA NOT IMPLEMENTED YET\n");
 			if(!picYcomp || (picYcomp == ((struct crystalhd_hw *)hw)->LastPicNo) ||
 				(picYcomp == ((struct crystalhd_hw *)hw)->LastTwoPicNo)) {
 				//Discard picture

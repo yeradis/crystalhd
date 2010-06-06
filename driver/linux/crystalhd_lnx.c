@@ -557,15 +557,9 @@ static int __devinit chd_dec_pci_probe(struct pci_dev *pdev,
 	int rc;
 	BC_STATUS sts = BC_STS_SUCCESS;
 
-#if 0
-	printk(KERN_DEBUG "%s: Vendor:0x%04x Device:0x%04x "
-		"s_vendor:0x%04x s_device: 0x%04x\n", __func__,
-		pdev->vendor, pdev->device, pdev->subsystem_vendor,
-		pdev->subsystem_device);
-#endif
+	printk(KERN_DEBUG "Starting Device:0x%04x\n", pdev->device);
 
-	/* FIXME: jarod: why atomic? */
-	pinfo = kzalloc(sizeof(struct crystalhd_adp), GFP_ATOMIC);
+	pinfo = kzalloc(sizeof(struct crystalhd_adp), GFP_KERNEL);
 	if (!pinfo) {
 		printk(KERN_ERR "%s: Failed to allocate memory\n", __func__);
 		return -ENOMEM;
@@ -714,11 +708,12 @@ int chd_dec_pci_resume(struct pci_dev *pdev)
 
 static DEFINE_PCI_DEVICE_TABLE(chd_dec_pci_id_table) = {
 	{ PCI_VDEVICE(BROADCOM, 0x1612), 8 },
+	{ PCI_VDEVICE(BROADCOM, 0x1615), 8 },
 	{ 0, },
 };
 MODULE_DEVICE_TABLE(pci, chd_dec_pci_id_table);
 
-static struct pci_driver bc_chd_70012_driver = {
+static struct pci_driver bc_chd_driver = {
 	.name     = "crystalhd",
 	.probe    = chd_dec_pci_probe,
 	.remove   = __devexit_p(chd_dec_pci_remove),
@@ -746,7 +741,7 @@ static int __init chd_dec_module_init(void)
 	printk(KERN_INFO "Loading crystalhd %d.%d.%d\n",
 	       crystalhd_kmod_major, crystalhd_kmod_minor, crystalhd_kmod_rev);
 
-	rc = pci_register_driver(&bc_chd_70012_driver);
+	rc = pci_register_driver(&bc_chd_driver);
 
 	if (rc < 0)
 		printk(KERN_ERR "%s: Could not find any devices. err:%d\n",
@@ -761,7 +756,7 @@ static void __exit chd_dec_module_cleanup(void)
 	printk(KERN_INFO "unloading crystalhd %d.%d.%d\n",
 	       crystalhd_kmod_major, crystalhd_kmod_minor, crystalhd_kmod_rev);
 
-	pci_unregister_driver(&bc_chd_70012_driver);
+	pci_unregister_driver(&bc_chd_driver);
 }
 module_exit(chd_dec_module_cleanup);
 
@@ -769,4 +764,4 @@ MODULE_AUTHOR("Naren Sankar <nsankar@broadcom.com>");
 MODULE_AUTHOR("Prasad Bolisetty <prasadb@broadcom.com>");
 MODULE_DESCRIPTION(CRYSTAL_HD_NAME);
 MODULE_LICENSE("GPL");
-MODULE_ALIAS("bcm70012");
+MODULE_ALIAS("crystalhd");

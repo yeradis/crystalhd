@@ -1110,7 +1110,7 @@ DtsGetDrvStat(
 	BC_DTS_STATS *pIntDrvStat;
 	DTS_LIB_CONTEXT		*Ctx = NULL;
 	BC_STATUS	sts = BC_STS_SUCCESS;
-	float		fTemperature = 0;
+//	float		fTemperature = 0;
 
 	DTS_GET_CTX(hDevice,Ctx);
 
@@ -1158,8 +1158,7 @@ DtsGetDrvStat(
 	pDrvStat->eosDetected = pIntDrvStat->eosDetected;
 
 
-// 	DtsGetCoreTemperature(hDevice, &fTemperature);
-// 	pDrvStat->Temperature = fTemperature;
+//
 
 	DtsRelIoctlData(Ctx,pIocData);
 

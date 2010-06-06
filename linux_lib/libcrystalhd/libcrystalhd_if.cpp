@@ -1282,8 +1282,6 @@ DtsStartCaptureImmidiate(HANDLE		hDevice,
 
 	DebugLog_Trace(LDIL_DBG,"DbgOptions=%x\n", Ctx->RegCfg.DbgOptions);
 
-	memcpy(&pIocData->u.RxCap.SVidRsp,&Ctx->sVidRsp,sizeof(pIocData->u.RxCap.SVidRsp));
-
 	pIocData->u.RxCap.Rsrd = ST_CAP_IMMIDIATE;
 	pIocData->u.RxCap.StartDeliveryThsh = RX_START_DELIVERY_THRESHOLD;
 	pIocData->u.RxCap.PauseThsh = PAUSE_DECODER_THRESHOLD;
@@ -1327,8 +1325,6 @@ DtsStartCapture(HANDLE  hDevice)
 	}
 
 	DebugLog_Trace(LDIL_DBG,"DbgOptions=%x\n", Ctx->RegCfg.DbgOptions);
-
-	memcpy(&pIocData->u.RxCap.SVidRsp,&Ctx->sVidRsp,sizeof(pIocData->u.RxCap.SVidRsp));
 
 	pIocData->u.RxCap.Rsrd = NO_PARAM;
 	pIocData->u.RxCap.StartDeliveryThsh = RX_START_DELIVERY_THRESHOLD;

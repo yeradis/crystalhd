@@ -116,19 +116,7 @@ typedef struct _crystalhd_dioq_s {
 typedef void (*hw_comp_callback)(crystalhd_dio_req *,
 				 wait_queue_head_t *event, BC_STATUS sts);
 
-/*========= Decoder (7412) register access routines.================= */
-uint32_t bc_dec_reg_rd(struct crystalhd_adp *, uint32_t);
-void bc_dec_reg_wr(struct crystalhd_adp *, uint32_t, uint32_t);
-
-/*========= Link (70012) register access routines.. =================*/
-uint32_t crystalhd_reg_rd(struct crystalhd_adp *, uint32_t);
-void crystalhd_reg_wr(struct crystalhd_adp *, uint32_t, uint32_t);
-
-/*========= Decoder (7412) memory access routines..=================*/
-BC_STATUS crystalhd_mem_rd(struct crystalhd_adp *, uint32_t, uint32_t, uint32_t *);
-BC_STATUS crystalhd_mem_wr(struct crystalhd_adp *, uint32_t, uint32_t, uint32_t *);
-
-/*==========Link (70012) PCIe Config access routines.================*/
+/*========== PCIe Config access routines.================*/
 BC_STATUS crystalhd_pci_cfg_rd(struct crystalhd_adp *, uint32_t, uint32_t, uint32_t *);
 BC_STATUS crystalhd_pci_cfg_wr(struct crystalhd_adp *, uint32_t, uint32_t, uint32_t);
 
@@ -185,7 +173,8 @@ extern void *crystalhd_dioq_fetch_wait(void *, uint32_t , uint32_t *);
 
 extern int crystalhd_create_elem_pool(struct crystalhd_adp *, uint32_t);
 extern void crystalhd_delete_elem_pool(struct crystalhd_adp *);
-extern unsigned long GetRptDropParam(uint32_t picHeight, uint32_t picWidth, void *);
+// Some HW specific code defines
+extern uint32_t link_GetRptDropParam(uint32_t picHeight, uint32_t picWidth, void *);
 
 /*================ Debug routines/macros .. ================================*/
 extern void crystalhd_show_buffer(uint32_t off, uint8_t *buff, uint32_t dwcount);

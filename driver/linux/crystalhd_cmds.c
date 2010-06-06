@@ -23,8 +23,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this driver.  If not, see <http://www.gnu.org/licenses/>.
  **********************************************************************/
-#include "crystalhd_cmds.h"
-#include "crystalhd_hw.h"
 #include "crystalhd_lnx.h"
 
 static struct crystalhd_user *bc_cproc_get_uid(struct crystalhd_cmd *ctx)
@@ -113,7 +111,7 @@ static BC_STATUS bc_cproc_notify_mode(struct crystalhd_cmd *ctx,
 		return BC_STS_ERROR;
 
 	/* Setup Hardware DMA rings */
-	return crystalhd_hw_setup_dma_rings(&ctx->hw_ctx);
+	return crystalhd_hw_setup_dma_rings(ctx->hw_ctx);
 }
 
 static BC_STATUS bc_cproc_get_version(struct crystalhd_cmd *ctx,
@@ -156,7 +154,7 @@ static BC_STATUS bc_cproc_reg_rd(struct crystalhd_cmd *ctx,
 {
 	if (!ctx || !idata)
 		return BC_STS_INV_ARG;
-	idata->udata.u.regAcc.Value = bc_dec_reg_rd(ctx->adp,
+	idata->udata.u.regAcc.Value = ctx->hw_ctx->pfnReadDevRegister(ctx->adp,
 					idata->udata.u.regAcc.Offset);
 	return BC_STS_SUCCESS;
 }
@@ -167,7 +165,7 @@ static BC_STATUS bc_cproc_reg_wr(struct crystalhd_cmd *ctx,
 	if (!ctx || !idata)
 		return BC_STS_INV_ARG;
 
-	bc_dec_reg_wr(ctx->adp, idata->udata.u.regAcc.Offset,
+	ctx->hw_ctx->pfnWriteDevRegister(ctx->adp, idata->udata.u.regAcc.Offset,
 		      idata->udata.u.regAcc.Value);
 
 	return BC_STS_SUCCESS;
@@ -179,7 +177,7 @@ static BC_STATUS bc_cproc_link_reg_rd(struct crystalhd_cmd *ctx,
 	if (!ctx || !idata)
 		return BC_STS_INV_ARG;
 
-	idata->udata.u.regAcc.Value = crystalhd_reg_rd(ctx->adp,
+	idata->udata.u.regAcc.Value = ctx->hw_ctx->pfnReadFPGARegister(ctx->adp,
 					idata->udata.u.regAcc.Offset);
 	return BC_STS_SUCCESS;
 }
@@ -190,7 +188,7 @@ static BC_STATUS bc_cproc_link_reg_wr(struct crystalhd_cmd *ctx,
 	if (!ctx || !idata)
 		return BC_STS_INV_ARG;
 
-	crystalhd_reg_wr(ctx->adp, idata->udata.u.regAcc.Offset,
+	ctx->hw_ctx->pfnWriteFPGARegister(ctx->adp, idata->udata.u.regAcc.Offset,
 		       idata->udata.u.regAcc.Value);
 
 	return BC_STS_SUCCESS;
@@ -209,7 +207,7 @@ static BC_STATUS bc_cproc_mem_rd(struct crystalhd_cmd *ctx,
 		dev_err(dev, "insufficient buffer\n");
 		return BC_STS_INV_ARG;
 	}
-	sts = crystalhd_mem_rd(ctx->adp, idata->udata.u.devMem.StartOff,
+	sts = ctx->hw_ctx->pfnDevDRAMRead(ctx->hw_ctx, idata->udata.u.devMem.StartOff,
 			     idata->udata.u.devMem.NumDwords,
 			     (uint32_t *)idata->add_cdata);
 	return sts;
@@ -230,7 +228,7 @@ static BC_STATUS bc_cproc_mem_wr(struct crystalhd_cmd *ctx,
 		return BC_STS_INV_ARG;
 	}
 
-	sts = crystalhd_mem_wr(ctx->adp, idata->udata.u.devMem.StartOff,
+	sts = ctx->hw_ctx->pfnDevDRAMWrite(ctx->hw_ctx, idata->udata.u.devMem.StartOff,
 			     idata->udata.u.devMem.NumDwords,
 			     (uint32_t *)idata->add_cdata);
 	return sts;
@@ -318,7 +316,7 @@ static BC_STATUS bc_cproc_download_fw(struct crystalhd_cmd *ctx,
 		return BC_STS_ERR_USAGE;
 	}
 
-	sts = crystalhd_download_fw(ctx->adp, (uint8_t *)idata->add_cdata,
+	sts = ctx->hw_ctx->pfnFWDwnld(ctx->hw_ctx, (uint8_t *)idata->add_cdata,
 				  idata->add_cdata_sz);
 
 	if (sts != BC_STS_SUCCESS) {
@@ -359,7 +357,7 @@ static BC_STATUS bc_cproc_do_fw_cmd(struct crystalhd_cmd *ctx, crystalhd_ioctl_d
 	if (cmd[0] == eCMD_C011_DEC_CHAN_PAUSE) {
 		if (!cmd[3]) {
 			ctx->state &= ~BC_LINK_PAUSED;
-			crystalhd_hw_unpause(&ctx->hw_ctx);
+			ctx->hw_ctx->pfnIssuePause(ctx->hw_ctx, false);
 		}
 	} else if (cmd[0] == eCMD_C011_DEC_CHAN_FLUSH) {
 		dev_info(dev, "Flush issued\n");
@@ -367,7 +365,7 @@ static BC_STATUS bc_cproc_do_fw_cmd(struct crystalhd_cmd *ctx, crystalhd_ioctl_d
 			ctx->cin_wait_exit = 1;
 	}
 
-	sts = crystalhd_do_fw_cmd(&ctx->hw_ctx, &idata->udata.u.fwCmd);
+	sts = ctx->hw_ctx->pfnDoFirmwareCmd(ctx->hw_ctx, &idata->udata.u.fwCmd);
 
 	if (sts != BC_STS_SUCCESS) {
 		dev_info(dev, "fw cmd %x failed\n", cmd[0]);
@@ -378,7 +376,7 @@ static BC_STATUS bc_cproc_do_fw_cmd(struct crystalhd_cmd *ctx, crystalhd_ioctl_d
 	if (cmd[0] == eCMD_C011_DEC_CHAN_PAUSE) {
 		if (cmd[3]) {
 			ctx->state |= BC_LINK_PAUSED;
-			crystalhd_hw_pause(&ctx->hw_ctx);
+			ctx->hw_ctx->pfnIssuePause(ctx->hw_ctx, true);
 		}
 	}
 
@@ -441,7 +439,7 @@ static BC_STATUS bc_cproc_hw_txdma(struct crystalhd_cmd *ctx,
 
 	ctx->tx_list_id = 0;
 	/* msleep_interruptible(2000); */
-	sts = crystalhd_hw_post_tx(&ctx->hw_ctx, dio, bc_proc_in_completion,
+	sts = crystalhd_hw_post_tx(ctx->hw_ctx, dio, bc_proc_in_completion,
 				 &event, &tx_listid,
 				 idata->udata.u.ProcInput.Encrypted);
 
@@ -449,7 +447,7 @@ static BC_STATUS bc_cproc_hw_txdma(struct crystalhd_cmd *ctx,
 		sts = bc_cproc_codein_sleep(ctx);
 		if (sts != BC_STS_SUCCESS)
 			break;
-		sts = crystalhd_hw_post_tx(&ctx->hw_ctx, dio,
+		sts = crystalhd_hw_post_tx(ctx->hw_ctx, dio,
 					 bc_proc_in_completion,
 					 &event, &tx_listid,
 					 idata->udata.u.ProcInput.Encrypted);
@@ -482,7 +480,7 @@ static BC_STATUS bc_cproc_hw_txdma(struct crystalhd_cmd *ctx,
 	 * so no need to wait on the event again.. the return itself
 	 * ensures the release of our resources.
 	 */
-	crystalhd_hw_cancel_tx(&ctx->hw_ctx, tx_listid);
+	crystalhd_hw_cancel_tx(ctx->hw_ctx, tx_listid);
 
 	return sts;
 }
@@ -590,7 +588,7 @@ static BC_STATUS bc_cproc_add_cap_buff(struct crystalhd_cmd *ctx,
 	if (!dio_hnd)
 		return BC_STS_ERROR;
 
-	sts = crystalhd_hw_add_cap_buffer(&ctx->hw_ctx, dio_hnd, (ctx->state == BC_LINK_READY));
+	sts = crystalhd_hw_add_cap_buffer(ctx->hw_ctx, dio_hnd, (ctx->state == BC_LINK_READY));
 	if ((sts != BC_STS_SUCCESS) && (sts != BC_STS_BUSY)) {
 		crystalhd_unmap_dio(ctx->adp, dio_hnd);
 		return sts;
@@ -604,13 +602,13 @@ static BC_STATUS bc_cproc_fmt_change(struct crystalhd_cmd *ctx,
 {
 	BC_STATUS sts = BC_STS_SUCCESS;
 
-	sts = crystalhd_hw_add_cap_buffer(&ctx->hw_ctx, dio, 0);
+	sts = crystalhd_hw_add_cap_buffer(ctx->hw_ctx, dio, 0);
 	if (sts != BC_STS_SUCCESS)
 		return sts;
 
 	ctx->state |= BC_LINK_FMT_CHG;
 	if (ctx->state == BC_LINK_READY)
-		sts = crystalhd_hw_start_capture(&ctx->hw_ctx);
+		sts = crystalhd_hw_start_capture(ctx->hw_ctx);
 
 	return sts;
 }
@@ -635,7 +633,7 @@ static BC_STATUS bc_cproc_fetch_frame(struct crystalhd_cmd *ctx,
 
 	frame = &idata->udata.u.DecOutData;
 
-	sts = crystalhd_hw_get_cap_buffer(&ctx->hw_ctx, &frame->PibInfo, &dio);
+	sts = crystalhd_hw_get_cap_buffer(ctx->hw_ctx, &frame->PibInfo, &dio);
 	if (sts != BC_STS_SUCCESS)
 		return (ctx->state & BC_LINK_SUSPEND) ? BC_STS_IO_USER_ABORT : sts;
 
@@ -662,7 +660,7 @@ static BC_STATUS bc_cproc_start_capture(struct crystalhd_cmd *ctx,
 {
 	ctx->state |= BC_LINK_CAP_EN;
 	if (ctx->state == BC_LINK_READY)
-		return crystalhd_hw_start_capture(&ctx->hw_ctx);
+		return crystalhd_hw_start_capture(ctx->hw_ctx);
 
 	return BC_STS_SUCCESS;
 }
@@ -685,19 +683,19 @@ static BC_STATUS bc_cproc_flush_cap_buffs(struct crystalhd_cmd *ctx,
 // 	if (!(ctx->state & BC_LINK_READY))
 // 		return crystalhd_hw_stop_capture(&ctx->hw_ctx);
 
-	dev_info(dev, "number of rx success %u and failure %u\n", ctx->hw_ctx.stats.rx_success, ctx->hw_ctx.stats.rx_errors);
+	dev_info(dev, "number of rx success %u and failure %u\n", ctx->hw_ctx->stats.rx_success, ctx->hw_ctx->stats.rx_errors);
 	if(idata->udata.u.FlushRxCap.bDiscardOnly) {
 		// just flush without unmapping and then resume
-		crystalhd_hw_stop_capture(&ctx->hw_ctx, false);
-		while((rpkt = crystalhd_dioq_fetch(ctx->hw_ctx.rx_actq)) != NULL)
-			crystalhd_dioq_add(ctx->hw_ctx.rx_freeq, rpkt, false, rpkt->pkt_tag);
+		crystalhd_hw_stop_capture(ctx->hw_ctx, false);
+		while((rpkt = crystalhd_dioq_fetch(ctx->hw_ctx->rx_actq)) != NULL)
+			crystalhd_dioq_add(ctx->hw_ctx->rx_freeq, rpkt, false, rpkt->pkt_tag);
 		
-		while((rpkt = crystalhd_dioq_fetch(ctx->hw_ctx.rx_rdyq)) != NULL)
-			crystalhd_dioq_add(ctx->hw_ctx.rx_freeq, rpkt, false, rpkt->pkt_tag);
-		crystalhd_hw_start_capture(&ctx->hw_ctx);
+		while((rpkt = crystalhd_dioq_fetch(ctx->hw_ctx->rx_rdyq)) != NULL)
+			crystalhd_dioq_add(ctx->hw_ctx->rx_freeq, rpkt, false, rpkt->pkt_tag);
+		crystalhd_hw_start_capture(ctx->hw_ctx);
 	} else {
 		ctx->state &= ~(BC_LINK_CAP_EN|BC_LINK_FMT_CHG);
-		crystalhd_hw_stop_capture(&ctx->hw_ctx, true);
+		crystalhd_hw_stop_capture(ctx->hw_ctx, true);
 	}
 
 	return BC_STS_SUCCESS;
@@ -717,7 +715,7 @@ static BC_STATUS bc_cproc_get_stats(struct crystalhd_cmd *ctx,
 		return BC_STS_INV_ARG;
 	}
 
-	crystalhd_hw_stats(&ctx->hw_ctx, &hw_stats);
+	crystalhd_hw_stats(ctx->hw_ctx, &hw_stats);
 
 	stats = &idata->udata.u.drvStat;
 	stats->drvRLL = hw_stats.rdyq_count;
@@ -735,7 +733,7 @@ static BC_STATUS bc_cproc_get_stats(struct crystalhd_cmd *ctx,
 	if (ctx->state & BC_LINK_PAUSED)
 		stats->DrvPauseTime = 1;
 
-	crystalhd_hw_check_input_full(ctx->adp, 0, &stats->DrvcpbEmptySize,
+	ctx->hw_ctx->pfnCheckInputFIFO(ctx->hw_ctx, 0, &stats->DrvcpbEmptySize,
 				      false, flags);
 
 	/* status peek ahead to retreive the next decoded frame timestamp */
@@ -743,7 +741,7 @@ static BC_STATUS bc_cproc_get_stats(struct crystalhd_cmd *ctx,
 		pic_width = stats->DrvNextMDataPLD & 0xffff;
 		stats->DrvNextMDataPLD = 0;
 		if (pic_width <= 1920)
-			crystalhd_hw_peek_next_decoded_frame(&ctx->hw_ctx,
+			ctx->hw_ctx->pfnPeekNextDeodedFr(ctx->hw_ctx,
 				&stats->DrvNextMDataPLD, pic_width);
 	}
 
@@ -753,37 +751,9 @@ static BC_STATUS bc_cproc_get_stats(struct crystalhd_cmd *ctx,
 static BC_STATUS bc_cproc_reset_stats(struct crystalhd_cmd *ctx,
 				      crystalhd_ioctl_data *idata)
 {
-	crystalhd_hw_stats(&ctx->hw_ctx, NULL);
+	crystalhd_hw_stats(ctx->hw_ctx, NULL);
 
 	return BC_STS_SUCCESS;
-}
-
-static BC_STATUS bc_cproc_chg_clk(struct crystalhd_cmd *ctx,
-				  crystalhd_ioctl_data *idata)
-{
-	struct device *dev = chd_get_device();
-	BC_CLOCK *clock;
-	uint32_t oldClk;
-	BC_STATUS sts = BC_STS_SUCCESS;
-
-	if (!ctx || !idata) {
-		dev_err(dev, "%s: Invalid Arg\n", __func__);
-		return BC_STS_INV_ARG;
-	}
-
-	clock = &idata->udata.u.clockValue;
-	oldClk = ctx->hw_ctx.core_clock_mhz;
-	ctx->hw_ctx.core_clock_mhz = clock->clk;
-
-	if (ctx->state & BC_LINK_READY) {
-		sts = crystalhd_hw_set_core_clock(&ctx->hw_ctx);
-		if (sts == BC_STS_CLK_NOCHG)
-			ctx->hw_ctx.core_clock_mhz = oldClk;
-	}
-
-	clock->clk = ctx->hw_ctx.core_clock_mhz;
-
-	return sts;
 }
 
 /*=============== Cmd Proc Table.. ======================================*/
@@ -808,7 +778,6 @@ static const crystalhd_cmd_tbl_t	g_crystalhd_cproc_tbl[] = {
 	{ BCM_IOC_GET_DRV_STAT,		bc_cproc_get_stats,	0},
 	{ BCM_IOC_RST_DRV_STAT,		bc_cproc_reset_stats,	0},
 	{ BCM_IOC_NOTIFY_MODE,		bc_cproc_notify_mode,	0},
-	{ BCM_IOC_CHG_CLK,		bc_cproc_chg_clk, 0},
 	{ BCM_IOC_END,			NULL},
 };
 
@@ -863,12 +832,12 @@ BC_STATUS crystalhd_suspend(struct crystalhd_cmd *ctx, crystalhd_ioctl_data *ida
 	}
 
 	if (ctx->tx_list_id) {
-		sts = crystalhd_hw_cancel_tx(&ctx->hw_ctx, ctx->tx_list_id);
+		sts = crystalhd_hw_cancel_tx(ctx->hw_ctx, ctx->tx_list_id);
 		if (sts != BC_STS_SUCCESS)
 			return sts;
 	}
 
-	sts = crystalhd_hw_suspend(&ctx->hw_ctx);
+	sts = crystalhd_hw_suspend(ctx->hw_ctx);
 	if (sts != BC_STS_SUCCESS)
 		return sts;
 
@@ -935,7 +904,10 @@ BC_STATUS crystalhd_user_open(struct crystalhd_cmd *ctx,
 
 	dev_info(dev, "Opening new user[%x] handle\n", uc->uid);
 
-	crystalhd_hw_open(&ctx->hw_ctx, ctx->adp);
+	ctx->hw_ctx = (struct crystalhd_hw*)kmalloc(sizeof(struct crystalhd_hw), GFP_KERNEL);
+	memset(ctx->hw_ctx, 0, sizeof(struct crystalhd_hw));
+	
+	crystalhd_hw_open(ctx->hw_ctx, ctx->adp);
 
 	uc->in_use = 1;
 
@@ -969,15 +941,17 @@ BC_STATUS crystalhd_user_close(struct crystalhd_cmd *ctx, struct crystalhd_user 
 
 	if ((mode == DTS_DIAG_MODE) || (mode == DTS_PLAYBACK_MODE)) {
 		// Stop the HW Capture just in case flush did not get called before stop
-		crystalhd_hw_stop_capture(&ctx->hw_ctx, true);
-		crystalhd_hw_free_dma_rings(&ctx->hw_ctx);
+		crystalhd_hw_stop_capture(ctx->hw_ctx, true);
+		crystalhd_hw_free_dma_rings(ctx->hw_ctx);
 		crystalhd_destroy_dio_pool(ctx->adp);
 		crystalhd_delete_elem_pool(ctx->adp);
 	} else if (bc_cproc_get_user_count(ctx)) {
 		return BC_STS_SUCCESS;
 	}
 
-	crystalhd_hw_close(&ctx->hw_ctx);
+	crystalhd_hw_close(ctx->hw_ctx);
+	kfree(ctx->hw_ctx);
+	ctx->hw_ctx = NULL;
 
 	ctx->state = BC_LINK_INVALID;
 
@@ -1015,9 +989,16 @@ BC_STATUS __devinit crystalhd_setup_cmd_context(struct crystalhd_cmd *ctx,
 		ctx->user[i].mode = DTS_MODE_INV;
 	}
 
+	ctx->hw_ctx = (struct crystalhd_hw*)kmalloc(sizeof(struct crystalhd_hw), GFP_KERNEL);
+
+	memset(ctx->hw_ctx, 0, sizeof(struct crystalhd_hw));
+
 	/*Open and Close the Hardware to put it in to sleep state*/
-	crystalhd_hw_open(&ctx->hw_ctx, ctx->adp);
-	crystalhd_hw_close(&ctx->hw_ctx);
+	crystalhd_hw_open(ctx->hw_ctx, ctx->adp);
+	crystalhd_hw_close(ctx->hw_ctx);
+	kfree(ctx->hw_ctx);
+	ctx->hw_ctx = NULL;
+	
 	return BC_STS_SUCCESS;
 }
 
@@ -1104,5 +1085,8 @@ bool crystalhd_cmd_interrupt(struct crystalhd_cmd *ctx)
 		return 0;
 	}
 
-	return crystalhd_hw_interrupt(ctx->adp, &ctx->hw_ctx);
+	if(ctx->hw_ctx->adp->pdev->device == BC_PCI_DEVID_LINK)
+		return crystalhd_link_hw_interrupt(ctx->adp, ctx->hw_ctx);
+	else
+		return 0;
 }
