@@ -37,7 +37,7 @@
 #include "crystalhd_hw.h"
 #include "crystalhd_misc.h"
 
-extern struct device * chd_get_device(void);
+extern struct device * chddev(void);
 
 enum _crystalhd_state{
 	BC_LINK_INVALID		= 0x00,

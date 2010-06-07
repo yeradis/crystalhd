@@ -70,7 +70,7 @@ static void bc_cproc_mark_pwr_state(struct crystalhd_cmd *ctx)
 static BC_STATUS bc_cproc_notify_mode(struct crystalhd_cmd *ctx,
 				      crystalhd_ioctl_data *idata)
 {
-	struct device *dev = chd_get_device();
+	struct device *dev = chddev();
 	int rc = 0, i = 0;
 
 	if (!ctx || !idata) {
@@ -117,10 +117,8 @@ static BC_STATUS bc_cproc_notify_mode(struct crystalhd_cmd *ctx,
 static BC_STATUS bc_cproc_get_version(struct crystalhd_cmd *ctx,
 				      crystalhd_ioctl_data *idata)
 {
-	struct device *dev = chd_get_device();
-
 	if (!ctx || !idata) {
-		dev_err(dev, "%s: Invalid Arg\n", __func__);
+		dev_err(chddev(), "%s: Invalid Arg\n", __func__);
 		return BC_STS_INV_ARG;
 	}
 	idata->udata.u.VerInfo.DriverMajor = crystalhd_kmod_major;
@@ -132,10 +130,8 @@ static BC_STATUS bc_cproc_get_version(struct crystalhd_cmd *ctx,
 
 static BC_STATUS bc_cproc_get_hwtype(struct crystalhd_cmd *ctx, crystalhd_ioctl_data *idata)
 {
-	struct device *dev = chd_get_device();
-
 	if (!ctx || !idata) {
-		dev_err(dev, "%s: Invalid Arg\n", __func__);
+		dev_err(chddev(), "%s: Invalid Arg\n", __func__);
 		return BC_STS_INV_ARG;
 	}
 
@@ -197,14 +193,13 @@ static BC_STATUS bc_cproc_link_reg_wr(struct crystalhd_cmd *ctx,
 static BC_STATUS bc_cproc_mem_rd(struct crystalhd_cmd *ctx,
 				 crystalhd_ioctl_data *idata)
 {
-	struct device *dev = chd_get_device();
 	BC_STATUS sts = BC_STS_SUCCESS;
 
 	if (!ctx || !idata || !idata->add_cdata)
 		return BC_STS_INV_ARG;
 
 	if (idata->udata.u.devMem.NumDwords > (idata->add_cdata_sz / 4)) {
-		dev_err(dev, "insufficient buffer\n");
+		dev_err(chddev(), "insufficient buffer\n");
 		return BC_STS_INV_ARG;
 	}
 	sts = ctx->hw_ctx->pfnDevDRAMRead(ctx->hw_ctx, idata->udata.u.devMem.StartOff,
@@ -217,14 +212,13 @@ static BC_STATUS bc_cproc_mem_rd(struct crystalhd_cmd *ctx,
 static BC_STATUS bc_cproc_mem_wr(struct crystalhd_cmd *ctx,
 				 crystalhd_ioctl_data *idata)
 {
-	struct device *dev = chd_get_device();
 	BC_STATUS sts = BC_STS_SUCCESS;
 
 	if (!ctx || !idata || !idata->add_cdata)
 		return BC_STS_INV_ARG;
 
 	if (idata->udata.u.devMem.NumDwords > (idata->add_cdata_sz / 4)) {
-		dev_err(dev, "insufficient buffer\n");
+		dev_err(chddev(), "insufficient buffer\n");
 		return BC_STS_INV_ARG;
 	}
 
@@ -237,7 +231,6 @@ static BC_STATUS bc_cproc_mem_wr(struct crystalhd_cmd *ctx,
 static BC_STATUS bc_cproc_cfg_rd(struct crystalhd_cmd *ctx,
 				 crystalhd_ioctl_data *idata)
 {
-	struct device *dev = chd_get_device();
 	uint32_t ix, cnt, off, len;
 	BC_STATUS sts = BC_STS_SUCCESS;
 	uint32_t *temp;
@@ -258,7 +251,7 @@ static BC_STATUS bc_cproc_cfg_rd(struct crystalhd_cmd *ctx,
 	for (ix = 0; ix < cnt; ix++) {
 		sts = crystalhd_pci_cfg_rd(ctx->adp, off, len, &temp[ix]);
 		if (sts != BC_STS_SUCCESS) {
-			dev_err(dev, "config read : %d\n", sts);
+			dev_err(chddev(), "config read : %d\n", sts);
 			return sts;
 		}
 		off += len;
@@ -270,7 +263,6 @@ static BC_STATUS bc_cproc_cfg_rd(struct crystalhd_cmd *ctx,
 static BC_STATUS bc_cproc_cfg_wr(struct crystalhd_cmd *ctx,
 				 crystalhd_ioctl_data *idata)
 {
-	struct device *dev = chd_get_device();
 	uint32_t ix, cnt, off, len;
 	BC_STATUS sts = BC_STS_SUCCESS;
 	uint32_t *temp;
@@ -291,7 +283,7 @@ static BC_STATUS bc_cproc_cfg_wr(struct crystalhd_cmd *ctx,
 	for (ix = 0; ix < cnt; ix++) {
 		sts = crystalhd_pci_cfg_wr(ctx->adp, off, len, temp[ix]);
 		if (sts != BC_STS_SUCCESS) {
-			dev_err(dev, "config write : %d\n", sts);
+			dev_err(chddev(), "config write : %d\n", sts);
 			return sts;
 		}
 		off += len;
@@ -303,16 +295,15 @@ static BC_STATUS bc_cproc_cfg_wr(struct crystalhd_cmd *ctx,
 static BC_STATUS bc_cproc_download_fw(struct crystalhd_cmd *ctx,
 				      crystalhd_ioctl_data *idata)
 {
-	struct device *dev = chd_get_device();
 	BC_STATUS sts = BC_STS_SUCCESS;
 
 	if (!ctx || !idata || !idata->add_cdata || !idata->add_cdata_sz) {
-		dev_err(dev, "%s: Invalid Arg\n", __func__);
+		dev_err(chddev(), "%s: Invalid Arg\n", __func__);
 		return BC_STS_INV_ARG;
 	}
 
 	if (ctx->state != BC_LINK_INVALID) {
-		dev_err(dev, "Link invalid state %d \n", ctx->state);
+		dev_err(chddev(), "Link invalid state %d \n", ctx->state);
 		return BC_STS_ERR_USAGE;
 	}
 
@@ -320,7 +311,7 @@ static BC_STATUS bc_cproc_download_fw(struct crystalhd_cmd *ctx,
 				  idata->add_cdata_sz);
 
 	if (sts != BC_STS_SUCCESS) {
-		dev_err(dev, "Firmware Download Failure!! - %d\n", sts);
+		dev_err(chddev(), "Firmware Download Failure!! - %d\n", sts);
 	} else
 		ctx->state |= BC_LINK_INIT;
 
@@ -342,7 +333,7 @@ static BC_STATUS bc_cproc_download_fw(struct crystalhd_cmd *ctx,
  */
 static BC_STATUS bc_cproc_do_fw_cmd(struct crystalhd_cmd *ctx, crystalhd_ioctl_data *idata)
 {
-	struct device *dev = chd_get_device();
+	struct device *dev = chddev();
 	BC_STATUS sts;
 	uint32_t *cmd;
 
@@ -386,10 +377,8 @@ static BC_STATUS bc_cproc_do_fw_cmd(struct crystalhd_cmd *ctx, crystalhd_ioctl_d
 static void bc_proc_in_completion(crystalhd_dio_req *dio_hnd,
 				  wait_queue_head_t *event, BC_STATUS sts)
 {
-	struct device *dev = chd_get_device();
-
 	if (!dio_hnd || !event) {
-		dev_err(dev, "%s: Invalid Arg\n", __func__);
+		dev_err(chddev(), "%s: Invalid Arg\n", __func__);
 		return;
 	}
 	if (sts == BC_STS_IO_USER_ABORT)
@@ -424,7 +413,7 @@ static BC_STATUS bc_cproc_hw_txdma(struct crystalhd_cmd *ctx,
 				   crystalhd_ioctl_data *idata,
 				   crystalhd_dio_req *dio)
 {
-	struct device *dev = chd_get_device();
+	struct device *dev = chddev();
 	uint32_t tx_listid = 0;
 	BC_STATUS sts = BC_STS_SUCCESS;
 	wait_queue_head_t event;
@@ -489,7 +478,7 @@ static BC_STATUS bc_cproc_hw_txdma(struct crystalhd_cmd *ctx,
 static BC_STATUS bc_cproc_check_inbuffs(bool pin, void *ubuff, uint32_t ub_sz,
 					uint32_t uv_off, bool en_422)
 {
-	struct device *dev = chd_get_device();
+	struct device *dev = chddev();
 	if (!ubuff || !ub_sz) {
 		dev_err(dev, "%s->Invalid Arg %p %x\n",
 			((pin) ? "TX" : "RX"), ubuff, ub_sz);
@@ -520,7 +509,7 @@ static BC_STATUS bc_cproc_check_inbuffs(bool pin, void *ubuff, uint32_t ub_sz,
 
 static BC_STATUS bc_cproc_proc_input(struct crystalhd_cmd *ctx, crystalhd_ioctl_data *idata)
 {
-	struct device *dev = chd_get_device();
+	struct device *dev = chddev();
 	void *ubuff;
 	uint32_t ub_sz;
 	crystalhd_dio_req *dio_hnd = NULL;
@@ -557,7 +546,7 @@ static BC_STATUS bc_cproc_proc_input(struct crystalhd_cmd *ctx, crystalhd_ioctl_
 static BC_STATUS bc_cproc_add_cap_buff(struct crystalhd_cmd *ctx,
 				       crystalhd_ioctl_data *idata)
 {
-	struct device *dev = chd_get_device();
+	struct device *dev = chddev();
 	void *ubuff;
 	uint32_t ub_sz, uv_off;
 	bool en_422;
@@ -616,7 +605,7 @@ static BC_STATUS bc_cproc_fmt_change(struct crystalhd_cmd *ctx,
 static BC_STATUS bc_cproc_fetch_frame(struct crystalhd_cmd *ctx,
 				      crystalhd_ioctl_data *idata)
 {
-	struct device *dev = chd_get_device();
+	struct device *dev = chddev();
 	crystalhd_dio_req *dio = NULL;
 	BC_STATUS sts = BC_STS_SUCCESS;
 	BC_DEC_OUT_BUFF *frame;
@@ -668,7 +657,7 @@ static BC_STATUS bc_cproc_start_capture(struct crystalhd_cmd *ctx,
 static BC_STATUS bc_cproc_flush_cap_buffs(struct crystalhd_cmd *ctx,
 					  crystalhd_ioctl_data *idata)
 {
-	struct device *dev = chd_get_device();
+	struct device *dev = chddev();
 	crystalhd_rx_dma_pkt *rpkt;
 
 	if (!ctx || !idata) {
@@ -704,14 +693,13 @@ static BC_STATUS bc_cproc_flush_cap_buffs(struct crystalhd_cmd *ctx,
 static BC_STATUS bc_cproc_get_stats(struct crystalhd_cmd *ctx,
 				    crystalhd_ioctl_data *idata)
 {
-	struct device *dev = chd_get_device();
 	BC_DTS_STATS *stats;
 	struct crystalhd_hw_stats	hw_stats;
 	uint32_t pic_width;
 	unsigned long flags = 0;
 
 	if (!ctx || !idata) {
-		dev_err(dev, "%s: Invalid Arg\n", __func__);
+		dev_err(chddev(), "%s: Invalid Arg\n", __func__);
 		return BC_STS_INV_ARG;
 	}
 
@@ -805,7 +793,7 @@ static const crystalhd_cmd_tbl_t	g_crystalhd_cproc_tbl[] = {
  */
 BC_STATUS crystalhd_suspend(struct crystalhd_cmd *ctx, crystalhd_ioctl_data *idata)
 {
-	struct device *dev = chd_get_device();
+	struct device *dev = chddev();
 	BC_STATUS sts = BC_STS_SUCCESS;
 
 	if (!ctx || !idata) {
@@ -864,9 +852,7 @@ BC_STATUS crystalhd_suspend(struct crystalhd_cmd *ctx, crystalhd_ioctl_data *ida
  */
 BC_STATUS crystalhd_resume(struct crystalhd_cmd *ctx)
 {
-	struct device *dev = chd_get_device();
-
-	dev_dbg(dev, "crystalhd_resume Success %x\n", ctx->state);
+	dev_dbg(chddev(), "crystalhd_resume Success %x\n", ctx->state);
 
 	bc_cproc_mark_pwr_state(ctx);
 
@@ -888,7 +874,7 @@ BC_STATUS crystalhd_resume(struct crystalhd_cmd *ctx)
 BC_STATUS crystalhd_user_open(struct crystalhd_cmd *ctx,
 			      struct crystalhd_user **user_ctx)
 {
-	struct device *dev = chd_get_device();
+	struct device *dev = chddev();
 	struct crystalhd_user *uc;
 
 	if (!ctx || !user_ctx) {
@@ -929,7 +915,6 @@ BC_STATUS crystalhd_user_open(struct crystalhd_cmd *ctx,
  */
 BC_STATUS crystalhd_user_close(struct crystalhd_cmd *ctx, struct crystalhd_user *uc)
 {
-	struct device *dev = chd_get_device();
 	uint32_t mode = uc->mode;
 
 	ctx->user[uc->uid].mode = DTS_MODE_INV;
@@ -937,7 +922,7 @@ BC_STATUS crystalhd_user_close(struct crystalhd_cmd *ctx, struct crystalhd_user 
 	ctx->cin_wait_exit = 1;
 	ctx->pwr_state_change = 0;
 
-	dev_info(dev, "Closing user[%x] handle\n", uc->uid);
+	dev_info(chddev(), "Closing user[%x] handle\n", uc->uid);
 
 	if ((mode == DTS_DIAG_MODE) || (mode == DTS_PLAYBACK_MODE)) {
 		// Stop the HW Capture just in case flush did not get called before stop
@@ -1013,9 +998,7 @@ BC_STATUS __devinit crystalhd_setup_cmd_context(struct crystalhd_cmd *ctx,
  */
 BC_STATUS __devexit crystalhd_delete_cmd_context(struct crystalhd_cmd *ctx)
 {
-	struct device *dev = chd_get_device();
-
-	dev_dbg(dev, "Deleting Command context..\n");
+	dev_dbg(chddev(), "Deleting Command context..\n");
 
 	ctx->adp = NULL;
 
@@ -1038,7 +1021,7 @@ BC_STATUS __devexit crystalhd_delete_cmd_context(struct crystalhd_cmd *ctx)
 crystalhd_cmd_proc crystalhd_get_cmd_proc(struct crystalhd_cmd *ctx, uint32_t cmd,
 				      struct crystalhd_user *uc)
 {
-	struct device *dev = chd_get_device();
+	struct device *dev = chddev();
 	crystalhd_cmd_proc cproc = NULL;
 	unsigned int i, tbl_sz;
 

@@ -112,11 +112,10 @@ void chd_dec_free_iodata(struct crystalhd_adp *adp, crystalhd_ioctl_data *iodata
 
 static inline int crystalhd_user_data(unsigned long ud, void *dr, int size, int set)
 {
-	struct device *dev = chd_get_device();
 	int rc;
 
 	if (!ud || !dr) {
-		dev_err(dev, "%s: Invalid arg\n", __func__);
+		dev_err(chddev(), "%s: Invalid arg\n", __func__);
 		return -EINVAL;
 	}
 
@@ -126,7 +125,7 @@ static inline int crystalhd_user_data(unsigned long ud, void *dr, int size, int 
 		rc = copy_from_user(dr, (void *)ud, size);
 
 	if (rc) {
-		dev_err(dev, "Invalid args for command\n");
+		dev_err(chddev(), "Invalid args for command\n");
 		rc = -EFAULT;
 	}
 
@@ -136,18 +135,17 @@ static inline int crystalhd_user_data(unsigned long ud, void *dr, int size, int 
 static int chd_dec_fetch_cdata(struct crystalhd_adp *adp, crystalhd_ioctl_data *io,
 			       uint32_t m_sz, unsigned long ua)
 {
-	struct device *dev = chd_get_device();
 	unsigned long ua_off;
 	int rc = 0;
 
 	if (!adp || !io || !ua || !m_sz) {
-		dev_err(dev, "Invalid Arg!!\n");
+		dev_err(chddev(), "Invalid Arg!!\n");
 		return -EINVAL;
 	}
 
 	io->add_cdata = vmalloc(m_sz);
 	if (!io->add_cdata) {
-		dev_err(dev, "kalloc fail for sz:%x\n", m_sz);
+		dev_err(chddev(), "kalloc fail for sz:%x\n", m_sz);
 		return -ENOMEM;
 	}
 
@@ -155,8 +153,9 @@ static int chd_dec_fetch_cdata(struct crystalhd_adp *adp, crystalhd_ioctl_data *
 	ua_off = ua + sizeof(io->udata);
 	rc = crystalhd_user_data(ua_off, io->add_cdata, io->add_cdata_sz, 0);
 	if (rc) {
-		dev_err(dev, "failed to pull add_cdata sz:%x ua_off:%x\n",
-			io->add_cdata_sz, (unsigned int)ua_off);
+		dev_err(chddev(), "failed to pull add_cdata sz:%x "
+			"ua_off:%x\n", io->add_cdata_sz,
+			(unsigned int)ua_off);
 		kfree(io->add_cdata);
 		io->add_cdata = NULL;
 		return -ENODATA;
@@ -168,7 +167,6 @@ static int chd_dec_fetch_cdata(struct crystalhd_adp *adp, crystalhd_ioctl_data *
 static int chd_dec_release_cdata(struct crystalhd_adp *adp,
 				 crystalhd_ioctl_data *io, unsigned long ua)
 {
-	struct device *dev = chd_get_device();
 	unsigned long ua_off;
 	int rc;
 
@@ -182,8 +180,9 @@ static int chd_dec_release_cdata(struct crystalhd_adp *adp,
 		rc = crystalhd_user_data(ua_off, io->add_cdata,
 					io->add_cdata_sz, 1);
 		if (rc) {
-			dev_err(dev, "failed to push add_cdata sz:%x ua_off:%x\n",
-				io->add_cdata_sz, (unsigned int)ua_off);
+			dev_err(chddev(), "failed to push add_cdata sz:%x "
+				"ua_off:%x\n", io->add_cdata_sz,
+				(unsigned int)ua_off);
 			return -ENODATA;
 		}
 	}
@@ -200,18 +199,18 @@ static int chd_dec_proc_user_data(struct crystalhd_adp *adp,
 				  crystalhd_ioctl_data *io,
 				  unsigned long ua, int set)
 {
-	struct device *dev = chd_get_device();
 	int rc;
 	uint32_t m_sz = 0;
 
 	if (!adp || !io || !ua) {
-		dev_err(dev, "Invalid Arg!!\n");
+		dev_err(chddev(), "Invalid Arg!!\n");
 		return -EINVAL;
 	}
 
 	rc = crystalhd_user_data(ua, &io->udata, sizeof(io->udata), set);
 	if (rc) {
-		dev_err(dev, "failed to %s iodata\n", (set ? "set" : "get"));
+		dev_err(chddev(), "failed to %s iodata\n",
+			(set ? "set" : "get"));
 		return rc;
 	}
 
@@ -235,14 +234,13 @@ static int chd_dec_proc_user_data(struct crystalhd_adp *adp,
 static int chd_dec_api_cmd(struct crystalhd_adp *adp, unsigned long ua,
 			   uint32_t uid, uint32_t cmd, crystalhd_cmd_proc func)
 {
-	struct device *dev = chd_get_device();
 	int rc;
 	crystalhd_ioctl_data *temp;
 	BC_STATUS sts = BC_STS_SUCCESS;
 
 	temp = chd_dec_alloc_iodata(adp, 0);
 	if (!temp) {
-		dev_err(dev, "Failed to get iodata..\n");
+		dev_err(chddev(), "Failed to get iodata..\n");
 		return -EINVAL;
 	}
 
@@ -270,25 +268,24 @@ static int chd_dec_api_cmd(struct crystalhd_adp *adp, unsigned long ua,
 static int chd_dec_ioctl(struct inode *in, struct file *fd,
 			 unsigned int cmd, unsigned long ua)
 {
-	struct device *dev = chd_get_device();
 	struct crystalhd_adp *adp = chd_get_adp();
 	crystalhd_cmd_proc cproc;
 	struct crystalhd_user *uc;
 
 	if (!adp || !fd) {
-		dev_err(dev, "Invalid adp\n");
+		dev_err(chddev(), "Invalid adp\n");
 		return -EINVAL;
 	}
 
 	uc = (struct crystalhd_user *)fd->private_data;
 	if (!uc) {
-		dev_err(dev, "Failed to get uc\n");
+		dev_err(chddev(), "Failed to get uc\n");
 		return -ENODATA;
 	}
 
 	cproc = crystalhd_get_cmd_proc(&adp->cmds, cmd, uc);
 	if (!cproc) {
-		dev_err(dev, "Unhandled command: %d\n", cmd);
+		dev_err(chddev(), "Unhandled command: %d\n", cmd);
 		return -EINVAL;
 	}
 
@@ -429,7 +426,6 @@ fail:
 
 static void __devexit chd_dec_release_chdev(struct crystalhd_adp *adp)
 {
-	struct device *dev = chd_get_device();
 	crystalhd_ioctl_data *temp = NULL;
 	if (!adp)
 		return;
@@ -438,7 +434,7 @@ static void __devexit chd_dec_release_chdev(struct crystalhd_adp *adp)
 		/* unregister crystalhd class */
 		device_destroy(crystalhd_class, MKDEV(adp->chd_dec_major, 0));
 		unregister_chrdev(adp->chd_dec_major, CRYSTALHD_API_NAME);
-		dev_info(dev, "released api device - %d\n",
+		dev_info(chddev(), "released api device - %d\n",
 		       adp->chd_dec_major);
 		class_destroy(crystalhd_class);
 	}
@@ -523,21 +519,20 @@ static void __devexit chd_pci_release_mem(struct crystalhd_adp *pinfo)
 
 static void __devexit chd_dec_pci_remove(struct pci_dev *pdev)
 {
-	struct device *dev = chd_get_device();
 	struct crystalhd_adp *pinfo;
 	BC_STATUS sts = BC_STS_SUCCESS;
 
-	dev_dbg(dev, "Entering %s\n", __func__);
+	dev_dbg(chddev(), "Entering %s\n", __func__);
 
 	pinfo = (struct crystalhd_adp *) pci_get_drvdata(pdev);
 	if (!pinfo) {
-		dev_err(dev, "could not get adp\n");
+		dev_err(chddev(), "could not get adp\n");
 		return;
 	}
 
 	sts = crystalhd_delete_cmd_context(&pinfo->cmds);
 	if (sts != BC_STS_SUCCESS)
-		dev_err(dev, "cmd delete :%d\n", sts);
+		dev_err(chddev(), "cmd delete :%d\n", sts);
 
 	chd_dec_release_chdev(pinfo);
 
@@ -737,7 +732,7 @@ struct crystalhd_adp *chd_get_adp(void)
 	return g_adp_info;
 }
 
-struct device * chd_get_device(void)
+inline struct device *chddev(void)
 {
 	return &chd_get_adp()->pdev->dev;
 }
