@@ -1840,7 +1840,7 @@ DtsAlignSendData( HANDLE  hDevice ,
 		}
 
 		/* Copy the non-DWORD aligned buffer first */
-		oddBytes = (uint8_t)((uint32_t)pDeliverBuf % 4);
+		oddBytes = (uint8_t)((uintptr_t)pDeliverBuf % 4);
 
 		if (Ctx->VidParams.StreamType == BC_STREAM_TYPE_ES)
 		{
