@@ -856,11 +856,6 @@ DtsOpenDecoder(
 	Ctx->bEOSCheck = FALSE;
 	Ctx->bEOS = FALSE;
 	Ctx->CapState = 0;
-	if(Ctx->SingleThreadedAppMode) {
-		Ctx->cpbBase = 0;
-		Ctx->cpbEnd = 0;
-	}
-	Ctx->FPDrain = FALSE;
 
 	sts = DtsSetVideoClock(hDevice,0);
 	if (sts != BC_STS_SUCCESS)
@@ -992,14 +987,6 @@ DtsCloseDecoder(
 	Ctx->bEOS = FALSE;
 
 	Ctx->InSampleCount = 0;
-#ifdef TX_CIRCULAR_BUFFER
-	Ctx->nTxHoldBufRead = Ctx->nTxHoldBufWrite = 0;
-	Ctx->nTxHoldBufCounter = 0;
-#else
-	Ctx->nPendBufInd = 0;
-#endif
-	Ctx->nPendFPBufInd = 0;
-	Ctx->FPDrain = FALSE;
 
 	/* Clear all pending lists.. */
 	DtsClrPendMdataList(Ctx);
@@ -1242,10 +1229,6 @@ DRVIFLIB_API BC_STATUS
 
 	Ctx->State = BC_DEC_STATE_START;
 
-	Ctx->totalPicsCounted = 0;
-	Ctx->rptPicsCounted = 0;
-	Ctx->nrptPicsCounted = 0;
-
 	return sts;
 }
 
@@ -1419,10 +1402,6 @@ DtsProcOutput(
 	do
 	{
 		memset(&OutBuffs,0,sizeof(OutBuffs));
-
-		// If running in adobe mode and we are draining that make sure TX is still going
-		if (Ctx->SingleThreadedAppMode && Ctx->nPendFPBufInd != 0 && Ctx->FPDrain)
-			DtsSendData(hDevice, 0, 0, 0, 0);
 
 		sts = DtsFetchOutInterruptible(Ctx,&OutBuffs,milliSecWait);
 		if(sts != BC_STS_SUCCESS)
@@ -1720,375 +1699,6 @@ DtsReleaseOutputBuffs(
 	return DtsRelRxBuff(Ctx, &Ctx->pOutData->u.RxBuffs, FALSE);
 }
 
-// NAREN this function is used to send data buffered to the HW
-// This is initially for FP since it needs buffering to avoid stalling the CPU
-// and excessive polling from the single thread plugin due to the HW returning 0 size
-// buffers when it is absorbing data
-// FP tries to send bursts of data to return from hide or minimized operation to full visible
-// operation and this will allow bigger bursts
-DRVIFLIB_API BC_STATUS
-DtsSendDataFPMode( HANDLE  hDevice ,
-				 uint8_t *pUserData,
-				 uint32_t ulSizeInBytes,
-				 uint64_t timeStamp,
-				 BOOL encrypted
-			    )
-{
-	uint32_t	DramOff;
-	BC_STATUS	sts = BC_STS_SUCCESS;
-	DTS_LIB_CONTEXT		*Ctx = NULL;
-	BC_DTS_STATUS pStat;
-	uint32_t TransferSz = 0;
-	//unused uint32_t i_cnt=0, p_cnt=0;
-
-	//unused BC_DTS_STATS *pDtsStat = DtsGetgStats();
-
-	DTS_GET_CTX(hDevice,Ctx);
-
-	// Not really needed for FP since it only used H.264. But leave it just in case
-	if(Ctx->VidParams.VideoAlgo == BC_VID_ALGO_VC1MP)
-		encrypted|=0x2;
-
-	if(ulSizeInBytes > FP_TX_BUF_SIZE)
-		return BC_STS_INSUFF_RES; //Error
-
-	// This hack only works because FP is single threaded and we are sure that no one else is using this function
-	// For other cases we will have to use synchronization
-	Ctx->SingleThreadedAppMode |= 0x8; // get the HW free size always in this function
-	// First get the available size from the HW
-	sts = DtsGetDriverStatus(hDevice, &pStat);
-	Ctx->SingleThreadedAppMode &= 0x7;
-	if(sts != BC_STS_SUCCESS)
-		return sts;
-
-	/* If we are aborting TX then clear the buffer and return */
-	if(pStat.cpbEmptySize & 0x80000000)
-	{
-		Ctx->nPendFPBufInd = 0;
-		return BC_STS_SUCCESS;
-	}
-
-	// Check for Drain condition. In case of FP Drain will be posted from ProcOutput
-	if((ulSizeInBytes == 0) && (pUserData == NULL))
-	{
-		// first make sure the HW can deal with the data
-		if(pStat.cpbEmptySize == 0)
-			return BC_STS_SUCCESS;
-
-		if(Ctx->nPendFPBufInd <= pStat.cpbEmptySize)
-			TransferSz = Ctx->nPendFPBufInd;
-		else
-			TransferSz = pStat.cpbEmptySize;
-
-		sts = DtsTxDmaText(hDevice, Ctx->FPpendingBuf, TransferSz, &DramOff, encrypted);
-		if(sts == BC_STS_SUCCESS)
-			DtsUpdateInStats(Ctx, TransferSz);
-		else
-			return sts;
-
-		Ctx->nPendFPBufInd -= TransferSz;
-		if (Ctx->nPendFPBufInd == 0)
-			return BC_STS_SUCCESS;
-		// Then clean up the buffer for the next time
-		if(memmove_s(Ctx->FPpendingBuf, FP_TX_BUF_SIZE, Ctx->FPpendingBuf + TransferSz, Ctx->nPendFPBufInd))
-			return BC_STS_INSUFF_RES;
-		else
-			return BC_STS_SUCCESS;
-	}
-
-	// We can safely buffer if we can't send because FP has checked for enough space before the TX
-	// if the cpb returns empty - we are either in PD or don't have space
-	// just buffer and return
-	if(pStat.cpbEmptySize == 0)
-	{
-		if(memcpy_s(Ctx->FPpendingBuf + Ctx->nPendFPBufInd, FP_TX_BUF_SIZE - Ctx->nPendFPBufInd, pUserData, ulSizeInBytes))
-			return BC_STS_INSUFF_RES;
-		Ctx->nPendFPBufInd += ulSizeInBytes;
-		return BC_STS_SUCCESS;
-	}
-
-	// We can send some data. If we can send without buffering data send directly
-	if((Ctx->nPendFPBufInd == 0) && (ulSizeInBytes <= pStat.cpbEmptySize))
-	{
-		sts = DtsTxDmaText(hDevice, pUserData, ulSizeInBytes, &DramOff, encrypted);
-		if(sts == BC_STS_SUCCESS)
-			DtsUpdateInStats(Ctx,ulSizeInBytes);
-		return sts;
-	}
-
-	// We were unable to send all the data. So buffer the rest.
-	// Do a poor man's queue here. Ugly, so fix this if it is a performance problem
-	// First add to the buffer
-	if(memcpy_s(Ctx->FPpendingBuf + Ctx->nPendFPBufInd, FP_TX_BUF_SIZE - Ctx->nPendFPBufInd, pUserData, ulSizeInBytes))
-		return BC_STS_INSUFF_RES;
-	Ctx->nPendFPBufInd += ulSizeInBytes;
-	if(Ctx->nPendFPBufInd <= pStat.cpbEmptySize)
-		TransferSz = Ctx->nPendFPBufInd;
-	else
-		TransferSz = pStat.cpbEmptySize;
-
-	sts = DtsTxDmaText(hDevice, Ctx->FPpendingBuf, TransferSz, &DramOff, encrypted);
-	if(sts == BC_STS_SUCCESS)
-		DtsUpdateInStats(Ctx, TransferSz);
-	else
-		return sts;
-	Ctx->nPendFPBufInd -= TransferSz;
-	if (Ctx->nPendFPBufInd == 0)
-		return BC_STS_SUCCESS;
-	// Then clean up the buffer for the next time
-	if(memmove_s(Ctx->FPpendingBuf, FP_TX_BUF_SIZE, Ctx->FPpendingBuf + TransferSz, Ctx->nPendFPBufInd))
-		return BC_STS_INSUFF_RES;
-	else
-		return BC_STS_SUCCESS;
-
-}
-
-DRVIFLIB_API BC_STATUS
-DtsSendDataBuffer( HANDLE  hDevice ,
-				 uint8_t *pUserData,
-				 uint32_t ulSizeInBytes,
-				 uint64_t timeStamp,
-				 BOOL encrypted
-			    )
-{
-	uint32_t	DramOff;
-	BC_STATUS	sts = BC_STS_SUCCESS;
-	DTS_LIB_CONTEXT		*Ctx = NULL;
-	BC_IOCTL_DATA		*pIocData = NULL;
-	uint8_t bForceDeliver = false;
-	uint8_t bFlushing = false;
-
-	//unused uint8_t* pData;
-	uint32_t	ulSize;
-
-	uint32_t ulTxBufAvailSize;
-	//unused BC_DTS_STATS *pDtsStat = DtsGetgStats( );
-
-	DTS_GET_CTX(hDevice,Ctx);
-
-	if(Ctx->VidParams.VideoAlgo == BC_VID_ALGO_VC1MP)
-		encrypted|=0x2;
-
-	// ulSizeInBytes = 0 && pUserData = NULL ==> Drain input buffer
-
-	if (pUserData == NULL && ulSizeInBytes == 0)
-		bFlushing = true;
-
-#ifdef TX_CIRCULAR_BUFFER
-	if (Ctx->nTxHoldBufWrite >= Ctx->nTxHoldBufRead)
-	{
-		ulTxBufAvailSize = TX_HOLD_BUF_SIZE - (Ctx->nTxHoldBufWrite - Ctx->nTxHoldBufRead);
-	}
-	else
-	{
-		ulTxBufAvailSize = Ctx->nTxHoldBufRead - Ctx->nTxHoldBufWrite;
-	}
-	if (ulSizeInBytes && ulTxBufAvailSize > ulSizeInBytes)
-	{
-		if ((TX_HOLD_BUF_SIZE - Ctx->nTxHoldBufWrite) >= ulSizeInBytes)
-		{
-			memcpy(Ctx->pendingBuf+Ctx->nTxHoldBufWrite, pUserData, ulSizeInBytes);
-			Ctx->nTxHoldBufWrite = (Ctx->nTxHoldBufWrite + ulSizeInBytes) % TX_HOLD_BUF_SIZE;
-			ulSizeInBytes = 0;
-		}
-		else
-		{
-			ulSize = TX_HOLD_BUF_SIZE - Ctx->nTxHoldBufWrite;
-			memcpy(Ctx->pendingBuf+Ctx->nTxHoldBufWrite, pUserData, ulSize);
-			pUserData += ulSize;
-			memcpy(Ctx->pendingBuf, pUserData, ulSizeInBytes - ulSize);
-			Ctx->nTxHoldBufWrite = ulSizeInBytes - ulSize;
-			ulSizeInBytes = 0;
-		}
-	}
-
-	if(!(pIocData = DtsAllocIoctlData(Ctx)))
-		return BC_STS_INSUFF_RES;
-
-	while (Ctx->nTxHoldBufWrite != Ctx->nTxHoldBufRead)
-	{
-		bForceDeliver = bFlushing;
-		if (Ctx->nTxHoldBufWrite >= Ctx->nTxHoldBufRead)
-		{
-			ulSize = Ctx->nTxHoldBufWrite - Ctx->nTxHoldBufRead;
-		}
-		else
-		{
-			bForceDeliver = true;
-			ulSize = TX_HOLD_BUF_SIZE - Ctx->nTxHoldBufRead;
-		}
-
-		if ((!bForceDeliver) && (ulSize < TX_BUF_THRESHOLD) && (Ctx->nTxHoldBufCounter < TX_BUF_DELIVER_THRESHOLD))
-		{
-			Ctx->nTxHoldBufCounter ++;
-			break;
-		}
-		Ctx->nTxHoldBufCounter = 0;
-		if (DtsDrvCmd(Ctx, BCM_IOC_GET_DRV_STAT, 0, pIocData, FALSE) == BC_STS_SUCCESS)
-		{
-			if (pIocData->u.drvStat.DrvcpbEmptySize & 0x80000000)
-			{
-				//Aborting Tx
-				Ctx->nTxHoldBufWrite = Ctx->nTxHoldBufRead = 0;
-				DtsRelIoctlData(Ctx,pIocData);
-				return BC_STS_IO_USER_ABORT;
-			}
-			if (pIocData->u.drvStat.DrvcpbEmptySize == 0)
-			{
-				bc_sleep_ms(5);
-				break;
-			}
-			if (pIocData->u.drvStat.DrvcpbEmptySize < ulSize)
-				ulSize = pIocData->u.drvStat.DrvcpbEmptySize;
-
-			if(!bForceDeliver)
-				ulSize = (ulSize >> 2) << 2;
-
-			if (ulSize)
-			{
-
-				sts = DtsTxDmaText(hDevice, Ctx->pendingBuf+Ctx->nTxHoldBufRead,ulSize, &DramOff, encrypted);
-				if(sts == BC_STS_SUCCESS)
-				{
-					Ctx->nTxHoldBufRead = ( Ctx->nTxHoldBufRead + ulSize ) % TX_HOLD_BUF_SIZE;
-					if(Ctx->nTxHoldBufRead == Ctx->nTxHoldBufWrite)
-						Ctx->nTxHoldBufWrite = Ctx->nTxHoldBufRead = 0;
-					DtsUpdateInStats(Ctx,ulSize);
-				}
-			}
-		}
-	}
-	DtsRelIoctlData(Ctx,pIocData);
-
-	if (ulSizeInBytes > 0)
-		return BC_STS_BUSY;
-	if (bFlushing && (Ctx->nTxHoldBufWrite != Ctx->nTxHoldBufRead))
-		return BC_STS_BUSY;
-	return BC_STS_SUCCESS;
-#else
-	if (ulSizeInBytes > 0 && pUserData)
-	{
-		if (ulSizeInBytes > TX_HOLD_BUF_SIZE)
-		{
-			if (Ctx->nPendBufInd)
-			{
-				sts = DtsTxDmaText(hDevice,Ctx->pendingBuf,Ctx->nPendBufInd,&DramOff, encrypted);
-				if (sts != BC_STS_SUCCESS)
-					return sts;
-				DtsUpdateInStats(Ctx,Ctx->nPendBufInd);
-				Ctx->nPendBufInd = 0;
-			}
-			sts = DtsTxDmaText(hDevice,pUserData,ulSizeInBytes,&DramOff, encrypted);
-			if(sts == BC_STS_SUCCESS)
-				DtsUpdateInStats(Ctx,ulSizeInBytes);
-			return sts;
-		}
-		else if ((Ctx->nPendBufInd + ulSizeInBytes) < TX_HOLD_BUF_SIZE)
-		{
-			memcpy(Ctx->pendingBuf+Ctx->nPendBufInd, pUserData, ulSizeInBytes);
-			Ctx->nPendBufInd += ulSizeInBytes;
-			return BC_STS_SUCCESS;
-		}
-	}
-	pData = Ctx->pendingBuf;
-	ulSize = Ctx->nPendBufInd;
-
-	if (ulSize == 0)
-		return BC_STS_SUCCESS;
-
-	sts = DtsTxDmaText(hDevice,pData,ulSize,&DramOff, encrypted);
-	if(sts == BC_STS_SUCCESS)
-		DtsUpdateInStats(Ctx,ulSize);
-
-	if (ulSizeInBytes && pUserData)
-		memcpy(Ctx->pendingBuf, pUserData, ulSizeInBytes);
-
-	Ctx->nPendBufInd = ulSizeInBytes;
-	return sts;
-
-#endif
-}
-
-DRVIFLIB_API BC_STATUS
-DtsSendDataDirect( HANDLE  hDevice ,
-				 uint8_t *pUserData,
-				 uint32_t ulSizeInBytes,
-				 uint64_t timeStamp,
-				 BOOL encrypted
-			    )
-{
-	uint32_t	DramOff;
-	BC_STATUS	sts = BC_STS_SUCCESS;
-	uint32_t     CpbSize=0;
-	uint32_t		CpbFullness=0;
-	DTS_LIB_CONTEXT		*Ctx = NULL;
-	uint32_t base, end, readp, writep;
-	int		FifoSize;
-
-	BC_DTS_STATS *pDtsStat = DtsGetgStats( );
-
-	DTS_GET_CTX(hDevice,Ctx);
-
-	if (pUserData == NULL || ulSizeInBytes == 0)
-		return BC_STS_INV_ARG;
-
-	if(Ctx->VidParams.VideoAlgo == BC_VID_ALGO_VC1MP)
-		encrypted|=0x2;
-
-	if (!(Ctx->FixFlags & DTS_SKIP_TX_CHK_CPB) && (Ctx->DevId == BC_PCI_DEVID_LINK))
-	{
-
-		if(encrypted&0x2){
-			DtsDevRegisterRead(hDevice, REG_Dec_TsAudCDB2Base, &base);
-			DtsDevRegisterRead(hDevice, REG_Dec_TsAudCDB2End,	&end);
-			DtsDevRegisterRead(hDevice, REG_Dec_TsAudCDB2Wrptr, &writep);
-			DtsDevRegisterRead(hDevice, REG_Dec_TsAudCDB2Rdptr, &readp);
-		}
-		else if(encrypted&0x1){
-			DtsDevRegisterRead(hDevice, REG_Dec_TsUser0Base, &base);
-			DtsDevRegisterRead(hDevice, REG_Dec_TsUser0End, &end);
-			DtsDevRegisterRead(hDevice, REG_Dec_TsUser0Wrptr, &writep);
-			DtsDevRegisterRead(hDevice, REG_Dec_TsUser0Rdptr, &readp);
-		}else{
-			DtsDevRegisterRead(hDevice, REG_DecCA_RegCinBase, &base);
-			DtsDevRegisterRead(hDevice, REG_DecCA_RegCinEnd, &end);
-			DtsDevRegisterRead(hDevice, REG_DecCA_RegCinWrPtr, &writep);
-			DtsDevRegisterRead(hDevice, REG_DecCA_RegCinRdPtr, &readp);
-		}
-
-		CpbSize = end - base;
-
-		if(writep >= readp) {
-			CpbFullness = writep - readp;
-		} else {
-			CpbFullness = (end - base) - (readp - writep);
-		}
-
-		FifoSize = CpbSize - CpbFullness;
-
-		if(FifoSize < BC_INFIFO_THRESHOLD) {
-			//DebugLog_Trace(LDIL_DBG, "Bsy0:Base:0x%08x End:0x%08x Wr:0x%08x Rd:0x%08x FifoSz:0x%08x\n",
-			//						base,end, writep, readp, FifoSize);
-			pDtsStat->TxFifoBsyCnt++;
-			return BC_STS_BUSY;
-		}
-
-		if((signed int)ulSizeInBytes > (FifoSize - BC_INFIFO_THRESHOLD)) {
-			//DebugLog_Trace(LDIL_DBG, "Bsy1:Base:0x%08x End:0x%08x Wr:0x%08x Rd:0x%08x FifoSz:0x%08x XfrReq:0x%08x\n",
-			//					base,end, writep, readp, FifoSize, ulSizeInBytes);
-			pDtsStat->TxFifoBsyCnt++;
-			return BC_STS_BUSY;
-		}
-	}
-	sts = DtsTxDmaText(hDevice, pUserData, ulSizeInBytes, &DramOff, encrypted);
-
-	if(sts == BC_STS_SUCCESS)
-	{
-		DtsUpdateInStats(Ctx,ulSizeInBytes);
-	}
-	return sts;
-}
-
 DRVIFLIB_INT_API BC_STATUS
 DtsSendData( HANDLE  hDevice ,
 				 uint8_t *pUserData,
@@ -2097,23 +1707,14 @@ DtsSendData( HANDLE  hDevice ,
 				 BOOL encrypted
 			    )
 {
-	//unused BC_STATUS	sts = BC_STS_SUCCESS;
 	DTS_LIB_CONTEXT		*Ctx = NULL;
 
 	DTS_GET_CTX(hDevice,Ctx);
 
-	if ((Ctx->DevId == BC_PCI_DEVID_LINK) || (Ctx->FixFlags&DTS_DIAG_TEST_MODE))
-	{
-		return DtsSendDataDirect(hDevice, pUserData, ulSizeInBytes, timeStamp, encrypted);
-	}
-	else if (Ctx->SingleThreadedAppMode)
-	{
-		return DtsSendDataFPMode(hDevice, pUserData, ulSizeInBytes, timeStamp, encrypted);
-	}
-	else
-	{
-		return DtsSendDataBuffer(hDevice, pUserData, ulSizeInBytes, timeStamp, encrypted);
-	}
+	// for now check the sizes here and wait if there is not enough space
+	while(ulSizeInBytes > Ctx->circBuf.freeSize)
+		usleep(20 * 1000);
+	return txBufPush(&Ctx->circBuf, pUserData, ulSizeInBytes);
 }
 
 DRVIFLIB_API BC_STATUS
@@ -2602,46 +2203,11 @@ DtsFlushInput( HANDLE  hDevice ,
 	if(Op == 0 || Op == 5) // DRAIN
 	{
 		Ctx->PESConvParams.m_bAddSpsPps = true;
-#ifdef TX_CIRCULAR_BUFFER
-		if ((Ctx->InSampleCount == 0) && (Ctx->nTxHoldBufRead == Ctx->nTxHoldBufWrite))
-			return BC_STS_SUCCESS;
-#else
-		if ((Ctx->InSampleCount == 0) && (Ctx->nPendBufInd == 0))
-			return BC_STS_SUCCESS;
-#endif
 		DtsSendEOS(hDevice, Op);
-#ifdef TX_CIRCULAR_BUFFER
-		while (Ctx->State == BC_DEC_STATE_START && Ctx->nTxHoldBufRead != Ctx->nTxHoldBufWrite)
-		{
-			if ((sts = DtsSendData(hDevice, 0, 0, 0, 0))== BC_STS_SUCCESS)
-				break;
-		}
-		Ctx->nTxHoldBufRead = Ctx->nTxHoldBufWrite = 0;
-#else
-		if (Ctx->nPendBufInd)
-			DtsSendData(hDevice, 0, 0, 0, 0);
-		Ctx->nPendBufInd = 0;
-#endif
-		if (Ctx->SingleThreadedAppMode && Ctx->nPendFPBufInd)
-		{
-			DtsSendData(hDevice, 0, 0, 0, 0);
-			Ctx->FPDrain = TRUE;
-		}
-		if (!Ctx->SingleThreadedAppMode)
-			bc_sleep_ms(50);
 	}
 	else
 	{
-#ifdef TX_CIRCULAR_BUFFER
-		Ctx->nTxHoldBufRead = Ctx->nTxHoldBufWrite = 0;
-		Ctx->nTxHoldBufCounter = 0;
-#else
-		Ctx->nPendBufInd = 0;
-#endif
-		if (Ctx->InSampleCount == 0)
-			return BC_STS_SUCCESS;
-		Ctx->nPendFPBufInd = 0;
-		Ctx->FPDrain = FALSE;
+		txBufFlush(&Ctx->circBuf);
 		Ctx->bEOSCheck = FALSE;
 		bc_sleep_ms(30); // For the cancel to take place in case we are looping
 		sts = DtsCancelTxRequest(hDevice, Op);
@@ -2674,11 +2240,6 @@ DtsFlushInput( HANDLE  hDevice ,
 	Ctx->bEOS = FALSE;
 	Ctx->InSampleCount = 0;
 
-	// Clear the saved cpb base and end for SingleThreadedAppMode
-	if(Ctx->SingleThreadedAppMode) {
-		Ctx->cpbBase = 0;
-		Ctx->cpbEnd = 0;
-	}
 	Ctx->PESConvParams.m_lStartCodeDataSize = 0;
 
 	return BC_STS_SUCCESS;
@@ -3116,42 +2677,62 @@ DRVIFLIB_API BC_STATUS
 DtsGetDriverStatus( HANDLE  hDevice,
 	                BC_DTS_STATUS *pStatus)
 {
-    BC_DTS_STATS temp;
-    BC_STATUS ret;
-
-    DTS_LIB_CONTEXT *Ctx = NULL;
-    DTS_GET_CTX(hDevice,Ctx);
-
-    uint64_t NextTimeStamp = 0;
-
-    if (Ctx->SingleThreadedAppMode)
-        temp.DrvNextMDataPLD = Ctx->picWidth | (0x1 << 31);
-
-    ret = DtsGetDrvStat(hDevice, &temp);
-
-    pStatus->FreeListCount      = temp.drvFLL;
-    pStatus->ReadyListCount     = temp.drvRLL;
-    pStatus->FramesCaptured     = temp.opFrameCaptured;
-    pStatus->FramesDropped      = temp.opFrameDropped;
-    pStatus->FramesRepeated     = temp.reptdFrames;
-    pStatus->PIBMissCount       = temp.pibMisses;
-    pStatus->InputCount         = temp.ipSampleCnt;
-    pStatus->InputBusyCount     = temp.TxFifoBsyCnt;
-    pStatus->InputTotalSize     = temp.ipTotalSize;
-    pStatus->cpbEmptySize       = temp.DrvcpbEmptySize;
-    pStatus->PowerStateChange   = temp.pwr_state_change;
-
-	if(temp.eosDetected)
-	{
-		Ctx->bEOS = true;
+	BC_DTS_STATS temp;
+	BC_STATUS ret;
+	BOOL realHWCPBSize = false; // Always report DIL buffer size unless explicitly asked to report HW size
+	BOOL readTXinfoOnly = false; // Report only TX information
+	
+	uint64_t NextTimeStamp = 0;
+	
+	DTS_LIB_CONTEXT			*Ctx = NULL;
+	DTS_GET_CTX(hDevice,Ctx);
+	
+	temp.DrvNextMDataPLD = Ctx->picWidth | (0x1 << 31);
+		
+	// If bit 31 of the input cpbEmptySize is set, then report the real HW size
+	// Else report the buffered size
+	// If Bit 30 of the input cpbEmptySize is set, then only report TX information
+	// and not probe for anything else
+	// Use Bit 29 to indicate to the driver to read the VC1 fifo status
+	if(pStatus->cpbEmptySize >> 31)
+		realHWCPBSize = true;
+	if((pStatus->cpbEmptySize >> 30) & 0x1) {
+		readTXinfoOnly = true;
+		temp.DrvcpbEmptySize |= (1 << 30);
 	}
 
+	if(Ctx->VidParams.VideoAlgo == BC_VID_ALGO_VC1MP)
+		temp.DrvcpbEmptySize |= (1 << 29);
+	
+	ret = DtsGetDrvStat(hDevice, &temp);
+	
+	if (ret != BC_STS_SUCCESS)
+	{
+		return ret;
+	}
+
+	pStatus->FreeListCount      = temp.drvFLL;
+	pStatus->ReadyListCount     = temp.drvRLL;
+	pStatus->FramesCaptured     = temp.opFrameCaptured;
+	pStatus->FramesDropped      = temp.opFrameDropped;
+	pStatus->FramesRepeated     = temp.reptdFrames;
+	pStatus->PIBMissCount       = temp.pibMisses;
+	pStatus->InputCount         = temp.ipSampleCnt;
+	pStatus->InputBusyCount     = temp.TxFifoBsyCnt;
+	pStatus->InputTotalSize     = temp.ipTotalSize;
+	pStatus->cpbEmptySize		= temp.DrvcpbEmptySize;
+	
+	if(temp.eosDetected)
+	{
+		Ctx->bEOS = TRUE;
+	}
+	
 	if (Ctx->bEOSCheck == TRUE && Ctx->bEOS == FALSE)
 	{
 		if (pStatus->ReadyListCount == 0)
 		{
 			Ctx->DrvStatusEOSCnt ++;
-
+			
 			if(Ctx->DrvStatusEOSCnt >= BC_EOS_PIC_COUNT)
 			{
 				/* Mark this picture as end of stream..*/
@@ -3161,50 +2742,29 @@ DtsGetDriverStatus( HANDLE  hDevice,
 		else
 			Ctx->DrvStatusEOSCnt = 0;
 	}
+	
+	if(!realHWCPBSize)
+		pStatus->cpbEmptySize = Ctx->circBuf.freeSize;
 
-    // return the timestamp of the next picture to be returned by ProcOutput
-    if((pStatus->ReadyListCount > 0) && Ctx->SingleThreadedAppMode) {
-		if(Ctx->DevId == BC_PCI_DEVID_FLEA)
-		{
-			if(temp.DrvNextMDataPLD == 0xFFFFFFFF){
-				//For Pre-Load
-				pStatus->NextTimeStamp = 0xFFFFFFFFFFFFFFFFLL;
-			}else{
-				//Normal PTS
-				//Change PTS becuase of Shift PTS Issue in FW and 32-bit (ms) and 64-bit (100 ns) Scaling
-				pStatus->NextTimeStamp = (temp.DrvNextMDataPLD * 2 * 10000);
-			}
-		}else{
-			DtsFetchTimeStampMdata(Ctx, ((temp.DrvNextMDataPLD & 0xFF) << 8) | ((temp.DrvNextMDataPLD & 0xFF00) >> 8), &NextTimeStamp);
-			pStatus->NextTimeStamp = NextTimeStamp;
-		}
-	}
-
-#ifdef TX_CIRCULAR_BUFFER
-	if(Ctx->nTxHoldBufRead == Ctx->nTxHoldBufWrite)
-		pStatus->TxBufData = FALSE;
-	else
-		pStatus->TxBufData = TRUE;
-#else
-	if(Ctx->nPendBufInd)
-		pStatus->TxBufData = TRUE;
-	else
-		pStatus->TxBufData = FALSE;
-#endif
-
-	if(Ctx->SingleThreadedAppMode && (Ctx->DevId == BC_PCI_DEVID_FLEA))
+	if(!readTXinfoOnly)
 	{
-		if((Ctx->SingleThreadedAppMode & 0x8) != 0x8)
-		{
-			// First
-			// Try to send data to HW if possible
-			if (Ctx->nPendFPBufInd != 0)
-				DtsSendData(hDevice, 0, 0, 0, 0);
-			// Leave some room for PES headers
-			// Then check and return the size in the buffer
-			pStatus->cpbEmptySize = FP_TX_BUF_SIZE - Ctx->nPendFPBufInd - 128; // Return the buffer size if FP is checking
+		/* return the timestamp of the next picture to be returned by ProcOutput */
+		if((pStatus->ReadyListCount > 0) && Ctx->SingleThreadedAppMode) {
+			if(Ctx->DevId == BC_PCI_DEVID_FLEA)
+			{
+				if(temp.DrvNextMDataPLD == 0xFFFFFFFF){
+					//For Pre-Load
+					pStatus->NextTimeStamp = 0xFFFFFFFFFFFFFFFFLL;
+				}else{
+					//Normal PTS
+					//Change PTS becuase of Shift PTS Issue in FW and 32-bit (ms) and 64-bit (100 ns) Scaling
+					pStatus->NextTimeStamp = (temp.DrvNextMDataPLD * 2 * 10000);
+				}
+			}else{
+				DtsFetchTimeStampMdata(Ctx, ((temp.DrvNextMDataPLD & 0xFF) << 8) | ((temp.DrvNextMDataPLD & 0xFF00) >> 8), &NextTimeStamp);
+				pStatus->NextTimeStamp = NextTimeStamp;
+			}
 		}
-		// Return HW true size if we are checking from the send funtion
 	}
 
 	return ret;

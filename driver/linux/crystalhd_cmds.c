@@ -699,6 +699,7 @@ static BC_STATUS bc_cproc_get_stats(struct crystalhd_cmd *ctx,
 	struct crystalhd_hw_stats	hw_stats;
 	uint32_t pic_width;
 	uint8_t flags = 0;
+	bool readTxOnly = false;
 
 	if (!ctx || !idata) {
 		dev_err(chddev(), "%s: Invalid Arg\n", __func__);
@@ -723,11 +724,19 @@ static BC_STATUS bc_cproc_get_stats(struct crystalhd_cmd *ctx,
 	if (ctx->state & BC_LINK_PAUSED)
 		stats->DrvPauseTime = 1;
 
+	// use bit 29 of the input status to indicate that we are trying to read VC1 status
+	// This is important for the BCM70012 which uses a different input queue for VC1
+	if(stats->DrvcpbEmptySize & BC_BIT(29))
+		flags = 0x2;
+	// Bit 30 is used to indicate that we are reading only the TX stats and to not touch the Ready list
+	if(stats->DrvcpbEmptySize & BC_BIT(30))
+		readTxOnly = true;
+	
 	ctx->hw_ctx->pfnCheckInputFIFO(ctx->hw_ctx, 0, &stats->DrvcpbEmptySize,
 				      false, &flags);
 
 	/* status peek ahead to retreive the next decoded frame timestamp */
-	if (stats->drvRLL && (stats->DrvNextMDataPLD & BC_BIT(31))) {
+	if (!readTxOnly && stats->drvRLL && (stats->DrvNextMDataPLD & BC_BIT(31))) {
 		pic_width = stats->DrvNextMDataPLD & 0xffff;
 		stats->DrvNextMDataPLD = 0;
 		if (pic_width <= 1920)

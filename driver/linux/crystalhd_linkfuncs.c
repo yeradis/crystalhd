@@ -646,7 +646,7 @@ uint32_t link_GetHeightFromPib(crystalhd_dio_req *dio,
 
 /* This function cannot be called from ISR context since it uses APIs that can sleep */
 bool link_GetPictureInfo(uint32_t picHeight, uint32_t picWidth, crystalhd_dio_req *dio,
-			   uint32_t *PicNumber, uint32_t *PicMetaData)
+			   uint32_t *PicNumber, uint64_t *PicMetaData)
 {
 	unsigned long PicInfoLineNum = 0, HeightInPib = 0, offset = 0, size = 0;
 	PBC_PIC_INFO_BLOCK pPicInfoLine = NULL;
@@ -780,8 +780,9 @@ getpictureinfo_err:
 
 uint32_t link_GetRptDropParam(uint32_t picHeight, uint32_t picWidth, void* pRxDMAReq)
 {
-	uint32_t PicNumber = 0, PicMetaData = 0, result = 0;
-			
+	uint32_t PicNumber = 0, result = 0;
+	uint64_t PicMetaData = 0;
+	
 	if(link_GetPictureInfo(picHeight, picWidth, ((crystalhd_rx_dma_pkt *)pRxDMAReq)->dio_req,
 				&PicNumber, &PicMetaData))
 		result = PicNumber;
@@ -795,7 +796,7 @@ uint32_t link_GetRptDropParam(uint32_t picHeight, uint32_t picWidth, void* pRxDM
 * and returns it. THIS IS ONLY USED FOR LINK.
 */
 bool crystalhd_link_peek_next_decoded_frame(struct crystalhd_hw *hw,
-					  uint32_t *meta_payload,
+					  uint64_t *meta_payload,
 					  uint32_t PicWidth)
 {
 	uint32_t PicNumber = 0;
@@ -815,9 +816,6 @@ bool crystalhd_link_peek_next_decoded_frame(struct crystalhd_hw *hw,
 		if (rpkt) {
 			link_GetPictureInfo(hw->PICHeight, hw->PICWidth, rpkt->dio_req,
 				       &PicNumber, meta_payload);
-			dev_dbg(&hw->adp->pdev->dev, "%s: PicWidth(%d), "
-				"PicNumber(%d), meta_payload(0x%x)\n",
-				__func__, PicWidth, PicNumber, *meta_payload);
 		}
 	}
 

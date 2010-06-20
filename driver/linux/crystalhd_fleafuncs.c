@@ -1317,11 +1317,31 @@ BC_STATUS crystalhd_flea_hw_pause(struct crystalhd_hw *hw, bool state)
 	return BC_STS_SUCCESS;
 }
 
-bool crystalhd_flea_peek_next_decoded_frame(struct crystalhd_hw *hw, uint32_t *meta_payload, uint32_t PicWidth)
+bool crystalhd_flea_peek_next_decoded_frame(struct crystalhd_hw *hw, uint64_t *meta_payload, uint32_t PicWidth)
 {
-	// Curtis temporary return success
-	printk(KERN_ERR "%s: Curtis temporary return success.\n", __func__);
+	uint32_t PicNumber = 0;
+	unsigned long flags = 0;
+	crystalhd_dioq_t *ioq;
+	crystalhd_elem_t *tmp;
+	crystalhd_rx_dma_pkt *rpkt;
+	
+	*meta_payload = 0;
+	
+	ioq = hw->rx_rdyq;
+	spin_lock_irqsave(&ioq->lock, flags);
+	
+	if ((ioq->count > 0) && (ioq->head != (crystalhd_elem_t *)&ioq->head)) {
+		tmp = ioq->head;
+		rpkt = (crystalhd_rx_dma_pkt *)tmp->data;
+		if (rpkt) {
+			flea_GetPictureInfo(hw, rpkt, &PicNumber, meta_payload);
+		}
+	}
+	
+	spin_unlock_irqrestore(&ioq->lock, flags);
+	
 	return true;
+	
 }
 
 void crystalhd_flea_clear_rx_errs_intrs(struct crystalhd_hw *hw)
@@ -2087,7 +2107,7 @@ bool crystalhd_flea_hw_interrupt_handle(struct crystalhd_adp *adp, struct crysta
 
 /* This function cannot be called from ISR context since it uses APIs that can sleep */
 bool flea_GetPictureInfo(struct crystalhd_hw *hw, crystalhd_rx_dma_pkt * rx_pkt,
-							uint32_t *PicNumber, uint32_t *PicMetaData)
+							uint32_t *PicNumber, uint64_t *PicMetaData)
 {
 	unsigned long PicInfoLineNum = 0, offset = 0, size = 0;
 	PBC_PIC_INFO_BLOCK pPicInfoLine = NULL;
@@ -2116,7 +2136,7 @@ bool flea_GetPictureInfo(struct crystalhd_hw *hw, crystalhd_rx_dma_pkt * rx_pkt,
 		goto getpictureinfo_err;
 	PicInfoLineNum = *(uint32_t*)(dio->pib_va);
 	if (PicInfoLineNum > 1092) {
-		printk("Invalid Line Number[%d]\n", (int)PicInfoLineNum);
+		printk("Invalid Line Number[%x]\n", (int)PicInfoLineNum);
 		goto getpictureinfo_err;
 	}
 
@@ -2145,6 +2165,8 @@ bool flea_GetPictureInfo(struct crystalhd_hw *hw, crystalhd_rx_dma_pkt * rx_pkt,
 		goto getpictureinfo_err;
 		
 	pPicInfoLine = (PBC_PIC_INFO_BLOCK)(tmpPicInfo);
+
+	*PicMetaData = pPicInfoLine->timeStamp;
 
 	if(widthField & PIB_EOS_DETECTED_BIT)
 	{
@@ -2252,7 +2274,8 @@ getpictureinfo_err:
 
 uint32_t flea_GetRptDropParam(struct crystalhd_hw *hw, void* pRxDMAReq)
 {
-	uint32_t PicNumber = 0, PicMetaData = 0, result = 0;
+	uint32_t PicNumber = 0,result = 0;
+	uint64_t PicMetaData = 0;
 
 	if(flea_GetPictureInfo(hw, (crystalhd_rx_dma_pkt *)pRxDMAReq,
 		&PicNumber, &PicMetaData))

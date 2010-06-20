@@ -122,16 +122,7 @@ enum _DtsAppSpecificCfgFlags {
 #define MAX_DISORDER_GAP	5
 
 #define ALIGN_BUF_SIZE	(512*1024)
-#define TX_CIRCULAR_BUFFER
-#ifdef TX_CIRCULAR_BUFFER
-	#define	TX_HOLD_BUF_SIZE (4 * 1024 * 1024)
-	#define TX_BUF_THRESHOLD 64*1024
-	#define TX_BUF_DELIVER_THRESHOLD 5
-#else
-	#define	TX_HOLD_BUF_SIZE (64 * 1024)
-#endif
-#define FP_TX_BUF_SIZE (1024 * 1024 + 512 * 1024)
-
+#define CIRC_TX_BUF_SIZE (4096*1024)
 typedef struct _DTS_MPOOL_TYPE {
 	uint32_t	type;
 	uint32_t	sz;
@@ -190,6 +181,28 @@ typedef struct _DTS_INPUT_MDATA{
 
 #define DTS_MDATA_TAG_MASK		(0x00010000)
 #define DTS_MDATA_MAX_TAG		(0x0000FFFF)
+
+typedef struct _TXBUFFER{
+	uint32_t	readPointer; // Index into the buffer for next read
+	uint32_t	writePointer; // Index into the buffer for next write
+	uint32_t 	freeSize;
+	uint32_t 	totalSize;
+	uint32_t 	busySize;
+	uint8_t* 	basePointer; // First byte that can be written
+	uint8_t* 	endPointer; // Last byte that can be written
+	uint8_t* 	buffer;
+	pthread_mutex_t flushLock; // LOCK used only for flushing
+	pthread_mutex_t pushpopLock; // LOCK for push and pop operations
+}TXBUFFER, *pTXBUFFER;
+
+BC_STATUS txBufPush(pTXBUFFER txBuf, uint8_t* bufToPush, uint32_t sizeToPush);
+BC_STATUS txBufPop(pTXBUFFER txBuf, uint8_t* bufToPop, uint32_t sizeToPop);
+BC_STATUS txBufFlush(pTXBUFFER txBuf);
+BC_STATUS txBufInit(pTXBUFFER txBuf, uint32_t sizeInit);
+BC_STATUS txBufFree(pTXBUFFER txBuf);
+
+// TX Thread function
+void * txThreadProc(void *ctx);
 
 typedef struct _DTS_LIB_CONTEXT{
 	uint32_t				Sig;			/* Mazic number */
@@ -271,38 +284,20 @@ typedef struct _DTS_LIB_CONTEXT{
 	char			DilPath[MAX_PATH+1];	/* DIL runtime Location.. */
 
 	uint8_t			SingleThreadedAppMode;	/* flag to indicate that we are running in single threaded mode */
-	uint32_t		cpbBase;				/* Only used in single threaded mode to save base and end to reduce number of HW reads */
-	uint32_t		cpbEnd;
 	PES_CONVERT_PARAMS PESConvParams;
 	BC_HW_CAPS		capInfo;
 	uint16_t		InSampleCount;
 	uint8_t			bMapOutBufDone;
-#ifdef TX_CIRCULAR_BUFFER
-	uint32_t		nTxHoldBufRead;
-	uint32_t		nTxHoldBufWrite;
-	uint16_t		nTxHoldBufCounter;
-#else
-	uint32_t		nPendBufInd;
-#endif
-	uint32_t		nPendFPBufInd;
-	uint8_t			FPDrain; // FP has initiated drain operation
 
 	BC_PIC_INFO_BLOCK	FormatInfo;
 
-	__attribute__((aligned(4))) uint8_t		alignBuf[ALIGN_BUF_SIZE];
-	__attribute__((aligned(4))) uint8_t		pendingBuf[TX_HOLD_BUF_SIZE];
-	__attribute__((aligned(4))) uint8_t		FPpendingBuf[FP_TX_BUF_SIZE];
+	TXBUFFER		circBuf;
+	bool			txThreadExit; // Handle to event to indicate to the tx thread to exit
+	pthread_t		htxThread; // Handle to TX thread
+    uint8_t* 		alignBuf;
+
 	uint8_t			bScaling;
-
-	/* Power management and dynamic clock frequency changes related */
-	uint8_t			totalPicsCounted;
-	uint8_t			rptPicsCounted;
-	uint8_t			nrptPicsCounted;
-	uint8_t			numTimesClockChanged;
-	uint8_t			minClk;
-	uint8_t			maxClk;
-	uint8_t			curClk;
-
+	
 }DTS_LIB_CONTEXT;
 
 /* Helper macro to get lib context from user handle */

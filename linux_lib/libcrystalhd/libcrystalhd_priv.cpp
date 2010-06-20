@@ -35,6 +35,8 @@
 #include <sys/ipc.h>
 #include <sys/ioctl.h>
 #include "7411d.h"
+#include "libcrystalhd_if.h"
+#include "libcrystalhd_int_if.h"
 #include "libcrystalhd_priv.h"
 
 #define	 BC_EOS_DETECTED		0xffffffff
@@ -1413,7 +1415,8 @@ BC_STATUS DtsInitInterface(int hDevice,HANDLE *RetCtx, uint32_t mode)
 
 	DTS_LIB_CONTEXT *Ctx = NULL;
 	BC_STATUS	sts = BC_STS_SUCCESS;
-
+	pthread_attr_t thread_attr;
+	
 	Ctx = (DTS_LIB_CONTEXT*)malloc(sizeof(*Ctx));
 	if(!Ctx){
 		DebugLog_Trace(LDIL_DBG,"DtsInitInterface: Ctx alloc failed\n");
@@ -1457,6 +1460,17 @@ BC_STATUS DtsInitInterface(int hDevice,HANDLE *RetCtx, uint32_t mode)
 		}
 	}
 
+	// Allocate circular buffer
+	if(BC_STS_SUCCESS != txBufInit(&Ctx->circBuf, CIRC_TX_BUF_SIZE))
+		sts = BC_STS_INSUFF_RES;
+
+	pthread_attr_init(&thread_attr);
+	pthread_attr_setdetachstate(&thread_attr, PTHREAD_CREATE_JOINABLE);
+	pthread_create(&Ctx->htxThread, &thread_attr, txThreadProc, Ctx);
+	pthread_attr_destroy(&thread_attr);
+
+	posix_memalign((void**)&Ctx->alignBuf, 128, ALIGN_BUF_SIZE);
+	
 	*RetCtx = (HANDLE)Ctx;
 
 	return sts;
@@ -1562,6 +1576,15 @@ BC_STATUS DtsReleaseInterface(DTS_LIB_CONTEXT *Ctx)
 		DebugLog_Trace(LDIL_DBG,"DtsDeviceClose: Close Handle Failed with error %d\n",errno);
 
 	}
+
+	// Exit TX thread
+	Ctx->txThreadExit = true;
+	// wait to make sure the thread exited
+	pthread_join(Ctx->htxThread, NULL);
+	// de-Allocate circular buffer
+	txBufFree(&Ctx->circBuf);
+	Ctx->htxThread = 0;
+	free(Ctx->alignBuf);
 
 	free(Ctx);
 
@@ -2119,6 +2142,221 @@ void DtsUpdateOutStats(DTS_LIB_CONTEXT	*Ctx, BC_DTS_PROC_OUT *pOut)
 	Ctx->prevPicNum = pOut->PicInfo.picture_number;
 
 	return;
+}
+
+/********************************************************************************/
+/* TX Circular Buffer routines */
+// Init the circular buffer to be on 128 byte boundary
+BC_STATUS txBufInit(pTXBUFFER txBuf, uint32_t sizeInit)
+{
+	BC_STATUS sts = BC_STS_SUCCESS;
+	if(txBuf->buffer != NULL)
+		return BC_STS_INV_ARG;
+	posix_memalign((void**)&txBuf->buffer, 128, sizeInit);
+	if(txBuf->buffer != NULL)
+	{
+		txBuf->basePointer = txBuf->buffer;
+		txBuf->endPointer = txBuf->basePointer + sizeInit - 1;
+		txBuf->readPointer = txBuf->writePointer = 0;
+		txBuf->freeSize = txBuf->totalSize = sizeInit;
+		txBuf->busySize = 0;
+		pthread_mutex_init(&txBuf->flushLock, NULL);
+		pthread_mutex_init(&txBuf->pushpopLock, NULL);
+	}
+	else
+		sts = BC_STS_INSUFF_RES;
+	return sts;
+}
+
+// Push the number of bytes specified on to the circular buffer
+// This routine copies the data so that the orginial buffer can be released
+
+// Assume here that Flush of this buffer always happens from the same thread that does procinput
+// So don't lock pushing of new data against flush
+
+BC_STATUS txBufPush(pTXBUFFER txBuf, uint8_t* bufToPush, uint32_t sizeToPush)
+{
+	uint32_t mcpySz = 0, sizeTop = 0;
+	uint8_t* bufRemain = bufToPush;
+	
+	if(txBuf == NULL || bufToPush == NULL)
+		return BC_STS_INV_ARG;
+	
+	if(txBuf->freeSize < sizeToPush)
+		return BC_STS_INSUFF_RES;
+	
+	// How much will fit before we need to wrap
+	sizeTop = (uint32_t)(txBuf->endPointer - (txBuf->basePointer + txBuf->writePointer) + 1);
+	if(sizeToPush <= sizeTop)
+		mcpySz = sizeToPush;
+	else
+		mcpySz = sizeTop;
+
+	memcpy(txBuf->basePointer + txBuf->writePointer, bufToPush, mcpySz);
+	
+	txBuf->writePointer = (txBuf->writePointer + mcpySz) % txBuf->totalSize;
+
+	pthread_mutex_lock(&txBuf->pushpopLock);
+	txBuf->busySize += mcpySz;
+	txBuf->freeSize -= mcpySz;
+	pthread_mutex_unlock(&txBuf->pushpopLock);
+	
+	if((sizeToPush - mcpySz) != 0)
+	{
+		// Can only get here if we wrap at the top
+		// writePointer should be 0
+		bufRemain += mcpySz;
+		mcpySz = sizeToPush - mcpySz;
+		sizeTop = txBuf->readPointer;
+		memcpy(txBuf->basePointer, bufRemain, mcpySz);
+		txBuf->writePointer = mcpySz;
+		pthread_mutex_lock(&txBuf->pushpopLock);
+		txBuf->busySize += mcpySz;
+		txBuf->freeSize -= mcpySz;
+		pthread_mutex_unlock(&txBuf->pushpopLock);
+	}
+	
+	return BC_STS_SUCCESS;
+}
+
+// Pops data from the circular buffer
+// Returns the number of bytes popped
+// We have to do a copy since we require the HW buffer to be 128 byte aligned for Flea
+BC_STATUS txBufPop(pTXBUFFER txBuf, uint8_t* bufToPop, uint32_t sizeToPop)
+{
+	uint32_t popSz = 0, sizeTop = 0;
+	uint8_t* bufRemain = bufToPop;
+	
+	if(txBuf == NULL)
+		return BC_STS_INV_ARG;
+	
+	if(sizeToPop > txBuf->busySize)
+		return BC_STS_INV_ARG;
+	
+	pthread_mutex_lock(&txBuf->flushLock);
+	sizeTop = (uint32_t)(txBuf->endPointer - (txBuf->basePointer + txBuf->readPointer) + 1);
+	if(sizeToPop <= sizeTop)
+		popSz = sizeToPop;
+	else
+		popSz = sizeTop;
+	
+	memcpy(bufToPop, txBuf->basePointer + txBuf->readPointer, popSz);
+	
+	txBuf->readPointer = (txBuf->readPointer + popSz) % txBuf->totalSize;
+
+	pthread_mutex_lock(&txBuf->pushpopLock);
+	txBuf->busySize -= popSz;
+	txBuf->freeSize += popSz;
+	pthread_mutex_unlock(&txBuf->pushpopLock);
+	
+	if((sizeToPop - popSz) != 0)
+	{
+		// Can only get here if we wrap at the top
+		// readPointer should be 0
+		bufRemain += popSz;
+		popSz = sizeToPop - popSz;
+		sizeTop = txBuf->writePointer;
+		memcpy(bufRemain, txBuf->basePointer, popSz);
+		txBuf->readPointer = popSz;
+		pthread_mutex_lock(&txBuf->pushpopLock);
+		txBuf->busySize -= popSz;
+		txBuf->freeSize += popSz;
+		pthread_mutex_unlock(&txBuf->pushpopLock);
+	}
+	
+	pthread_mutex_unlock(&txBuf->flushLock);
+	return BC_STS_SUCCESS;
+}
+
+// Assume here that Flush of this buffer always happens from the same thread that does procinput
+// So don't lock pushing of new data against flush
+BC_STATUS txBufFlush(pTXBUFFER txBuf)
+{
+	if(txBuf->buffer == NULL)
+		return BC_STS_INV_ARG;
+	pthread_mutex_lock(&txBuf->flushLock);
+	txBuf->readPointer = txBuf->writePointer = 0;
+	txBuf->freeSize = txBuf->totalSize;
+	txBuf->busySize = 0;
+	pthread_mutex_unlock(&txBuf->flushLock);
+	return BC_STS_SUCCESS;
+}
+
+BC_STATUS txBufFree(pTXBUFFER txBuf)
+{
+	if(txBuf->buffer == NULL)
+		return BC_STS_INV_ARG;
+	txBuf->basePointer = NULL;
+	txBuf->endPointer = NULL;
+	txBuf->readPointer = txBuf->writePointer = 0;
+	txBuf->freeSize = 0;
+	txBuf->busySize = 0;
+	free(txBuf->buffer);
+	pthread_mutex_destroy(&txBuf->flushLock);
+	pthread_mutex_destroy(&txBuf->pushpopLock);
+	return BC_STS_SUCCESS;
+}
+
+// TX Thread
+void * txThreadProc(void *ctx)
+{
+	DTS_LIB_CONTEXT* Ctx = (DTS_LIB_CONTEXT*)ctx;
+	uint8_t* localBuffer;
+	uint32_t szDataToSend;
+	BC_STATUS sts;
+	uint32_t dramOff;
+	uint8_t encrypted = 0;
+	HANDLE hDevice = (HANDLE)Ctx;
+	BC_DTS_STATUS pStat;
+
+	posix_memalign((void**)&localBuffer, 128, CIRC_TX_BUF_SIZE);
+	
+	while(!Ctx->txThreadExit)
+	{
+		// Check if we have data to send. Not really necessary, but just leave it here for sanity checking
+		if(Ctx->circBuf.busySize != 0)
+		{
+			// Get the real HW free size and also mark as we want TX information only
+			pStat.cpbEmptySize = (0x3 << 31);
+			
+			sts = DtsGetDriverStatus(hDevice, &pStat);
+			if(sts != BC_STS_SUCCESS)
+			{
+				// Figure out what to do
+				// For now just try again
+				pStat.cpbEmptySize = 0;
+			}
+			
+			if(pStat.cpbEmptySize == 0)
+			{
+				usleep(100);
+				continue;
+			}
+			
+			if(Ctx->circBuf.busySize < pStat.cpbEmptySize)
+				szDataToSend = Ctx->circBuf.busySize;
+			else
+				szDataToSend = pStat.cpbEmptySize;
+			txBufPop(&Ctx->circBuf, localBuffer, szDataToSend);
+			if(Ctx->VidParams.VideoAlgo == BC_VID_ALGO_VC1MP)
+				encrypted |= 0x2;
+			sts = DtsTxDmaText(hDevice, localBuffer, szDataToSend, &dramOff, encrypted);
+			
+			if(sts == BC_STS_SUCCESS)
+			{
+				DtsUpdateInStats(Ctx, szDataToSend);
+			}
+			else
+			{
+				// signal error to the next procinput
+			}
+		} else
+			usleep(5 * 1000);
+		
+	}
+	free(localBuffer);
+	localBuffer = NULL;
+	return FALSE;
 }
 
 /*====================== Debug Routines ========================================*/

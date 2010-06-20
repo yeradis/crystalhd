@@ -180,11 +180,12 @@ typedef struct _BC_DTS_STATS {
 	 * BIT-31 MEANS READ Next PIB Info.
 	 * Width will be in bit 0-16.
 	 */
-	uint32_t		DrvNextMDataPLD;
+	uint64_t		DrvNextMDataPLD;
 	uint32_t		DrvcpbEmptySize;
 
 	float			Temperature;
-	uint32_t		res1[10];
+	uint32_t		TempFromDriver;
+	uint32_t		res1[8];
 
 } BC_DTS_STATS;
 
