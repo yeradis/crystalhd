@@ -731,7 +731,7 @@ static BC_STATUS bc_cproc_get_stats(struct crystalhd_cmd *ctx,
 	// Bit 30 is used to indicate that we are reading only the TX stats and to not touch the Ready list
 	if(stats->DrvcpbEmptySize & BC_BIT(30))
 		readTxOnly = true;
-	
+
 	ctx->hw_ctx->pfnCheckInputFIFO(ctx->hw_ctx, 0, &stats->DrvcpbEmptySize,
 				      false, &flags);
 

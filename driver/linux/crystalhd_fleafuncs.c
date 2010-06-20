@@ -1145,7 +1145,7 @@ bool crystalhd_flea_check_input_full(struct crystalhd_hw *hw, uint32_t needed_sz
 		if(hw->TxFwInputBuffInfo.DramBuffSzInBytes < TX_WRAP_THRESHOLD)
 		{
 			pTxBuffInfo = (TX_INPUT_BUFFER_INFO *) (0);
-			FlagsAddr = hw->TxBuffInfoAddr + ((uint32_t) (&pTxBuffInfo->Flags));
+			FlagsAddr = hw->TxBuffInfoAddr + ((uintptr_t) (&pTxBuffInfo->Flags));
 			// Read Modify the Flags to ask the FW to WRAP
 			hw->pfnDevDRAMRead(hw,FlagsAddr,1,&RegVal);
 			RegVal |= DFW_FLAGS_WRAP;
@@ -1632,7 +1632,7 @@ static void crystalhd_flea_update_tx_done_to_fw(struct crystalhd_hw *hw)
 	-- scratch.
 	*/
 	pTxBuffInfo = (TX_INPUT_BUFFER_INFO *) (0);
-	seqNumAddr = hw->TxBuffInfoAddr + ((uint32_t) (&pTxBuffInfo->SeqNum));
+	seqNumAddr = hw->TxBuffInfoAddr + ((uintptr_t) (&pTxBuffInfo->SeqNum));
 
 	//Read the seqnece number
 	hw->pfnDevDRAMRead(hw, seqNumAddr, 1, &regVal);

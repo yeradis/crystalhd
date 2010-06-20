@@ -103,7 +103,8 @@ BC_STATUS crystalhd_hw_open(struct crystalhd_hw *hw, struct crystalhd_adp *adp)
 	hw->pfnStartDevice(hw);
 	hw->dev_started = true;
 
-	printk(KERN_ERR "Opening HW. hw:0x%x, hw->adp:0x%x\n", (int)hw, (int)(hw->adp));
+	printk(KERN_ERR "Opening HW. hw:0x%lx, hw->adp:0x%lx\n",
+	       (uintptr_t)hw, (uintptr_t)(hw->adp));
 
 	return BC_STS_SUCCESS;
 }

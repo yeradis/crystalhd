@@ -228,11 +228,11 @@ struct crystalhd_hw; /* forward declaration for the types */
 /* typedef void*	(*HW_VERIFY_DEVICE)(struct crystalhd_adp*); */
 /* typedef bool	(*HW_INIT_DEVICE_RESOURCES)(struct crystalhd_adp*); */
 /* typedef bool	(*HW_CLEAN_DEVICE_RESOURCES)(struct crystalhd_adp*); */
-typedef bool	(*HW_START_DEVICE)(struct crystalhd_hw*);
-typedef bool	(*HW_STOP_DEVICE)(struct crystalhd_hw*);
+typedef bool		(*HW_START_DEVICE)(struct crystalhd_hw*);
+typedef bool		(*HW_STOP_DEVICE)(struct crystalhd_hw*);
 /* typedef bool	(*HW_XLAT_AND_FIRE_SGL)(struct crystalhd_adp*,PVOID,PSCATTER_GATHER_LIST,uint32_t); */
 /* typedef bool	(*HW_RX_XLAT_SGL)(struct crystalhd_adp*,crystalhd_dio_req *ioreq); */
-/* typedef bool	(*HW_FIND_AND_CLEAR_INTR)(struct crystalhd_adp*,uint32_t*,uint32_t*); */
+typedef bool		(*HW_FIND_AND_CLEAR_INTR)(struct crystalhd_adp*,struct crystalhd_hw*);
 typedef uint32_t	(*HW_READ_DEVICE_REG)(struct crystalhd_adp*,uint32_t);
 typedef void		(*HW_WRITE_DEVICE_REG)(struct crystalhd_adp*,uint32_t,uint32_t);
 typedef uint32_t	(*HW_READ_FPGA_REG)(struct crystalhd_adp*,uint32_t);
@@ -243,7 +243,7 @@ typedef BC_STATUS	(*HW_WRITE_DEV_MEM)(struct crystalhd_hw*,uint32_t,uint32_t,uin
 /* typedef bool		(*HW_DISABLE_INTR)(struct crystalhd_adp*); */
 /* typedef bool		(*HW_ENABLE_INTR)(struct crystalhd_adp*); */
 typedef BC_STATUS	(*HW_POST_RX_SIDE_BUFF)(struct crystalhd_hw*,crystalhd_rx_dma_pkt*);
-typedef bool		(*HW_CHECK_INPUT_FIFO)(struct crystalhd_hw*, uint32_t, uint32_t*,bool,uint8_t);
+typedef bool		(*HW_CHECK_INPUT_FIFO)(struct crystalhd_hw*, uint32_t, uint32_t*,bool,uint8_t*);
 typedef void		(*HW_START_TX_DMA)(struct crystalhd_hw*, uint8_t, addr_64);
 typedef BC_STATUS	(*HW_STOP_TX_DMA)(struct crystalhd_hw*);
 /* typedef bool		(*HW_EVENT_NOTIFICATION)(struct crystalhd_adp*,BRCM_EVENT); */
@@ -305,7 +305,7 @@ struct crystalhd_hw {
 	uint32_t		hw_pause_issued;
 
 	uint32_t		fwcmdPostAddr;
-	uint32_t 		fwcmdPostMbox;
+	uint32_t		fwcmdPostMbox;
 	uint32_t		fwcmdRespMbox;
 
 	/* HW counters.. */
@@ -329,10 +329,10 @@ struct crystalhd_hw {
 	uint32_t	RxSeqNum;
 	uint32_t	DrvEosDetected;
 	uint32_t	DrvCancelEosFlag;
-	
+
 	uint32_t	SkipDropBadFrames;
 	uint32_t	TemperatureRegVal;
-	TX_INPUT_BUFFER_INFO	TxFwInputBuffInfo;	
+	TX_INPUT_BUFFER_INFO	TxFwInputBuffInfo;
 
 	bool		SingleThreadAppFIFOEmpty;
 //	HW_VERIFY_DEVICE			pfnVerifyDevice;
@@ -342,7 +342,7 @@ struct crystalhd_hw {
 	HW_STOP_DEVICE				pfnStopDevice;
 //	HW_XLAT_AND_FIRE_SGL			pfnTxXlatAndFireSGL;
 //	HW_RX_XLAT_SGL				pfnRxXlatSgl;
-	HW_FIND_AND_CLEAR_INTR		pfnFindAndClearIntr;
+	HW_FIND_AND_CLEAR_INTR			pfnFindAndClearIntr;
 	HW_READ_DEVICE_REG			pfnReadDevRegister;
 	HW_WRITE_DEVICE_REG			pfnWriteDevRegister;
 	HW_READ_FPGA_REG			pfnReadFPGARegister;
