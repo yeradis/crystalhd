@@ -29,6 +29,10 @@
 #include "crystalhd_lnx.h"
 #include "crystalhd_misc.h"
 
+// Some HW specific code defines
+extern uint32_t link_GetRptDropParam(uint32_t picHeight, uint32_t picWidth, void *);
+extern uint32_t flea_GetRptDropParam(void *, void *);
+
 static crystalhd_dio_req *crystalhd_alloc_dio(struct crystalhd_adp *adp)
 {
 	unsigned long flags = 0;
@@ -503,12 +507,19 @@ void *crystalhd_dioq_fetch_wait(void *hw, uint32_t to_secs, uint32_t *sig_pend)
 			// Drop the picture if it is a repeated picture
 			r_pkt = crystalhd_dioq_fetch(ioq);
 			// If format change packet, then return with out checking anything
-			if(r_pkt->flags & (COMP_FLAG_PIB_VALID | COMP_FLAG_FMT_CHANGE))
+			if (r_pkt->flags & (COMP_FLAG_PIB_VALID | COMP_FLAG_FMT_CHANGE))
 				return r_pkt;
-			if(((struct crystalhd_hw *)hw)->adp->pdev->device == BC_PCI_DEVID_LINK)
+			if (((struct crystalhd_hw *)hw)->adp->pdev->device == BC_PCI_DEVID_LINK)
 				picYcomp = link_GetRptDropParam(((struct crystalhd_hw *)hw)->PICHeight, ((struct crystalhd_hw *)hw)->PICWidth, (void *)r_pkt);
-			else
-				dev_info(chd, "FLEA NOT IMPLEMENTED YET\n");
+			else {
+				// For Flea, we don't have the width and height handy since they
+				// come in the PIB in the picture, so this function will also
+				// populate the width and height
+				picYcomp = flea_GetRptDropParam(hw, (void *)r_pkt);
+				// For flea it is the above function that indicated format change
+				if(r_pkt->flags & (COMP_FLAG_PIB_VALID | COMP_FLAG_FMT_CHANGE))
+					return r_pkt;
+			}
 			if(!picYcomp || (picYcomp == ((struct crystalhd_hw *)hw)->LastPicNo) ||
 				(picYcomp == ((struct crystalhd_hw *)hw)->LastTwoPicNo)) {
 				//Discard picture
@@ -519,8 +530,10 @@ void *crystalhd_dioq_fetch_wait(void *hw, uint32_t to_secs, uint32_t *sig_pend)
 				crystalhd_dioq_add(((struct crystalhd_hw *)hw)->rx_freeq, r_pkt, false, r_pkt->pkt_tag);
 				r_pkt = NULL;
 			} else {
-				if((picYcomp - ((struct crystalhd_hw *)hw)->LastPicNo) > 1)
-					dev_info(dev, "MISSING %lu PICTURES\n", (picYcomp - ((struct crystalhd_hw *)hw)->LastPicNo));
+				if(((struct crystalhd_hw *)hw)->adp->pdev->device == BC_PCI_DEVID_LINK) {
+					if((picYcomp - ((struct crystalhd_hw *)hw)->LastPicNo) > 1)
+						dev_info(dev, "MISSING %lu PICTURES\n", (picYcomp - ((struct crystalhd_hw *)hw)->LastPicNo));
+				}
 				((struct crystalhd_hw *)hw)->LastTwoPicNo = ((struct crystalhd_hw *)hw)->LastPicNo;
 				((struct crystalhd_hw *)hw)->LastPicNo = picYcomp;
 				return r_pkt;

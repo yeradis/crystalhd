@@ -97,7 +97,6 @@ void crystalhd_flea_ddr_pll_config(struct crystalhd_hw* hw, int32_t *speed_grade
 	hw->pfnWriteDevRegister(hw->adp, BCHP_DDR23_CTL_REGS_0_SCRATCH, 0);
 
 	if (!skip_pll_setup) {
-		printk("Configuring DDR Controller PLLs\n");
 		for(i=0;i<num_plls;i++) {
 			switch(speed_grade[i])
 			{
@@ -157,8 +156,6 @@ void crystalhd_flea_ddr_pll_config(struct crystalhd_hw* hw, int32_t *speed_grade
 			}
 			if (timeout<=0)
 				printk("Timed out waiting for DDR Controller PLL %d to lock\n",i);
-			else
-				printk("DDR Controller PLL %d locked.\n",i);
 		}
 	  
 		//deassert PLL digital reset
@@ -232,7 +229,6 @@ void crystalhd_flea_ddr_pll_config(struct crystalhd_hw* hw, int32_t *speed_grade
 		// If in other than tmode 0 then set the VDL override settings to max.
 		if (tmode) {
 			tmp = 0x3ff;
-			printk("DDR Controller: TMODE[%d]. Forcing STATIC_VDL_OVERRIDE to max values\n",tmode);
 			hw->pfnWriteDevRegister(hw->adp, BCHP_DDR23_PHY_BYTE_LANE_0_VDL_OVERRIDE_0, 0x1003f);
 			hw->pfnWriteDevRegister(hw->adp, BCHP_DDR23_PHY_BYTE_LANE_0_VDL_OVERRIDE_1, 0x1003f);
 			hw->pfnWriteDevRegister(hw->adp, BCHP_DDR23_PHY_BYTE_LANE_0_VDL_OVERRIDE_2, 0x1003f);
@@ -266,8 +262,6 @@ void crystalhd_flea_ddr_pll_config(struct crystalhd_hw* hw, int32_t *speed_grade
 				break;
 		}
 
-		printk("ZQ calibration result: 0x%08X\n", tmp);
-
 		if(tmode) {
 			// Set fields addr_ovr_en and dq_pvr_en to '1'.  Set all *_override_val fields to 0xf - ZQ_PVT_COMP_CTL
 			tmp = ( (  1 << 25) |     //  addr_ovr_en
@@ -281,10 +275,8 @@ void crystalhd_flea_ddr_pll_config(struct crystalhd_hw* hw, int32_t *speed_grade
 			tmp = hw->pfnReadDevRegister(hw->adp, BCHP_DDR23_PHY_CONTROL_REGS_DRIVE_PAD_CTL);
 			tmp &= (0xfffffffe);    //clear bits 0 and 1.
 			hw->pfnWriteDevRegister(hw->adp, BCHP_DDR23_PHY_CONTROL_REGS_DRIVE_PAD_CTL,tmp);
-			printk("DDR Controller: TMODE[%d]. Forced ZQ_PVT_COMP_CTL and DRIVE_PAD_CTL\n",tmode);
 		}
 	}//for(i=0..
-	printk("DDR Controller PLL Configuration Complete\n");
 }
 
 void crystalhd_flea_ddr_ctrl_init(struct crystalhd_hw *hw,
@@ -339,6 +331,7 @@ void crystalhd_flea_ddr_ctrl_init(struct crystalhd_hw *hw,
 
 	// For each controller port, 0 and 1.
 	for (port_int=0; port_int < 1; ++port_int)  {
+#if 0
 		printk("******************************************************\n");
 		printk("* Configuring DDR23 at addr=0x%x, speed grade [%s]\n",0,
                 ((speed_grade == DDR2_667MHZ) && (tmode == 0)) ? "667MHZ":
@@ -346,7 +339,7 @@ void crystalhd_flea_ddr_ctrl_init(struct crystalhd_hw *hw,
                 ((speed_grade == DDR2_400MHZ) && (tmode == 0)) ? "400MHZ":
                 ((speed_grade == DDR2_333MHZ) && (tmode == 0)) ? "333MHZ":
                 ((speed_grade == DDR2_266MHZ) && (tmode == 0)) ? "266MHZ": "400MHZ" );
-
+#endif
 		// Written in this manner to prevent table lookup in Memory for embedded MIPS code.
 		// Cannot use memory until it is inited!  Case statements with greater than 5 cases use memory tables
 		// when optimized.  Tony O 9/18/07
@@ -473,11 +466,11 @@ void crystalhd_flea_ddr_ctrl_init(struct crystalhd_hw *hw,
 		DQ_WIDTH = 16 ;
 		// ****** End of Grain specific fixed settings *****
 
-
+#if 0
 		printk("* DDR23 Config: CAS: %d, tRFC: %d, INTLV: %d, WIDTH: %d\n",
 				tCAS,tRFC,INTLV_BYTES,DQ_WIDTH);
 		printk("******************************************************\n");
-
+#endif
 		//Disable refresh
 		data = ((0x68 << 0) |  //Refresh period
 				(0x0 << 12)    //disable refresh
@@ -679,9 +672,6 @@ void crystalhd_flea_ddr_ctrl_init(struct crystalhd_hw *hw,
 			//MemSysRegWr(arb_refresh_addr + GLOBAL_REG_RBUS_START,data);
 			hw->pfnWriteDevRegister(hw->adp, BCHP_PRI_ARB_CONTROL_REGS_REFRESH_CTL_0,data);
 		}
-		else {
-			printk("**** Skipping DDR23 Refresh enable for Test Modes[%d] ****\n", tmode);
-		}     
 
 		//offset = 0;
 		//offset += GLOBAL_REG_RBUS_START;
@@ -727,22 +717,19 @@ void crystalhd_flea_ddr_arb_rts_init(struct crystalhd_hw *hw)
 	addr_cnt = BCHP_PRI_CLIENT_REGS_CLIENT_00_COUNT;
 	addr_ctrl = BCHP_PRI_CLIENT_REGS_CLIENT_00_CONTROL;
 
-	printk("init: Info: Memory Arbiter RTS init  begin\n");
 	//Go through the various clients and program them
 	for(i=0;i<21;i++){
-		if (rts_prog_vals[i][0] > 0){
+		if (rts_prog_vals[i][0] > 0) {
 			hw->pfnWriteDevRegister(hw->adp, addr_cnt,
 				(rts_prog_vals[i][1]) |        //Blockout Count
 				(rts_prog_vals[i][2] << 16)    //Critical Period
-		);
+				);
 			hw->pfnWriteDevRegister(hw->adp, addr_ctrl,
 				(rts_prog_vals[i][3]) |        //Priority Level
 				(rts_prog_vals[i][4] << 8)     //Access Mode
-		);
-    }
-    addr_cnt+=8;
-    addr_ctrl+=8;
-  }
-
-  printk("init: Info: Memory Arbiter RTS init  end\n");
+				);
+		}
+		addr_cnt+=8;
+		addr_ctrl+=8;
+	}
 }

@@ -191,16 +191,6 @@ typedef enum _ERR_STATUS_
 	FORCE_CANCEL		=0x8000
 }ERROR_STATUS;
 
-typedef enum _RX_CAP_STATE_{
-	RX_CAP_OFF		= 0x00,		/* Dont Capture At All*/
-	RX_PIB_SIGNAL_ST_CAP	= 0x01,		/* First Valid PIB Recieved*/
-	RX_APP_SIGNAL_ST_CAP	= 0x02,		/* START_CAP IOCTL Recieved*/
-	RX_CAPTURE_ON		= 0x03,		/* Capture The Rx Video */
-	RX_PAUSED_INT_STOP_PEND	= 0x04,		/* Decoder is PAUSED STOP Is not Issues To Rx Engines*/
-	RX_PAUSED_INT_STOP_DONE	= 0x010,	/* Decoder is PAUSED Rx DMA Engines Stopped */
-
-} RX_CAPTURE_STATE;
-
 typedef struct _tx_dma_pkt_ {
 	dma_desc_mem		desc_mem;
 	hw_comp_callback	call_back;
@@ -328,7 +318,7 @@ struct crystalhd_hw {
 	uint32_t	LastTwoPicNo;	/* For Repeated Frame Detection on Interlace clip*/
 	uint32_t	LastSessNum;	/* For Session Change Detection */
 
-	RX_CAPTURE_STATE RxCaptureState;
+	bool RxCaptureState;
 
 	// BCM70015 mods
 	uint32_t	PicQSts;		/* This is the bitmap given by PiCQSts Interrupt*/
@@ -421,11 +411,6 @@ BC_STATUS crystalhd_hw_start_capture(struct crystalhd_hw *hw);
 BC_STATUS crystalhd_hw_stop_capture(struct crystalhd_hw *hw, bool unmap);
 BC_STATUS crystalhd_hw_suspend(struct crystalhd_hw *hw);
 void crystalhd_hw_stats(struct crystalhd_hw *hw, struct crystalhd_hw_stats *stats);
-
-#define CAPTURE_RX_DATA_ENABLED(hw)		(RX_CAPTURE_ON == hw->RxCaptureState)
-#define SET_RX_CAPTURE_SIGNAL(hw,_value_)	{ hw->RxCaptureState |= _value_;}
-#define CLEAR_RX_CAPTURE_SIGNAL(hw,_value_)	( hw->RxCaptureState = hw->RxCaptureState & ((RX_CAPTURE_STATE)(~_value_)) )
-#define RESET_RX_CAPTURE(hw)			{ hw->RxCaptureState = RX_CAP_OFF;}
 
 #define GET_Y0_ERR_MSK (MISC1_Y_RX_ERROR_STATUS_RX_L0_OVERRUN_ERROR_MASK |		\
 						MISC1_Y_RX_ERROR_STATUS_RX_L0_UNDERRUN_ERROR_MASK |		\

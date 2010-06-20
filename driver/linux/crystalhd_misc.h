@@ -38,6 +38,7 @@
 #include <linux/sched.h>
 #include <asm/system.h>
 #include "bc_dts_glob_lnx.h"
+#include "crystalhd_hw.h"
 
 /* Global element pool for all Queue management.
  * TX: Active = BC_TX_LIST_CNT, Free = BC_TX_LIST_CNT.
@@ -173,8 +174,6 @@ extern void *crystalhd_dioq_fetch_wait(void *, uint32_t , uint32_t *);
 
 extern int crystalhd_create_elem_pool(struct crystalhd_adp *, uint32_t);
 extern void crystalhd_delete_elem_pool(struct crystalhd_adp *);
-// Some HW specific code defines
-extern uint32_t link_GetRptDropParam(uint32_t picHeight, uint32_t picWidth, void *);
 
 /*================ Debug routines/macros .. ================================*/
 extern void crystalhd_show_buffer(uint32_t off, uint8_t *buff, uint32_t dwcount);

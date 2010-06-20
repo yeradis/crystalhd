@@ -156,10 +156,10 @@ bool crystalhd_flea_detect_ddr3(struct crystalhd_hw *hw)
 	/*If this bit is clear then have DDR-3 else we have DDR-2*/
 	if(!(regVal & BC_BIT(6)))
 	{
-		printk("DDR-3 Detected\n");
+		dev_dbg(&hw->adp->pdev->dev,"DDR-3 Detected\n");
 		return true;
 	}
-	printk("DDR-2 Detected\n");
+	dev_dbg(&hw->adp->pdev->dev,"DDR-2 Detected\n");
 	return false;
 }
 
@@ -457,10 +457,9 @@ void crystalhd_flea_handle_PicQSts_intr(struct crystalhd_hw *hw)
 	   -- For Flea, we will get a PicQSts interrupt where we will
 	   -- enable the capture. */
 
-	if(!CAPTURE_RX_DATA_ENABLED(hw))
+	if(!hw->RxCaptureState)
 	{
-		if(RX_APP_SIGNAL_ST_CAP & hw->RxCaptureState)
-			SET_RX_CAPTURE_SIGNAL(hw, RX_PIB_SIGNAL_ST_CAP);
+		hw->RxCaptureState = true;
 	}
 }
 
@@ -600,7 +599,7 @@ BC_STATUS crystalhd_flea_download_fw(struct crystalhd_hw *hw, uint8_t *pBuffer, 
 //   Can we set both the bits at the same time?? Security Arch Doc describes the steps 
 //   and the first step is to enable scrubbing and then scrambling.
 
-	printk("[crystalhd_flea_download_fw]: step 1. Enable scrubbing\n");
+	dev_dbg(&hw->adp->pdev->dev,"[crystalhd_flea_download_fw]: step 1. Enable scrubbing\n");
 
 	//Enable Scrubbing
 	regVal = hw->pfnReadDevRegister(hw->adp, BCHP_SCRUB_CTRL_SCRUB_ENABLE);
@@ -613,7 +612,7 @@ BC_STATUS crystalhd_flea_download_fw(struct crystalhd_hw *hw, uint8_t *pBuffer, 
 
 
 //-- Step 2. Poll for SCRAM_KEY_DONE_INT.
-	printk("[crystalhd_flea_download_fw]: step 2. Poll for SCRAM_KEY_DONE_INT\n");
+	dev_dbg(&hw->adp->pdev->dev,"[crystalhd_flea_download_fw]: step 2. Poll for SCRAM_KEY_DONE_INT\n");
 
 	pollCnt=0;
 	while(pollCnt < FLEA_MAX_POLL_CNT)
@@ -630,7 +629,7 @@ BC_STATUS crystalhd_flea_download_fw(struct crystalhd_hw *hw, uint8_t *pBuffer, 
 	//-- Will Assert when we do not see SCRAM_KEY_DONE_INTTERRUPT
 	if(!(regVal & SCRAM_KEY_DONE_INT_BIT))
 	{
-		printk("[crystalhd_flea_download_fw]: step 2. Did not get scram key done interrupt.\n");
+		dev_err(&hw->adp->pdev->dev,"[crystalhd_flea_download_fw]: step 2. Did not get scram key done interrupt.\n");
 		return BC_STS_ERROR;
 	}	
 
@@ -658,7 +657,7 @@ BC_STATUS crystalhd_flea_download_fw(struct crystalhd_hw *hw, uint8_t *pBuffer, 
 	hw->FleaRxPicDelAddr = borchStachAddr + 1 + HOST_TO_FW_PIC_DEL_INFO_ADDR;
 	hw->FleaFLLUpdateAddr = borchStachAddr + 1 + HOST_TO_FW_FLL_ADDR;
 
-	printk("[crystalhd_flea_download_fw]: step 3. Write the BORCH and STARCH addresses. %x:%x, %x:%x\n",
+	dev_dbg(&hw->adp->pdev->dev,"[crystalhd_flea_download_fw]: step 3. Write the BORCH and STARCH addresses. %x:%x, %x:%x\n",
 			BCHP_SCRUB_CTRL_BORCH_END_ADDRESS, 
 			borchStachAddr, 
 			BCHP_SCRUB_CTRL_STARCH_END_ADDRESS, 
@@ -666,7 +665,7 @@ BC_STATUS crystalhd_flea_download_fw(struct crystalhd_hw *hw, uint8_t *pBuffer, 
 
 //-- Step 4. Write the firmware to DRAM. [Without the Signature, 32-bit access to DRAM]
 
-	printk("[crystalhd_flea_download_fw]: step 4. Write the firmware to DRAM. Sz:%d Bytes\n",
+	dev_dbg(&hw->adp->pdev->dev,"[crystalhd_flea_download_fw]: step 4. Write the firmware to DRAM. Sz:%d Bytes\n",
 			buffSz - FLEA_FW_SIG_LEN_IN_BYTES - LENGTH_FIELD_SIZE);
 
 	hw->pfnDevDRAMWrite(hw, FW_DOWNLOAD_START_ADDR, (buffSz - FLEA_FW_SIG_LEN_IN_BYTES - LENGTH_FIELD_SIZE)/4, (uint32_t *)pBuffer);
@@ -684,7 +683,7 @@ BCHP_SCRUB_CTRL_BI_CMAC_95_64		0x000f6014			CMAC Bits[95:64]
 BCHP_SCRUB_CTRL_BI_CMAC_127_96		0x000f6018			CMAC Bits[127:96] 
 ==================================================================================
 */
-	printk("[crystalhd_flea_download_fw]: step 5. Write the signature to CMAC register.\n");
+	dev_dbg(&hw->adp->pdev->dev,"[crystalhd_flea_download_fw]: step 5. Write the signature to CMAC register.\n");
 	cmacOffset = buffSz - FLEA_FW_SIG_LEN_IN_BYTES;
 	pCmacSig = (uint32_t *) &pBuffer[cmacOffset];
 
@@ -699,14 +698,14 @@ BCHP_SCRUB_CTRL_BI_CMAC_127_96		0x000f6018			CMAC Bits[127:96]
 
 //-- Step 6. Write the ARM run bit to 1.
 //   We need a write back because we do not want to change other bits
-	printk("[crystalhd_flea_download_fw]: step 6. Write the ARM run bit to 1.\n");
+	dev_dbg(&hw->adp->pdev->dev,"[crystalhd_flea_download_fw]: step 6. Write the ARM run bit to 1.\n");
 
 	regVal = hw->pfnReadDevRegister(hw->adp, BCHP_ARMCR4_BRIDGE_REG_BRIDGE_CTL);
 	regVal |= ARM_RUN_REQ_BIT;
 	hw->pfnWriteDevRegister(hw->adp, BCHP_ARMCR4_BRIDGE_REG_BRIDGE_CTL, regVal);
 
 //-- Step 7. Poll for Boot Verification done/failure interrupt.
-	printk("[crystalhd_flea_download_fw]: step 7. Poll for Boot Verification done/failure interrupt.\n");
+	dev_dbg(&hw->adp->pdev->dev,"[crystalhd_flea_download_fw]: step 7. Poll for Boot Verification done/failure interrupt.\n");
 
 	pollCnt=0;
 	while(1)
@@ -715,7 +714,7 @@ BCHP_SCRUB_CTRL_BI_CMAC_127_96		0x000f6018			CMAC Bits[127:96]
 
 		if(regVal & BOOT_VER_FAIL_BIT ) //|| regVal & SHARF_ERR_INTR)
 		{
-			printk("[crystalhd_flea_download_fw]: step 7. Error bit occured. RetVal:%x\n", regVal);
+			dev_err(&hw->adp->pdev->dev,"[crystalhd_flea_download_fw]: step 7. Error bit occured. RetVal:%x\n", regVal);
 
 			bRetVal = false; 
 			break;
@@ -723,7 +722,7 @@ BCHP_SCRUB_CTRL_BI_CMAC_127_96		0x000f6018			CMAC Bits[127:96]
 
 		if(regVal & BOOT_VER_DONE_BIT)
 		{
-			printk("[crystalhd_flea_download_fw]: step 7. Done  RetVal:%x\n", regVal);
+			dev_err(&hw->adp->pdev->dev,"[crystalhd_flea_download_fw]: step 7. Done  RetVal:%x\n", regVal);
 
 			bRetVal = true; /*This is the only place we return TRUE from*/
 			break;
@@ -732,7 +731,7 @@ BCHP_SCRUB_CTRL_BI_CMAC_127_96		0x000f6018			CMAC Bits[127:96]
 		pollCnt++;
 		if( pollCnt >= FLEA_MAX_POLL_CNT )
 		{
-			printk("[crystalhd_flea_download_fw]: step 7. Both done and failure bits are not set.\n");
+			dev_err(&hw->adp->pdev->dev,"[crystalhd_flea_download_fw]: step 7. Both done and failure bits are not set.\n");
 			bRetVal = false;
 			break;
 		}
@@ -765,7 +764,7 @@ BCHP_SCRUB_CTRL_BI_CMAC_127_96		0x000f6018			CMAC Bits[127:96]
 	bRetVal = crystalhd_flea_detect_fw_alive(hw);
 	if( !bRetVal )
 	{
-		printk("[crystalhd_flea_download_fw]: step 8. Detect firmware heart beat failed.\n");
+		dev_err(&hw->adp->pdev->dev,"[crystalhd_flea_download_fw]: step 8. Detect firmware heart beat failed.\n");
 		return BC_STS_ERROR;
 	}
 
@@ -785,7 +784,7 @@ BCHP_SCRUB_CTRL_BI_CMAC_127_96		0x000f6018			CMAC Bits[127:96]
 		}
 	}*/
 
-	printk("[crystalhd_flea_download_fw]: ..... Complete.\n");
+	dev_dbg(&hw->adp->pdev->dev,"[crystalhd_flea_download_fw]: ..... Complete.\n");
 	return BC_STS_SUCCESS;
 }
 
@@ -871,6 +870,7 @@ bool crystalhd_flea_start_device(struct crystalhd_hw *hw)
 	-- except for fatal errors.
 	*/
 	hw->rx_list_post_index = 0;
+	hw->RxCaptureState = false;
 
 	msleep_interruptible(1);
 
@@ -1365,6 +1365,8 @@ void crystalhd_flea_stop_rx_dma_engine(struct crystalhd_hw *hw)
 	FLEA_INTR_STS_REG	IntrStsValue;
 	bool failedL0 = true, failedL1 = true;
 	uint32_t pollCnt = 0;
+
+	hw->RxCaptureState = false;
 	
 	if((hw->rx_list_sts[0] == sts_free) && (hw->rx_list_sts[1] == sts_free))
 		return; // Nothing to be done
@@ -1424,6 +1426,11 @@ BC_STATUS crystalhd_flea_hw_fire_rxdma(struct crystalhd_hw *hw,
 	if (hw->rx_list_post_index >= DMA_ENGINE_CNT) {
 		dev_err(dev, "List Out Of bounds %x\n", hw->rx_list_post_index);
 		return BC_STS_INV_ARG;
+	}
+
+	if(!hw->RxCaptureState) {
+		printk("Capture not yet enabled\n");
+		return BC_STS_BUSY;
 	}
 
 	spin_lock_irqsave(&hw->rx_lock, flags);
@@ -1494,8 +1501,6 @@ void crystalhd_flea_start_tx_dma_engine(struct crystalhd_hw *hw, uint8_t list_id
 	uint32_t first_desc_u_addr, first_desc_l_addr;
 	TX_INPUT_BUFFER_INFO	TxBuffInfo;
 	uint32_t WrAddr=0, WrSzInDWords=0;
-
-	printk("TX of %d data to address %x\n", hw->TxFwInputBuffInfo.HostXferSzInBytes, hw->TxFwInputBuffInfo.DramBuffAdd);
 	
 	// For FLEA, first update the HW with the DMA parameters	
 	WrSzInDWords = (sizeof(TxBuffInfo.DramBuffAdd) +
@@ -1942,6 +1947,7 @@ bool crystalhd_flea_hw_interrupt_handle(struct crystalhd_adp *adp, struct crysta
 	bool				bIntFound		= false;
 	bool				bPostRxBuff		= false;
 	bool				bSomeCmdDone	= false;
+	crystalhd_rx_dma_pkt *rx_pkt;
 
 	bool	rc = false;
 	
@@ -1955,8 +1961,6 @@ bool crystalhd_flea_hw_interrupt_handle(struct crystalhd_adp *adp, struct crysta
 	if(!IntrStsValue.WholeReg)
 		return rc;	/*Not Our interrupt*/
 
-	printk("FLEA got interrupt %x\n", IntrStsValue.WholeReg);
-	
 	/*If any of the bit is set we have a problem*/
 	if(IntrStsValue.HaltIntr || IntrStsValue.PcieTgtCaAttn || IntrStsValue.PcieTgtUrAttn)
 	{
@@ -2054,6 +2058,13 @@ bool crystalhd_flea_hw_interrupt_handle(struct crystalhd_adp *adp, struct crysta
 		hw->pfnWriteDevRegister(hw->adp, BCHP_INTR_INTR_CLR_REG, IntrStsValue.WholeReg);
 		hw->pfnWriteDevRegister(hw->adp, BCHP_INTR_EOI_CTRL, 1);
 	}
+
+	// Try to post RX Capture buffer from ISR context
+	if(bPostRxBuff) {
+		rx_pkt = crystalhd_dioq_fetch(hw->rx_freeq);
+		if (rx_pkt)
+			hw->pfnPostRxSideBuff(hw, rx_pkt);
+	}
 //
 //	if( (pHWExt->FleaPowerState == FLEA_PS_LP_PENDING) && (bSomeCmdDone))
 //	{
@@ -2073,521 +2084,179 @@ bool crystalhd_flea_hw_interrupt_handle(struct crystalhd_adp *adp, struct crysta
 //
 	return rc;
 }
-											
-// Curtis postpone
-//static
-//void
-//HWFleaClearRxErrsAndIntrs(PHW_EXTENSION pHWExt)
-///*
-//-- Clears all the errors and interrupt on RX DMA engine.
-//*/
-//{
-//	uint32_t				ulRegVal;
-//	FLEA_INTR_STS_REG	IntrToClear,IntrSts;
-//
-//	IntrToClear.WholeReg = 0;
-//	IntrSts.WholeReg = 0;
-//
-//	pHWExt->pHwExports->pfnReadDevRegister(pHWExt,
-//	BCHP_INTR_INTR_STATUS,
-//	&IntrSts.WholeReg);
-//
-//	DebugPrint(BRCM_COMP_ID, BRCM_DBG_LEVEL, "reg before clr %x\n", IntrSts.WholeReg);
-//	if(IntrSts.WholeReg)
-//	{
-//	CLEAR_Y_DMA_ERR(pHWExt,ulRegVal);
-//	CLEAR_UV_DMA_ERR(pHWExt,ulRegVal);
-//
-//	IntrToClear.L0UVRxDMADone	=	IntrSts.L0UVRxDMADone;
-//	IntrToClear.L0UVRxDMAErr	=	IntrSts.L0UVRxDMAErr;
-//	IntrToClear.L0YRxDMADone	=	IntrSts.L0YRxDMADone;
-//	IntrToClear.L0YRxDMAErr		=	IntrSts.L0YRxDMAErr;
-//	IntrToClear.L1UVRxDMADone	=	IntrSts.L1UVRxDMADone;
-//	IntrToClear.L1UVRxDMAErr	=	IntrSts.L1UVRxDMAErr;
-//	IntrToClear.L1YRxDMADone	=	IntrSts.L1YRxDMADone;
-//	IntrToClear.L1YRxDMAErr		=	IntrSts.L1YRxDMAErr;
-//
-//	DebugPrint(BRCM_COMP_ID, BRCM_DBG_LEVEL, "reg before clr 2%x\n", IntrToClear.WholeReg);
-//
-//	pHWExt->pHwExports->pfnWriteDevRegister(pHWExt,
-//	BCHP_INTR_INTR_CLR_REG,
-//	IntrToClear.WholeReg,
-//	false);
-//
-//	pHWExt->pHwExports->pfnWriteDevRegister(pHWExt,
-//	BCHP_INTR_EOI_CTRL,
-//	1,false);
-//	DebugPrint(BRCM_COMP_ID,
-//	BRCM_DBG_LEVEL,
-//	"E\n");
-//
-//	}
-//	return;
-//}
 
+/* This function cannot be called from ISR context since it uses APIs that can sleep */
+bool flea_GetPictureInfo(struct crystalhd_hw *hw, crystalhd_rx_dma_pkt * rx_pkt,
+							uint32_t *PicNumber, uint32_t *PicMetaData)
+{
+	unsigned long PicInfoLineNum = 0, offset = 0, size = 0;
+	PBC_PIC_INFO_BLOCK pPicInfoLine = NULL;
+	uint32_t tmpYBuffData;
+	unsigned long res = 0;
+	uint32_t widthField = 0;
+	
+	void *tmpPicInfo = NULL;
+	crystalhd_dio_req *dio = rx_pkt->dio_req;
+	*PicNumber = 0;
+	*PicMetaData = 0;
 
+	if (!dio)
+		goto getpictureinfo_err;
 
-// Curtis redundant code ?
-//uint32_t link_GetPicInfoLineNum(crystalhd_dio_req *dio, uint8_t *base)
-//{
-//	uint32_t PicInfoLineNum = 0;
-//
-//	if (dio->uinfo.b422mode == MODE422_YUY2) {
-//		PicInfoLineNum = ((uint32_t)(*(base + 6)) & 0xff)
-//			| (((uint32_t)(*(base + 4)) << 8)  & 0x0000ff00)
-//			| (((uint32_t)(*(base + 2)) << 16) & 0x00ff0000)
-//			| (((uint32_t)(*(base + 0)) << 24) & 0xff000000);
-//	} else if (dio->uinfo.b422mode == MODE422_UYVY) {
-//		PicInfoLineNum = ((uint32_t)(*(base + 7)) & 0xff)
-//			| (((uint32_t)(*(base + 5)) << 8)  & 0x0000ff00)
-//			| (((uint32_t)(*(base + 3)) << 16) & 0x00ff0000)
-//			| (((uint32_t)(*(base + 1)) << 24) & 0xff000000);
-//	} else {
-//		PicInfoLineNum = ((uint32_t)(*(base + 3)) & 0xff)
-//			| (((uint32_t)(*(base + 2)) << 8)  & 0x0000ff00)
-//			| (((uint32_t)(*(base + 1)) << 16) & 0x00ff0000)
-//			| (((uint32_t)(*(base + 0)) << 24) & 0xff000000);
-//	}
-//
-//	return PicInfoLineNum;
-//}
+	tmpPicInfo = kmalloc(2 * sizeof(BC_PIC_INFO_BLOCK) + 16, GFP_KERNEL); // since copy_from_user can sleep anyway
+	if(tmpPicInfo == NULL)
+		goto getpictureinfo_err;
+	dio->pib_va = kmalloc(32, GFP_KERNEL); // temp buffer of 32 bytes for the rest;
+	if(dio->pib_va == NULL)
+		goto getpictureinfo_err;
+	
+	offset = (rx_pkt->dio_req->uinfo.y_done_sz * 4) - PIC_PIB_DATA_OFFSET_FROM_END;
+	res = copy_from_user(dio->pib_va, (void *)(dio->uinfo.xfr_buff + offset), 4);
+	if (res != 0)
+		goto getpictureinfo_err;
+	PicInfoLineNum = *(uint32_t*)(dio->pib_va);
+	if (PicInfoLineNum > 1092) {
+		printk("Invalid Line Number[%d]\n", (int)PicInfoLineNum);
+		goto getpictureinfo_err;
+	}
 
-// Curtis redundant code ?
-//uint32_t link_GetMode422Data(crystalhd_dio_req *dio,
-//			       PBC_PIC_INFO_BLOCK pPicInfoLine, int type)
-//{
-//	int i;
-//	uint32_t offset = 0, val = 0;
-//	uint8_t *tmp;
-//	tmp = (uint8_t *)&val;
-//
-//	if (type == 1)
-//		offset = OFFSETOF(BC_PIC_INFO_BLOCK, picture_meta_payload);
-//	else if (type == 2)
-//		offset = OFFSETOF(BC_PIC_INFO_BLOCK, height);
-//	else
-//		offset = 0;
-//
-//	if (dio->uinfo.b422mode == MODE422_YUY2) {
-//		for (i = 0; i < 4; i++)
-//			((uint8_t*)tmp)[i] =
-//				((uint8_t*)pPicInfoLine)[(offset + i) * 2];
-//	} else if (dio->uinfo.b422mode == MODE422_UYVY) {
-//		for (i = 0; i < 4; i++)
-//			((uint8_t*)tmp)[i] =
-//				((uint8_t*)pPicInfoLine)[(offset + i) * 2 + 1];
-//	}
-//
-//	return val;
-//}
+	offset = (rx_pkt->dio_req->uinfo.y_done_sz * 4) - PIC_WIDTH_OFFSET_FROM_END;
+	res = copy_from_user(dio->pib_va, (void *)(dio->uinfo.xfr_buff + offset), 4);
+	if (res != 0)
+		goto getpictureinfo_err;
+	widthField = *(uint32_t*)(dio->pib_va);
+	hw->PICWidth = widthField & 0x3FFFFFFF; // bit 31 is FMT Change, bit 30 is EOS
+	if (hw->PICWidth > 2048) {
+		printk("Invalid width [%d]\n", hw->PICWidth);
+		goto getpictureinfo_err;
+	}
 
-// Curtis redundant code ?
-//uint32_t link_GetMetaDataFromPib(crystalhd_dio_req *dio,
-//				   PBC_PIC_INFO_BLOCK pPicInfoLine)
-//{
-//	uint32_t picture_meta_payload = 0;
-//
-//	if (dio->uinfo.b422mode)
-//		picture_meta_payload = link_GetMode422Data(dio, pPicInfoLine, 1);
-//	else
-//		picture_meta_payload = pPicInfoLine->picture_meta_payload;
-//
-//	return BC_SWAP32(picture_meta_payload);
-//}
+	/* calc pic info line offset */
+	if (dio->uinfo.b422mode) {
+		size = 2 * sizeof(BC_PIC_INFO_BLOCK);
+		offset = (PicInfoLineNum * hw->PICWidth * 2) + 4;
+	} else {
+		size = sizeof(BC_PIC_INFO_BLOCK);
+		offset = (PicInfoLineNum * hw->PICWidth) + 4;
+	}
 
-// Curtis redundant code ?
-//uint32_t link_GetHeightFromPib(crystalhd_dio_req *dio,
-//				 PBC_PIC_INFO_BLOCK pPicInfoLine)
-//{
-//	uint32_t height = 0;
-//
-//	if (dio->uinfo.b422mode)
-//		height = link_GetMode422Data(dio, pPicInfoLine, 2);
-//	else
-//		height = pPicInfoLine->height;
-//
-//	return BC_SWAP32(height);
-//}
+	res = copy_from_user(tmpPicInfo, (void *)(dio->uinfo.xfr_buff+offset), size);
+	if (res != 0)
+		goto getpictureinfo_err;
+		
+	pPicInfoLine = (PBC_PIC_INFO_BLOCK)(tmpPicInfo);
 
-// Curtis redundant code ?
-///* This function cannot be called from ISR context since it uses APIs that can sleep */
-//bool link_GetPictureInfo(uint32_t picHeight, uint32_t picWidth, crystalhd_dio_req *dio,
-//			   uint32_t *PicNumber, uint32_t *PicMetaData)
-//{
-//	unsigned long PicInfoLineNum = 0, HeightInPib = 0, offset = 0, size = 0;
-//	PBC_PIC_INFO_BLOCK pPicInfoLine = NULL;
-//	uint32_t pic_number = 0;
-//	uint8_t *tmp = (uint8_t *)&pic_number;
-//	int i;
-//	unsigned long res = 0;
-//
-//	*PicNumber = 0;
-//	*PicMetaData = 0;
-//
-//	if (!dio || !picWidth)
-//		goto getpictureinfo_err;
-//
-//	dio->pib_va = kmalloc(2 * sizeof(BC_PIC_INFO_BLOCK) + 16, GFP_KERNEL); // since copy_from_user can sleep anyway
-//	if(dio->pib_va == NULL)
-//		goto getpictureinfo_err;
-//	res = copy_from_user(dio->pib_va, (void *)dio->uinfo.xfr_buff, 8);
-//	if (res != 0)
-//		goto getpictureinfo_err;
-//
-//	/*
-//	 * -- Ajitabh[01-16-2009]: Strictly check against done size.
-//	 * -- we have seen that the done size sometimes comes less without
-//	 * -- any error indicated to the driver. So we change the limit
-//	 * -- to check against the done size rather than the full buffer size
-//	 * -- this way we will always make sure that the PIB is recieved by
-//	 * -- the driver.
-//	 */
-//	/* Limit = Base + pRxDMAReq->RxYDMADesc.RxBuffSz; */
-//	/* Limit = Base + (pRxDMAReq->RxYDoneSzInDword * 4); */
-//// 	Limit = dio->uinfo.xfr_buff + dio->uinfo.xfr_len;
-//
-//	PicInfoLineNum = link_GetPicInfoLineNum(dio, dio->pib_va);
-//	if (PicInfoLineNum > 1092) {
-//		printk("Invalid Line Number[%d]\n",	(int)PicInfoLineNum);
-//		goto getpictureinfo_err;
-//	}
-//
-//	/*
-//	 * -- Ajitabh[01-16-2009]: Added the check for validating the
-//	 * -- PicInfoLine Number. This function is only called for link so we
-//	 * -- do not have to check for height+1 or (Height+1)/2 as we are doing
-//	 * -- in DIL. In DIL we need that because for flea firmware is padding
-//	 * -- the data to make it 16 byte aligned. This Validates the reception
-//	 * -- of PIB itself.
-//	 */
-//	if (picHeight) {
-//		if ((PicInfoLineNum != picHeight) &&
-//		    (PicInfoLineNum != picHeight/2)) {
-//			printk("PicInfoLineNum[%d] != PICHeight "
-//				"Or PICHeight/2 [%d]\n",
-//				(int)PicInfoLineNum, picHeight);
-//			goto getpictureinfo_err;
-//		}
-//	}
-//	
-//	/* calc pic info line offset */
-//	if (dio->uinfo.b422mode) {
-//		size = 2 * sizeof(BC_PIC_INFO_BLOCK);
-//		offset = (PicInfoLineNum * picWidth * 2) + 8;
-//	} else {
-//		size = sizeof(BC_PIC_INFO_BLOCK);
-//		offset = (PicInfoLineNum * picWidth) + 4;
-//	}
-//
-//	res = copy_from_user(dio->pib_va, (void *)(dio->uinfo.xfr_buff+offset), size);
-//	if (res != 0)
-//		goto getpictureinfo_err;
-//	pPicInfoLine = (PBC_PIC_INFO_BLOCK)(dio->pib_va);
-//
-//// 	if (((uint8_t *)pPicInfoLine < Base) ||
-//// 	    ((uint8_t *)pPicInfoLine > Limit)) {
-//// 		dev_err(dev, "Base Limit Check Failed for Extracting "
-//// 			"the PIB\n");
-//// 		goto getpictureinfo_err;
-//// 	}
-//
-//	/*
-//	 * -- Ajitabh[01-16-2009]:
-//	 * We have seen that the data gets shifted for some repeated frames.
-//	 * To detect those we use PicInfoLineNum and compare it with height.
-//	 */
-//
-//	HeightInPib = link_GetHeightFromPib(dio, pPicInfoLine);
-//	if ((PicInfoLineNum != HeightInPib) &&
-//	    (PicInfoLineNum != HeightInPib / 2)) {
-//		printk("Height Match Failed: HeightInPIB[%d] "
-//			"PicInfoLineNum[%d]\n",
-//			(int)HeightInPib, (int)PicInfoLineNum);
-//		goto getpictureinfo_err;
-//	}
-//
-//	/* get pic meta data from pib */
-//	*PicMetaData = link_GetMetaDataFromPib(dio, pPicInfoLine);
-//	/* get pic number from pib */
-//	/* calc pic info line offset */
-//	if (dio->uinfo.b422mode)
-//		offset = (PicInfoLineNum * picWidth * 2);
-//	else
-//		offset = (PicInfoLineNum * picWidth);
-//
-//	res = copy_from_user(dio->pib_va, (void *)(dio->uinfo.xfr_buff+offset), 12);
-//	if (res != 0)
-//		goto getpictureinfo_err;
-//	
-//	if (dio->uinfo.b422mode == MODE422_YUY2) {
-//		for (i = 0; i < 4; i++)
-//			((uint8_t *)tmp)[i] = ((uint8_t *)dio->pib_va)[i * 2];
-//	} else if (dio->uinfo.b422mode == MODE422_UYVY) {
-//		for (i = 0; i < 4; i++)
-//			((uint8_t *)tmp)[i] = ((uint8_t *)dio->pib_va)[(i * 2) + 1];
-//	} else
-//		pic_number = *(uint32_t *)(dio->pib_va);
-//
-//	*PicNumber =  BC_SWAP32(pic_number);
-//	
-//	if(dio->pib_va)
-//		kfree(dio->pib_va);
-//
-//	return true;
-//
-//getpictureinfo_err:
-//	if(dio->pib_va)
-//		kfree(dio->pib_va);
-//	*PicNumber = 0;
-//	*PicMetaData = 0;
-//
-//	return false;
-//}
+	if(widthField & PIB_EOS_DETECTED_BIT)
+	{
+		printk("Got EOS flag.\n");
+		hw->DrvEosDetected = 1;
+		*(uint32_t *)(dio->pib_va) = 0xFFFFFFFF;
+		res = copy_to_user((void *)(dio->uinfo.xfr_buff), dio->pib_va, 4);
+		if (res != 0)
+			goto getpictureinfo_err;
+	}
+	else
+	{
+		if( hw->DrvEosDetected == 1 )
+			hw->DrvCancelEosFlag = 1;
+		
+		hw->DrvEosDetected = 0;
+		res = copy_from_user(dio->pib_va, (void *)(dio->uinfo.xfr_buff), 4);
+		if (res != 0)
+			goto getpictureinfo_err;
+		
+		tmpYBuffData = *(uint32_t *)(dio->pib_va);
+		pPicInfoLine->ycom = tmpYBuffData;
+		res = copy_to_user((void *)(dio->uinfo.xfr_buff+offset), tmpPicInfo, size);
+		if (res != 0)
+			goto getpictureinfo_err;
+		
+		*(uint32_t *)(dio->pib_va) = PicInfoLineNum;
+		res = copy_to_user((void *)(dio->uinfo.xfr_buff), dio->pib_va, 4);
+		if (res != 0)
+			goto getpictureinfo_err;
+	}
 
-// Curtis redundant code ?
-//uint32_t link_GetRptDropParam(uint32_t picHeight, uint32_t picWidth, void* pRxDMAReq)
-//{
-//	uint32_t PicNumber = 0, PicMetaData = 0, result = 0;
-//			
-//	if(link_GetPictureInfo(picHeight, picWidth, ((crystalhd_rx_dma_pkt *)pRxDMAReq)->dio_req,
-//				&PicNumber, &PicMetaData))
-//		result = PicNumber;
-//
-//	return result;
-//}
+	if(widthField & PIB_FORMAT_CHANGE_BIT)
+	{
+		rx_pkt->flags = 0;
+		rx_pkt->flags |= COMP_FLAG_PIB_VALID | COMP_FLAG_FMT_CHANGE;
+		
+		rx_pkt->pib.picture_number			= pPicInfoLine->picture_number;
+		rx_pkt->pib.width					= pPicInfoLine->width;
+		rx_pkt->pib.height					= pPicInfoLine->height;
+		rx_pkt->pib.chroma_format			= pPicInfoLine->chroma_format;
+		rx_pkt->pib.pulldown				= pPicInfoLine->pulldown;
+		rx_pkt->pib.flags					= pPicInfoLine->flags;
+		rx_pkt->pib.sess_num				= pPicInfoLine->sess_num;
+		rx_pkt->pib.aspect_ratio			= pPicInfoLine->aspect_ratio;
+		rx_pkt->pib.colour_primaries		= pPicInfoLine->colour_primaries;
+		rx_pkt->pib.picture_meta_payload	= pPicInfoLine->picture_meta_payload;
+		rx_pkt->pib.frame_rate 				= pPicInfoLine->frame_rate;
+		rx_pkt->pib.custom_aspect_ratio_width_height = pPicInfoLine->custom_aspect_ratio_width_height;
+		rx_pkt->pib.n_drop				= pPicInfoLine->n_drop;
+		rx_pkt->pib.ycom				= pPicInfoLine->ycom;
+		hw->PICHeight = rx_pkt->pib.height;
+		hw->PICWidth = rx_pkt->pib.width;
+		hw->LastPicNo=0;
+		hw->LastTwoPicNo=0;
+		printk("App PIB:%x %x %x %x %x %x %x %x %x %x\n",
+				 rx_pkt->pib.picture_number,
+				 rx_pkt->pib.aspect_ratio,
+				 rx_pkt->pib.chroma_format,
+				 rx_pkt->pib.colour_primaries,
+				 rx_pkt->pib.frame_rate,
+				 rx_pkt->pib.height,
+				 rx_pkt->pib.width,
+				 rx_pkt->pib.n_drop,
+				 rx_pkt->pib.pulldown,
+				 rx_pkt->pib.ycom);
+				 
+	}
+	
+	if(pPicInfoLine->flags & FLEA_DECODE_ERROR_FLAG)
+	{
+		*PicNumber = 0;
+	} else {
+		/* get pic number and flags */
+		if (dio->uinfo.b422mode)
+			offset = (PicInfoLineNum * hw->PICWidth * 2);
+		else
+			offset = (PicInfoLineNum * hw->PICWidth);
 
+		res = copy_from_user(dio->pib_va, (void *)(dio->uinfo.xfr_buff+offset), 4);
+		if (res != 0)
+			goto getpictureinfo_err;
 
-// Curtis redundant code ?
-///*
-//* This function gets the next picture metadata payload
-//* from the decoded picture in ReadyQ (if there was any)
-//* and returns it. THIS IS ONLY USED FOR LINK.
-//*/
-//bool crystalhd_link_peek_next_decoded_frame(struct crystalhd_hw *hw,
-//					  uint32_t *meta_payload,
-//					  uint32_t PicWidth)
-//{
-//	uint32_t PicNumber = 0;
-//	unsigned long flags = 0;
-//	crystalhd_dioq_t *ioq;
-//	crystalhd_elem_t *tmp;
-//	crystalhd_rx_dma_pkt *rpkt;
-//
-//	*meta_payload = 0;
-//
-//	ioq = hw->rx_rdyq;
-//	spin_lock_irqsave(&ioq->lock, flags);
-//
-//	if ((ioq->count > 0) && (ioq->head != (crystalhd_elem_t *)&ioq->head)) {
-//		tmp = ioq->head;
-//		rpkt = (crystalhd_rx_dma_pkt *)tmp->data;
-//		if (rpkt) {
-//			link_GetPictureInfo(hw->PICHeight, hw->PICWidth, rpkt->dio_req,
-//				       &PicNumber, meta_payload);
-//			dev_dbg(&hw->adp->pdev->dev, "%s: PicWidth(%d), "
-//				"PicNumber(%d), meta_payload(0x%x)\n",
-//				__func__, PicWidth, PicNumber, *meta_payload);
-//		}
-//	}
-//
-//	spin_unlock_irqrestore(&ioq->lock, flags);
-//
-//	return true;
-//}
+		*PicNumber = *(uint32_t *)(dio->pib_va);
+	}
+	
+	if(dio->pib_va)
+		kfree(dio->pib_va);
+	if(tmpPicInfo)
+		kfree(tmpPicInfo);
+	
+	return true;
 
+getpictureinfo_err:
+	if(dio->pib_va)
+		kfree(dio->pib_va);
+	if(tmpPicInfo)
+		kfree(tmpPicInfo);
+	
+	*PicNumber = 0;
+	*PicMetaData = 0;
 
-// Curtis redundant code ?
-//uint32_t crystalhd_link_get_pib_avail_cnt(struct crystalhd_hw *hw)
-//{
-//	/*
-//	* Position of the PIB Entries can be found at
-//	* 0th and the 1st location of the Circular list.
-//	*/
-//	uint32_t Q_addr;
-//	uint32_t pib_cnt, r_offset, w_offset;
-//
-//	Q_addr = hw->pib_del_Q_addr;
-//
-//	/* Get the Read Pointer */
-//	crystalhd_link_mem_rd(hw, Q_addr, 1, &r_offset);
-//
-//	/* Get the Write Pointer */
-//	crystalhd_link_mem_rd(hw, Q_addr + sizeof(uint32_t), 1, &w_offset);
-//
-//	if (r_offset == w_offset)
-//		return 0;	/* Queue is empty */
-//
-//	if (w_offset > r_offset)
-//		pib_cnt = w_offset - r_offset;
-//	else
-//		pib_cnt = (w_offset + MAX_PIB_Q_DEPTH) -
-//			  (r_offset + MIN_PIB_Q_DEPTH);
-//
-//	if (pib_cnt > MAX_PIB_Q_DEPTH) {
-//		dev_err(&hw->adp->pdev->dev, "Invalid PIB Count (%u)\n", pib_cnt);
-//		return 0;
-//	}
-//
-//	return pib_cnt;
-//}
+	return false;
+}
 
+uint32_t flea_GetRptDropParam(struct crystalhd_hw *hw, void* pRxDMAReq)
+{
+	uint32_t PicNumber = 0, PicMetaData = 0, result = 0;
 
-// Curtis redundant code ?
-//uint32_t crystalhd_link_get_addr_from_pib_Q(struct crystalhd_hw *hw)
-//{
-//	uint32_t Q_addr;
-//	uint32_t addr_entry, r_offset, w_offset;
-//
-//	Q_addr = hw->pib_del_Q_addr;
-//
-//	/* Get the Read Pointer 0Th Location is Read Pointer */
-//	crystalhd_link_mem_rd(hw, Q_addr, 1, &r_offset);
-//
-//	/* Get the Write Pointer 1st Location is Write pointer */
-//	crystalhd_link_mem_rd(hw, Q_addr + sizeof(uint32_t), 1, &w_offset);
-//
-//	/* Queue is empty */
-//	if (r_offset == w_offset)
-//		return 0;
-//
-//	if ((r_offset < MIN_PIB_Q_DEPTH) || (r_offset >= MAX_PIB_Q_DEPTH))
-//		return 0;
-//
-//	/* Get the Actual Address of the PIB */
-//	crystalhd_link_mem_rd(hw, Q_addr + (r_offset * sizeof(uint32_t)),
-//		       1, &addr_entry);
-//
-//	/* Increment the Read Pointer */
-//	r_offset++;
-//
-//	if (MAX_PIB_Q_DEPTH == r_offset)
-//		r_offset = MIN_PIB_Q_DEPTH;
-//
-//	/* Write back the read pointer to It's Location */
-//	crystalhd_link_mem_wr(hw, Q_addr, 1, &r_offset);
-//
-//	return addr_entry;
-//}
+	if(flea_GetPictureInfo(hw, (crystalhd_rx_dma_pkt *)pRxDMAReq,
+		&PicNumber, &PicMetaData))
+		result = PicNumber;
 
-// Curtis redundant code ?
-//bool crystalhd_link_rel_addr_to_pib_Q(struct crystalhd_hw *hw, uint32_t addr_to_rel)
-//{
-//	uint32_t Q_addr;
-//	uint32_t r_offset, w_offset, n_offset;
-//
-//	Q_addr = hw->pib_rel_Q_addr;
-//
-//	/* Get the Read Pointer */
-//	crystalhd_link_mem_rd(hw, Q_addr, 1, &r_offset);
-//
-//	/* Get the Write Pointer */
-//	crystalhd_link_mem_rd(hw, Q_addr + sizeof(uint32_t), 1, &w_offset);
-//
-//	if ((r_offset < MIN_PIB_Q_DEPTH) ||
-//	    (r_offset >= MAX_PIB_Q_DEPTH))
-//		return false;
-//
-//	n_offset = w_offset + 1;
-//
-//	if (MAX_PIB_Q_DEPTH == n_offset)
-//		n_offset = MIN_PIB_Q_DEPTH;
-//
-//	if (r_offset == n_offset)
-//		return false; /* should never happen */
-//
-//	/* Write the DRAM ADDR to the Queue at Next Offset */
-//	crystalhd_link_mem_wr(hw, Q_addr + (w_offset * sizeof(uint32_t)),
-//		       1, &addr_to_rel);
-//
-//	/* Put the New value of the write pointer in Queue */
-//	crystalhd_link_mem_wr(hw, Q_addr + sizeof(uint32_t), 1, &n_offset);
-//
-//	return true;
-//}
-
-
-// Curtis redundant code ?
-//void link_cpy_pib_to_app(C011_PIB *src_pib, BC_PIC_INFO_BLOCK *dst_pib)
-//{
-//	if (!src_pib || !dst_pib) {
-//		printk(KERN_ERR "%s: Invalid Arguments\n", __func__);
-//		return;
-//	}
-//
-//	dst_pib->timeStamp		= 0;
-//	dst_pib->picture_number		= src_pib->ppb.picture_number;
-//	dst_pib->width			= src_pib->ppb.width;
-//	dst_pib->height			= src_pib->ppb.height;
-//	dst_pib->chroma_format		= src_pib->ppb.chroma_format;
-//	dst_pib->pulldown		= src_pib->ppb.pulldown;
-//	dst_pib->flags			= src_pib->ppb.flags;
-//	dst_pib->sess_num		= src_pib->ptsStcOffset;
-//	dst_pib->aspect_ratio		= src_pib->ppb.aspect_ratio;
-//	dst_pib->colour_primaries	= src_pib->ppb.colour_primaries;
-//	dst_pib->picture_meta_payload	= src_pib->ppb.picture_meta_payload;
-//	dst_pib->frame_rate		= src_pib->resolution ;
-//	return;
-//}
-
-
-// Curtis redundant code ?
-//void crystalhd_link_proc_pib(struct crystalhd_hw *hw)
-//{
-//	unsigned int cnt;
-//	C011_PIB src_pib;
-//	uint32_t pib_addr, pib_cnt;
-//	BC_PIC_INFO_BLOCK *AppPib;
-//	crystalhd_rx_dma_pkt *rx_pkt = NULL;
-//
-//	pib_cnt = crystalhd_link_get_pib_avail_cnt(hw);
-//
-//	if (!pib_cnt)
-//		return;
-//
-//	for (cnt = 0; cnt < pib_cnt; cnt++) {
-//		pib_addr = crystalhd_link_get_addr_from_pib_Q(hw);
-//		crystalhd_link_mem_rd(hw, pib_addr, sizeof(C011_PIB) / 4,
-//				 (uint32_t *)&src_pib);
-//
-//		if (src_pib.bFormatChange) {
-//			rx_pkt = (crystalhd_rx_dma_pkt *)
-//					crystalhd_dioq_fetch(hw->rx_freeq);
-//			if (!rx_pkt)
-//				return;
-//
-//			rx_pkt->flags = 0;
-//			rx_pkt->flags |= COMP_FLAG_PIB_VALID |
-//					 COMP_FLAG_FMT_CHANGE;
-//			AppPib = &rx_pkt->pib;
-//			link_cpy_pib_to_app(&src_pib, AppPib);
-//
-//			hw->PICHeight = rx_pkt->pib.height;
-//			if (rx_pkt->pib.width > 1280)
-//				hw->PICWidth = 1920;
-//			else if (rx_pkt->pib.width > 720)
-//				hw->PICWidth = 1280;
-//			else
-//				hw->PICWidth = 720;
-//
-//			dev_info(&hw->adp->pdev->dev,
-//				"App PIB:%x %x %x %x %x %x %x %x %x %x\n",
-//				rx_pkt->pib.picture_number,
-//				rx_pkt->pib.aspect_ratio,
-//				rx_pkt->pib.chroma_format,
-//				rx_pkt->pib.colour_primaries,
-//				rx_pkt->pib.frame_rate,
-//				rx_pkt->pib.height,
-//				rx_pkt->pib.width,
-//				rx_pkt->pib.n_drop,
-//				rx_pkt->pib.pulldown,
-//				rx_pkt->pib.ycom);
-//
-//			crystalhd_dioq_add(hw->rx_rdyq, (void *)rx_pkt,
-//					   true, rx_pkt->pkt_tag);
-//
-//		}
-//
-//		crystalhd_link_rel_addr_to_pib_Q(hw, pib_addr);
-//	}
-//}
-
+	return result;
+}
