@@ -171,7 +171,7 @@ static int chd_dec_release_cdata(struct crystalhd_adp *adp,
 	int rc;
 
 	if (!adp || !io || !ua) {
-		dev_err(dev, "Invalid Arg!!\n");
+		dev_err(chddev(), "Invalid Arg!!\n");
 		return -EINVAL;
 	}
 
