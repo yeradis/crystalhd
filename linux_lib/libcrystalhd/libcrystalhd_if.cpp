@@ -290,6 +290,8 @@ static BC_STATUS DtsSetupHardware(HANDLE hDevice, BOOL IgnClkChk)
 
     if (Ctx->DevId == BC_PCI_DEVID_LINK)
         sts = DtsPushAuthFwToLink(hDevice,NULL);
+	else if (Ctx->DevId == BC_PCI_DEVID_FLEA)
+		sts = DtsPushFwToFlea(hDevice,NULL);
 
 	if(sts != BC_STS_SUCCESS){
 		return sts;

@@ -928,13 +928,13 @@ DtsDevMemWr(
 
 	if(!hDevice)
 	{
-		DebugLog_Trace(LDIL_DBG,"DtsDevMemRd: Invalid Handle\n");
+		DebugLog_Trace(LDIL_DBG,"DtsDevMemWr: Invalid Handle\n");
 		return BC_STS_INV_ARG;
 	}
 
 	if(!Buffer)
 	{
-		DebugLog_Trace(LDIL_DBG,"DtsDevMemRd: Null Buffer\n");
+		DebugLog_Trace(LDIL_DBG,"DtsDevMemWr: Null Buffer\n");
 		return BC_STS_INV_ARG;
 	}
 
@@ -951,7 +951,7 @@ DtsDevMemWr(
 
 	if(!pIoctlData)
 	{
-		DebugLog_Trace(LDIL_DBG,"DtsDevMemRd: Memory Allocation Failed\n");
+		DebugLog_Trace(LDIL_DBG,"DtsDevMemWr: Memory Allocation Failed\n");
 		return BC_STS_ERROR;
 	}
 
@@ -975,13 +975,13 @@ DtsDevMemWr(
 					(LPDWORD)&BytesReturned,
 					NULL))
 	{
-		DebugLog_Trace(LDIL_DBG,"DtsDevMemRd: DeviceIoControl Failed\n");
+		DebugLog_Trace(LDIL_DBG,"DtsDevMemWr: DeviceIoControl Failed\n");
 		return BC_STS_ERROR;
 	}
 
 	if(BC_STS_ERROR == pIoctlData->RetSts)
 	{
-		DebugLog_Trace(LDIL_DBG,"DtsDevMemRd: IOCTL Cmd Failed By Driver\n");
+		DebugLog_Trace(LDIL_DBG,"DtsDevMemWr: IOCTL Cmd Failed By Driver\n");
 		return pIoctlData->RetSts;
 	}
 
@@ -1036,7 +1036,7 @@ DtsTxDmaText( HANDLE  hDevice ,
 
 	if( BC_STS_SUCCESS != status)
 	{
-		DebugLog_Trace(LDIL_DBG,"DtsDevMemRd: DeviceIoControl Failed\n");
+		DebugLog_Trace(LDIL_DBG,"DtsTxDmaText: DeviceIoControl Failed with Sts %d\n", status);
 	}
 
 	DtsRelIoctlData(Ctx,pIocData);

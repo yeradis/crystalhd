@@ -46,6 +46,12 @@ fwbinPushToLINK(HANDLE hDevice, char *FwBinFile, uint32_t *bytesDnld);
 DRVIFLIB_INT_API BC_STATUS
 DtsPushAuthFwToLink(HANDLE hDevice, char *FwBinFile);
 
+DRVIFLIB_INT_API BC_STATUS
+fwbinPushToFLEA(HANDLE hDevice, char *FwBinFile, uint32_t *bytesDnld);
+
+DRVIFLIB_INT_API BC_STATUS
+DtsPushFwToFlea(HANDLE hDevice, char *FwBinFile);
+
 DRVIFLIB_INT_API BC_STATUS dec_write_fw_Sig(HANDLE hndl,uint32_t* Sig);
 
 #endif

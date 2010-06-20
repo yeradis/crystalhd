@@ -4,7 +4,9 @@
  *  Name: crystalhd_hw . c
  *
  *  Description:
- *		BCM70010 Linux driver HW layer.
+ *		BCM70012/BCM70015 Linux driver hardware layer.
+ *
+ *  HISTORY:
  *
  **********************************************************************
  * This file is part of the crystalhd device driver.
@@ -27,8 +29,101 @@
 #include <linux/device.h>
 #include <asm/tsc.h>
 #include "crystalhd_lnx.h"
+#include "crystalhd_linkfuncs.h"
+#include "crystalhd_fleafuncs.h"
 
 #define OFFSETOF(_s_, _m_) ((size_t)(unsigned long)&(((_s_ *)0)->_m_))
+
+BC_STATUS crystalhd_hw_open(struct crystalhd_hw *hw, struct crystalhd_adp *adp)
+{
+	if (!hw || !adp) {
+		printk(KERN_ERR "%s: Invalid Arguments\n", __func__);
+		return BC_STS_INV_ARG;
+	}
+
+	printk(KERN_ERR "opening HW\n");
+	if (hw->dev_started)
+		return BC_STS_SUCCESS;
+
+	// Setup HW specific functions appropriately
+	if (adp->pdev->device == BC_PCI_DEVID_FLEA) {
+		printk(KERN_ERR "crystalhd_hw_open: setting up functions, device = Flea\n");
+		hw->pfnStartDevice = crystalhd_flea_start_device;
+		hw->pfnStopDevice = crystalhd_flea_stop_device;
+		hw->pfnFindAndClearIntr = crystalhd_flea_hw_interrupt_handle;
+		hw->pfnReadDevRegister = crystalhd_flea_reg_rd;					// Done
+		hw->pfnWriteDevRegister = crystalhd_flea_reg_wr;				// Done
+		hw->pfnReadFPGARegister = crystalhd_flea_reg_rd;				// Done
+		hw->pfnWriteFPGARegister = crystalhd_flea_reg_wr;				// Done
+		hw->pfnCheckInputFIFO = crystalhd_flea_check_input_full;
+		hw->pfnDevDRAMRead = crystalhd_flea_mem_rd;						// Done
+		hw->pfnDevDRAMWrite = crystalhd_flea_mem_wr;					// Done
+		hw->pfnDoFirmwareCmd = crystalhd_flea_do_fw_cmd;
+		hw->pfnFWDwnld = crystalhd_flea_download_fw;
+		hw->pfnHWGetDoneSize = crystalhd_flea_get_dnsz;
+		hw->pfnIssuePause = crystalhd_flea_hw_pause;
+		hw->pfnPeekNextDeodedFr = crystalhd_flea_peek_next_decoded_frame;
+		hw->pfnPostRxSideBuff = crystalhd_flea_hw_post_cap_buff;
+		hw->pfnStartTxDMA = crystalhd_flea_start_tx_dma_engine;
+		hw->pfnStopTxDMA = crystalhd_flea_stop_tx_dma_engine;
+		hw->pfnStopRXDMAEngines = crystalhd_flea_stop_rx_dma_engine;
+		hw->pfnNotifyFLLChange = crystalhd_flea_notify_fll_change;
+	} else {
+		printk(KERN_ERR "crystalhd_hw_open: setting up functions, device = Link\n");
+		hw->pfnStartDevice = crystalhd_link_start_device;
+		hw->pfnStopDevice = crystalhd_link_stop_device;
+		hw->pfnFindAndClearIntr = crystalhd_link_hw_interrupt_handle;
+		hw->pfnReadDevRegister = link_dec_reg_rd;
+		hw->pfnWriteDevRegister = link_dec_reg_wr;
+		hw->pfnReadFPGARegister = crystalhd_link_reg_rd;
+		hw->pfnWriteFPGARegister = crystalhd_link_reg_wr;
+		hw->pfnCheckInputFIFO = crystalhd_link_check_input_full;
+		hw->pfnDevDRAMRead = crystalhd_link_mem_rd;
+		hw->pfnDevDRAMWrite = crystalhd_link_mem_wr;
+		hw->pfnDoFirmwareCmd = crystalhd_link_do_fw_cmd;
+		hw->pfnFWDwnld = crystalhd_link_download_fw;
+		hw->pfnHWGetDoneSize = crystalhd_link_get_dnsz;
+		hw->pfnIssuePause = crystalhd_link_hw_pause;
+		hw->pfnPeekNextDeodedFr = crystalhd_link_peek_next_decoded_frame;
+		hw->pfnPostRxSideBuff = crystalhd_link_hw_post_cap_buff;
+		hw->pfnStartTxDMA = crystalhd_link_start_tx_dma_engine;
+		hw->pfnStopTxDMA = crystalhd_link_stop_tx_dma_engine;
+		hw->pfnStopRXDMAEngines = crystalhd_link_stop_rx_dma_engine;
+		hw->pfnNotifyFLLChange = crystalhd_link_notify_fll_change;
+	}
+				
+	hw->adp = adp;
+	spin_lock_init(&hw->lock);
+	spin_lock_init(&hw->rx_lock);
+	/* FIXME: jarod: what are these magic numbers?!? */
+	hw->tx_ioq_tag_seed = 0x70023070;
+	hw->rx_pkt_tag_seed = 0x70029070;
+
+	hw->stop_pending = 0;
+	hw->pfnStartDevice(hw);
+	hw->dev_started = true;
+
+	printk(KERN_ERR "Opening HW. hw:0x%x, hw->adp:0x%x\n", (int)hw, (int)(hw->adp));
+
+	return BC_STS_SUCCESS;
+}
+
+BC_STATUS crystalhd_hw_close(struct crystalhd_hw *hw)
+{
+	if (!hw) {
+		printk(KERN_ERR "%s: Invalid Arguments\n", __func__);
+		return BC_STS_SUCCESS;
+	}
+	printk("Closing HW\n");
+	if (!hw->dev_started)
+		return BC_STS_SUCCESS;
+
+	/* Stop and DDR sleep will happen in here */
+	crystalhd_hw_suspend(hw);
+	hw->dev_started = false;
+
+	return BC_STS_SUCCESS;
+}
 
 crystalhd_rx_dma_pkt *crystalhd_hw_alloc_rx_pkt(struct crystalhd_hw *hw)
 {
@@ -159,82 +254,6 @@ hw_create_ioq_err:
 	crystalhd_hw_delete_ioqs(hw);
 
 	return sts;
-}
-
-BC_STATUS crystalhd_hw_open(struct crystalhd_hw *hw, struct crystalhd_adp *adp)
-{
-	if (!hw || !adp) {
-		printk(KERN_ERR "%s: Invalid Arguments\n", __func__);
-		return BC_STS_INV_ARG;
-	}
-
-	printk("opening HW\n");
-	if (hw->dev_started)
-		return BC_STS_SUCCESS;
-
-	// Setup HW specific functions appropriately
-	
-	if (adp->pdev->device == BC_PCI_DEVID_FLEA) {
-		
-		/*
-		pHWExt->HwPrivFuncs.pfnNotifyFLLChange = HWFleaNotifyFllChange;
-		pHWExt->HwPrivFuncs.pfnFireRx = HwFleaFireRx;
-		pHWExt->HwPrivFuncs.pfnPostProcessPicture = HwFleaPostProcessPicture;
-		pHWExt->HwPrivFuncs.pfnIssuePause = HwFleaIssuePause;
-		*/
-	} else {
-		printk("setting up functions\n");
-		hw->pfnStartDevice = crystalhd_link_start_device;
-		hw->pfnStopDevice = crystalhd_link_stop_device;
-		hw->pfnPostRxSideBuff = crystalhd_link_hw_post_cap_buff;
-		hw->pfnHWGetDoneSize = crystalhd_link_get_dnsz;
-		hw->pfnReadDevRegister = link_dec_reg_rd;
-		hw->pfnReadFPGARegister = crystalhd_link_reg_rd;
-		hw->pfnWriteFPGARegister = crystalhd_link_reg_wr;
-		hw->pfnWriteDevRegister = link_dec_reg_wr;
-		hw->pfnCheckInputFIFO = crystalhd_link_check_input_full;
-		hw->pfnDevDRAMRead = crystalhd_link_mem_rd;
-		hw->pfnDevDRAMWrite = crystalhd_link_mem_wr;
-		hw->pfnDoFirmwareCmd = crystalhd_link_do_fw_cmd;
-		hw->pfnFWDwnld = crystalhd_link_download_fw;
-		hw->pfnHWGetDoneSize = crystalhd_link_get_dnsz;
-		hw->pfnIssuePause = crystalhd_link_hw_pause;
-		hw->pfnPeekNextDeodedFr = crystalhd_link_peek_next_decoded_frame;
-		hw->pfnPostRxSideBuff = crystalhd_link_hw_post_cap_buff;
-		hw->pfnStartTxDMA = crystalhd_link_start_tx_dma_engine;
-		hw->pfnStopRXDMAEngines = crystalhd_link_stop_rx_dma_engine;
-		hw->pfnStopTxDMA = crystalhd_link_stop_tx_dma_engine;
-	}
-				
-	hw->adp = adp;
-	spin_lock_init(&hw->lock);
-	spin_lock_init(&hw->rx_lock);
-	/* FIXME: jarod: what are these magic numbers?!? */
-	hw->tx_ioq_tag_seed = 0x70023070;
-	hw->rx_pkt_tag_seed = 0x70029070;
-
-	hw->stop_pending = 0;
-	hw->pfnStartDevice(hw);
-	hw->dev_started = true;
-
-	return BC_STS_SUCCESS;
-}
-
-BC_STATUS crystalhd_hw_close(struct crystalhd_hw *hw)
-{
-	if (!hw) {
-		printk(KERN_ERR "%s: Invalid Arguments\n", __func__);
-		return BC_STS_SUCCESS;
-	}
-	printk("Closing HW\n");
-	if (!hw->dev_started)
-		return BC_STS_SUCCESS;
-
-	/* Stop and DDR sleep will happen in here */
-	crystalhd_hw_suspend(hw);
-	hw->dev_started = false;
-
-	return BC_STS_SUCCESS;
 }
 
 BC_STATUS crystalhd_hw_setup_dma_rings(struct crystalhd_hw *hw)
@@ -389,16 +408,17 @@ BC_STATUS crystalhd_hw_fill_desc(crystalhd_dio_req *ioreq,
 										dma_addr_t desc_paddr_base,
 										uint32_t sg_cnt, uint32_t sg_st_ix,
 										uint32_t sg_st_off, uint32_t xfr_sz,
-										struct device *dev)
+										struct device *dev, uint32_t destDRAMaddr)
 {
 	uint32_t count = 0, ix = 0, sg_ix = 0, len = 0, last_desc_ix = 0;
 	dma_addr_t desc_phy_addr = desc_paddr_base;
 	addr_64 addr_temp;
+	uint32_t curDRAMaddr = destDRAMaddr;
 
 	if (!ioreq || !desc || !desc_paddr_base || !xfr_sz ||
 		(!sg_cnt && !ioreq->uinfo.dir_tx)) {
 		dev_err(dev, "%s: Invalid Args\n", __func__);
-	return BC_STS_INV_ARG;
+		return BC_STS_INV_ARG;
 	}
 
 	for (ix = 0; ix < sg_cnt; ix++) {
@@ -422,7 +442,7 @@ BC_STATUS crystalhd_hw_fill_desc(crystalhd_dio_req *ioreq,
 		memset(&desc[ix], 0, sizeof(desc[ix]));
 		desc[ix].buff_addr_low  = addr_temp.low_part;
 		desc[ix].buff_addr_high = addr_temp.high_part;
-		desc[ix].dma_dir        = ioreq->uinfo.dir_tx;
+		desc[ix].dma_dir        = ioreq->uinfo.dir_tx; // RX dma_dir = 0, TX dma_dir = 1
 
 		/* Chain DMA descriptor.  */
 		addr_temp.full_addr = desc_phy_addr + sizeof(dma_descriptor);
@@ -442,6 +462,14 @@ BC_STATUS crystalhd_hw_fill_desc(crystalhd_dio_req *ioreq,
 		desc[ix].xfer_size = (len / 4);
 
 		count += len;
+		// If TX fill in the destination DRAM address if needed
+		if(ioreq->uinfo.dir_tx) {
+			desc[ix].sdram_buff_addr = curDRAMaddr;
+			curDRAMaddr = destDRAMaddr + count;
+		}
+		else
+			desc[ix].sdram_buff_addr = 0;
+			
 		desc_phy_addr += sizeof(dma_descriptor);
 	}
 
@@ -456,6 +484,13 @@ BC_STATUS crystalhd_hw_fill_desc(crystalhd_dio_req *ioreq,
 		desc[ix].xfer_size	= 1;
 		desc[ix].fill_bytes	= 4 - ioreq->fb_size;
 		count += ioreq->fb_size;
+		// If TX fill in the destination DRAM address if needed
+		if(ioreq->uinfo.dir_tx) {
+			desc[ix].sdram_buff_addr = curDRAMaddr;
+			curDRAMaddr = destDRAMaddr + count;
+		}
+		else
+			desc[ix].sdram_buff_addr = 0;
 		last_desc_ix++;
 	}
 
@@ -477,7 +512,7 @@ BC_STATUS crystalhd_hw_fill_desc(crystalhd_dio_req *ioreq,
 BC_STATUS crystalhd_xlat_sgl_to_dma_desc(crystalhd_dio_req *ioreq,
 												pdma_desc_mem pdesc_mem,
 												uint32_t *uv_desc_index,
-												struct device *dev)
+												struct device *dev, uint32_t destDRAMaddr)
 {
 	dma_descriptor *desc = NULL;
 	dma_addr_t desc_paddr_base = 0;
@@ -494,7 +529,7 @@ BC_STATUS crystalhd_xlat_sgl_to_dma_desc(crystalhd_dio_req *ioreq,
 	if (!pdesc_mem->sz || !pdesc_mem->pdma_desc_start ||
 		!ioreq->sg || (!ioreq->sg_cnt && !ioreq->uinfo.dir_tx)) {
 		dev_err(dev, "%s: Invalid Args\n", __func__);
-	return BC_STS_INV_ARG;
+		return BC_STS_INV_ARG;
 	}
 
 	if ((ioreq->uinfo.dir_tx) && (ioreq->uinfo.uv_offset)) {
@@ -515,7 +550,7 @@ BC_STATUS crystalhd_xlat_sgl_to_dma_desc(crystalhd_dio_req *ioreq,
 	}
 
 	sts = crystalhd_hw_fill_desc(ioreq, desc, desc_paddr_base, sg_cnt,
-									sg_st_ix, sg_st_off, xfr_sz, dev);
+									sg_st_ix, sg_st_off, xfr_sz, dev, destDRAMaddr);
 
 	if ((sts != BC_STS_SUCCESS) || !ioreq->uinfo.uv_offset)
 		return sts;
@@ -532,7 +567,7 @@ BC_STATUS crystalhd_xlat_sgl_to_dma_desc(crystalhd_dio_req *ioreq,
 	sg_st_off = ioreq->uinfo.uv_sg_off;
 
 	sts = crystalhd_hw_fill_desc(ioreq, desc, desc_paddr_base, sg_cnt,
-								sg_st_ix, sg_st_off, xfr_sz, dev);
+								sg_st_ix, sg_st_off, xfr_sz, dev, destDRAMaddr);
 	if (sts != BC_STS_SUCCESS)
 		return sts;
 
@@ -598,7 +633,9 @@ BC_STATUS crystalhd_hw_post_tx(struct crystalhd_hw *hw, crystalhd_dio_req *ioreq
 	uint32_t dummy_index = 0;
 	unsigned long flags;
 	uint8_t list_posted;
+	uint8_t local_flags = data_flags;
 	bool rc;
+	uint32_t destDRAMaddr = 0;
 
 	if (!hw || !ioreq || !call_back || !cb_event || !list_id) {
 		printk(KERN_ERR "%s: Invalid Arguments\n", __func__);
@@ -614,13 +651,18 @@ BC_STATUS crystalhd_hw_post_tx(struct crystalhd_hw *hw, crystalhd_dio_req *ioreq
 	 *
 	 * This will avoid the Q fetch/add in normal condition.
 	 */
+
 	rc = hw->pfnCheckInputFIFO(hw, ioreq->uinfo.xfr_len,
-					   &dummy_index, false, data_flags);
+					   &dummy_index, false, &local_flags);
+
 	if (rc) {
 		hw->stats.cin_busy++;
 		return BC_STS_BUSY;
 	}
 
+	if(local_flags & BC_BIT(7))
+		destDRAMaddr = hw->TxFwInputBuffInfo.DramBuffAdd;
+	
 	/* Get a list from TxFreeQ */
 	tx_dma_packet = (tx_dma_pkt *)crystalhd_dioq_fetch(hw->tx_freeq);
 	if (!tx_dma_packet) {
@@ -630,7 +672,7 @@ BC_STATUS crystalhd_hw_post_tx(struct crystalhd_hw *hw, crystalhd_dio_req *ioreq
 
 	sts = crystalhd_xlat_sgl_to_dma_desc(ioreq,
 					     &tx_dma_packet->desc_mem,
-					     &dummy_index, dev);
+					     &dummy_index, dev, destDRAMaddr);
 	if (sts != BC_STS_SUCCESS) {
 		add_sts = crystalhd_dioq_add(hw->tx_freeq, tx_dma_packet,
 					   false, 0);
@@ -669,6 +711,10 @@ BC_STATUS crystalhd_hw_post_tx(struct crystalhd_hw *hw, crystalhd_dio_req *ioreq
 	 * the valid bit. So be ready for that. All
 	 * the initialization should happen before that.
 	 */
+
+	// Save the transfer length
+	hw->TxFwInputBuffInfo.HostXferSzInBytes = ioreq->uinfo.xfr_len;
+	
 	hw->pfnStartTxDMA(hw, list_posted, desc_addr);
 
 	return BC_STS_SUCCESS;
@@ -718,7 +764,7 @@ BC_STATUS crystalhd_hw_add_cap_buffer(struct crystalhd_hw *hw,
 	tag = rpkt->pkt_tag;
 
 	sts = crystalhd_xlat_sgl_to_dma_desc(ioreq, &rpkt->desc_mem,
-					     &uv_desc_ix, &hw->adp->pdev->dev);
+					     &uv_desc_ix, &hw->adp->pdev->dev, 0);
 	if (sts != BC_STS_SUCCESS)
 		return sts;
 
@@ -731,8 +777,10 @@ BC_STATUS crystalhd_hw_add_cap_buffer(struct crystalhd_hw *hw,
 
 	if (en_post && !hw->hw_pause_issued)
 		sts = hw->pfnPostRxSideBuff(hw, rpkt);
-	else
+	else {
 		sts = crystalhd_dioq_add(hw->rx_freeq, rpkt, false, tag);
+		hw->pfnNotifyFLLChange(hw, false);
+	}
 
 	return sts;
 }

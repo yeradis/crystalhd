@@ -1634,7 +1634,6 @@ BC_STATUS DtsGetFirmwareFiles(DTS_LIB_CONTEXT *Ctx)
     strncat(fwfilepath, fwfile, fwfile_len);
     fwfilepath[strlen(fwdir) + fwfile_len] = '\0';
     strncpy(Ctx->FwBinFile, fwfilepath, strlen(fwdir) + fwfile_len);
-	DebugLog_Trace(LDIL_DATA,"DtsGetFirmwareFiles:Ctx->FwBinFile is %s\n", Ctx->FwBinFile);
 
 	return BC_STS_SUCCESS;
 
@@ -1777,7 +1776,7 @@ BC_STATUS DtsFetchMdata(DTS_LIB_CONTEXT *Ctx, uint16_t snum, BC_DTS_PROC_OUT *po
 	uint32_t		InTag;
 	DTS_INPUT_MDATA		*temp=NULL;
 	BC_STATUS	sts = BC_STS_NO_DATA;
-	int16_t tsnum = 0;
+	uint16_t tsnum = 0;
 	uint32_t i = 0;
 	
 	if(!Ctx || !pout){

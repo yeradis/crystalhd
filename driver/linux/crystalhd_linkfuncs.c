@@ -28,6 +28,7 @@
 #include <asm/tsc.h>
 #include "crystalhd_hw.h"
 #include "crystalhd_lnx.h"
+#include "crystalhd_linkfuncs.h"
 #include "bc_defines.h"
 
 #define OFFSETOF(_s_, _m_) ((size_t)(unsigned long)&(((_s_ *)0)->_m_))
@@ -59,9 +60,9 @@ uint32_t link_dec_reg_rd(struct crystalhd_adp *adp, uint32_t reg_off)
 				return 0;
 	}
 	
-	val = readl(adp->addr + reg_off);
+	val = readl(adp->mem_addr + reg_off);
 	dev_dbg(&adp->pdev->dev, "%s: read(0x%p) = 0x%08x\n",
-			__func__, adp->addr + reg_off, val);
+			__func__, adp->mem_addr + reg_off, val);
 			
 			return val;
 }
@@ -93,8 +94,8 @@ void link_dec_reg_wr(struct crystalhd_adp *adp, uint32_t reg_off, uint32_t val)
 	}
 	
 	dev_dbg(&adp->pdev->dev, "%s: writel(0x%08x @ 0x%p).\n",
-			__func__, val, adp->addr + reg_off);
-			writel(val, adp->addr + reg_off);
+			__func__, val, adp->mem_addr + reg_off);
+			writel(val, adp->mem_addr + reg_off);
 			
 			/* the udelay require for latest 70012, not for others... :( */
 			udelay(8);
@@ -827,12 +828,12 @@ bool crystalhd_link_peek_next_decoded_frame(struct crystalhd_hw *hw,
 
 bool crystalhd_link_check_input_full(struct crystalhd_hw *hw,
 				   uint32_t needed_sz, uint32_t *empty_sz,
-				   bool b_188_byte_pkts, uint8_t flags)
+				   bool b_188_byte_pkts, uint8_t *flags)
 {
 	uint32_t base, end, writep, readp;
 	uint32_t cpbSize, cpbFullness, fifoSize;
 
-	if (flags & 0x02) { /* ASF Bit is set */
+	if (*flags & 0x02) { /* ASF Bit is set */
 		base   = hw->pfnReadDevRegister(hw->adp, REG_Dec_TsAudCDB2Base);
 		end    = hw->pfnReadDevRegister(hw->adp, REG_Dec_TsAudCDB2End);
 		writep = hw->pfnReadDevRegister(hw->adp, REG_Dec_TsAudCDB2Wrptr);
@@ -1877,6 +1878,12 @@ BC_STATUS crystalhd_link_download_fw(struct crystalhd_hw *hw,
 	}
 
 	dev_info(dev, "Firmware Downloaded Successfully\n");
+
+	// Load command response addresses
+	hw->fwcmdPostAddr = TS_Host2CpuSnd;
+	hw->fwcmdPostMbox = Hst2CpuMbx1;
+	hw->fwcmdRespMbox = Cpu2HstMbx1;
+
 	return BC_STS_SUCCESS;;
 }
 
@@ -1912,13 +1919,13 @@ BC_STATUS crystalhd_link_do_fw_cmd(struct crystalhd_hw *hw, BC_FW_CMD *fw_cmd)
 	hw->pfw_cmd_event = &fw_cmd_event;
 
 	/*Write the command to the memory*/
-	crystalhd_link_mem_wr(hw, TS_Host2CpuSnd, FW_CMD_BUFF_SZ, cmd_buff);
+	hw->pfnDevDRAMWrite(hw, hw->fwcmdPostAddr, FW_CMD_BUFF_SZ, cmd_buff);
 
 	/*Memory Read for memory arbitrator flush*/
-	crystalhd_link_mem_rd(hw, TS_Host2CpuSnd, 1, &cnt);
+	hw->pfnDevDRAMRead(hw, hw->fwcmdPostAddr, 1, &cnt);
 
 	/* Write the command address to mailbox */
-	hw->pfnWriteDevRegister(hw->adp, Hst2CpuMbx1, TS_Host2CpuSnd);
+	hw->pfnWriteDevRegister(hw->adp, hw->fwcmdPostMbox, hw->fwcmdPostAddr);
 	msleep_interruptible(50);
 
 	crystalhd_wait_on_event(&fw_cmd_event, hw->fwcmd_evt_sts,
@@ -1943,10 +1950,10 @@ BC_STATUS crystalhd_link_do_fw_cmd(struct crystalhd_hw *hw, BC_FW_CMD *fw_cmd)
 	}
 
 	/*Get the Responce Address*/
-	cmd_res_addr = hw->pfnReadDevRegister(hw->adp, Cpu2HstMbx1);
+	cmd_res_addr = hw->pfnReadDevRegister(hw->adp, hw->fwcmdRespMbox);
 
 	/*Read the Response*/
-	crystalhd_link_mem_rd(hw, cmd_res_addr, FW_CMD_BUFF_SZ, res_buff);
+	hw->pfnDevDRAMRead(hw, cmd_res_addr, FW_CMD_BUFF_SZ, res_buff);
 
 	if (res_buff[2] != C011_RET_SUCCESS) {
 		dev_err(dev, "res_buff[2] != C011_RET_SUCCESS\n");
@@ -1960,11 +1967,11 @@ BC_STATUS crystalhd_link_do_fw_cmd(struct crystalhd_hw *hw, BC_FW_CMD *fw_cmd)
 	return sts;
 }
 
-bool crystalhd_link_hw_interrupt(struct crystalhd_adp *adp, struct crystalhd_hw *hw)
+bool crystalhd_link_hw_interrupt_handle(struct crystalhd_adp *adp, struct crystalhd_hw *hw)
 {
 	uint32_t intr_sts = 0;
 	uint32_t deco_intr = 0;
-	bool rc = 0;
+	bool rc = false;
 
 	if (!adp || !hw->dev_started)
 		return rc;
@@ -1976,7 +1983,7 @@ bool crystalhd_link_hw_interrupt(struct crystalhd_adp *adp, struct crystalhd_hw 
 
 	if (intr_sts) {
 		/* let system know we processed interrupt..*/
-		rc = 1;
+		rc = true;
 		hw->stats.dev_interrupts++;
 	}
 
@@ -2013,4 +2020,10 @@ bool crystalhd_link_hw_interrupt(struct crystalhd_adp *adp, struct crystalhd_hw 
 	}
 
 	return rc;
+}
+
+// Dummy private function
+void crystalhd_link_notify_fll_change(struct crystalhd_hw *hw, bool bCleanupContext)
+{
+	return;
 }

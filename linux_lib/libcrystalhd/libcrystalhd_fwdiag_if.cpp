@@ -142,7 +142,7 @@ DRVIFLIB_INT_API BC_STATUS
 DtsDownloadFWDIAGToLINK(HANDLE hDevice,char *FwBinFile)
 {
 	BC_STATUS status = BC_STS_ERROR;
- uint32_t byesDnld=0;
+	uint32_t byesDnld=0;
 	//char *fwfile=NULL;
 	char fwfile[MAX_PATH+1];
 	DTS_LIB_CONTEXT		*Ctx = NULL;
@@ -184,9 +184,6 @@ DtsDownloadFWDIAGToLINK(HANDLE hDevice,char *FwBinFile)
 		DebugLog_Trace(LDIL_DBG,"Error Reading DCI_STATUS register\n");
 		return status;
 	}
-
-
-
 
 	status = fwbinPushToLINK(hDevice, fwfile, &byesDnld);
 

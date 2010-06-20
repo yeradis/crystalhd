@@ -452,29 +452,17 @@ static void __devexit chd_dec_release_chdev(struct crystalhd_adp *adp)
 static int __devinit chd_pci_reserve_mem(struct crystalhd_adp *pinfo)
 {
 	int rc;
-	unsigned long bar2 = pci_resource_start(pinfo->pdev, 2);
-	uint32_t mem_len   = pci_resource_len(pinfo->pdev, 2);
-	unsigned long bar0 = pci_resource_start(pinfo->pdev, 0);
-	uint32_t i2o_len   = pci_resource_len(pinfo->pdev, 0);
 
-	/* printk(KERN_DEBUG "bar2:0x%lx-0x%08x  bar0:0x%lx-0x%08x\n", */
-	/*       bar2, mem_len, bar0, i2o_len); */
+	uint32_t bar0		= pci_resource_start(pinfo->pdev, 0);
+	uint32_t i2o_len	= pci_resource_len(pinfo->pdev, 0);
 
-	rc = check_mem_region(bar2, mem_len);
-	if (rc) {
-		printk(KERN_ERR "No valid mem region...\n");
-		return -ENOMEM;
-	}
+	uint32_t bar2		= pci_resource_start(pinfo->pdev, 2);
+	uint32_t mem_len	= pci_resource_len(pinfo->pdev, 2);
 
-	pinfo->addr = ioremap_nocache(bar2, mem_len);
-	if (!pinfo->addr) {
-		printk(KERN_ERR "Failed to remap mem region...\n");
-		return -ENOMEM;
-	}
+	printk(KERN_DEBUG "bar0:0x%x-0x%08x  bar2:0x%x-0x%08x\n",
+	        bar0, i2o_len, bar2, mem_len);
 
-	pinfo->pci_mem_start = bar2;
-	pinfo->pci_mem_len   = mem_len;
-
+	/* bar-0 */
 	rc = check_mem_region(bar0, i2o_len);
 	if (rc) {
 		printk(KERN_ERR "No valid mem region...\n");
@@ -483,21 +471,38 @@ static int __devinit chd_pci_reserve_mem(struct crystalhd_adp *pinfo)
 
 	pinfo->i2o_addr = ioremap_nocache(bar0, i2o_len);
 	if (!pinfo->i2o_addr) {
-		printk(KERN_ERR "Failed to remap mem region...\n");
+		printk(KERN_ERR "Failed to remap i2o region...\n");
 		return -ENOMEM;
 	}
 
 	pinfo->pci_i2o_start = bar0;
 	pinfo->pci_i2o_len   = i2o_len;
 
+	/* bar-2 */
+	rc = check_mem_region(bar2, mem_len);
+	if (rc) {
+		printk(KERN_ERR "No valid mem region...\n");
+		return -ENOMEM;
+	}
+
+	pinfo->mem_addr = ioremap_nocache(bar2, mem_len);
+	if (!pinfo->mem_addr) {
+		printk(KERN_ERR "Failed to remap mem region...\n");
+		return -ENOMEM;
+	}
+
+	pinfo->pci_mem_start = bar2;
+	pinfo->pci_mem_len   = mem_len;
+
+	/* pdev */
 	rc = pci_request_regions(pinfo->pdev, pinfo->name);
 	if (rc < 0) {
 		printk(KERN_ERR "Region request failed: %d\n", rc);
 		return rc;
 	}
 
-	/* printk(KERN_DEBUG "Mapped addr:0x%08lx  i2o_addr:0x%08lx\n", */
-	/*        (unsigned long)pinfo->addr, (unsigned long)pinfo->i2o_addr); */
+	printk(KERN_DEBUG "i2o_addr:0x%08lx   Mapped addr:0x%08lx  \n",
+	        (unsigned long)pinfo->i2o_addr, (unsigned long)pinfo->mem_addr);
 
 	return 0;
 }
@@ -507,8 +512,8 @@ static void __devexit chd_pci_release_mem(struct crystalhd_adp *pinfo)
 	if (!pinfo)
 		return;
 
-	if (pinfo->addr)
-		iounmap(pinfo->addr);
+	if (pinfo->mem_addr)
+		iounmap(pinfo->mem_addr);
 
 	if (pinfo->i2o_addr)
 		iounmap(pinfo->i2o_addr);

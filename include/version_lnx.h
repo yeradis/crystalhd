@@ -62,22 +62,22 @@
 #define BRCM_MAJOR_VERSION	0
 
 #define DRIVER_MAJOR_VERSION        BRCM_MAJOR_VERSION
-#define DRIVER_MINOR_VERSION        1
-#define DRIVER_REVISION             18
+#define DRIVER_MINOR_VERSION        2
+#define DRIVER_REVISION             0
 
 #define RC_FILE_VERSION             STRINGIFY_VERSION(DRIVER_MAJOR_VERSION,DRIVER_MINOR_VERSION,DRIVER_REVISION) ".0"
 
 /*======================= Device Interface Library ========================*/
 #define DIL_MAJOR_VERSION	BRCM_MAJOR_VERSION
 #define DIL_MINOR_VERSION	9
-#define DIL_REVISION		26
+#define DIL_REVISION		27
 
 #define DIL_RC_FILE_VERSION	STRINGIFY_VERSION(DIL_MAJOR_VERSION,DIL_MINOR_VERSION,DIL_REVISION)
 
 /*========================== deconf utility ==============================*/
 #define DECONF_MAJOR_VERSION	BRCM_MAJOR_VERSION
 #define DECONF_MINOR_VERSION	9
-#define DECONF_REVISION		17
+#define DECONF_REVISION		18
 #define DECONF_RC_FILE_VERSION  STRINGIFY_VERSION(DIL_MAJOR_VERSION,DIL_MINOR_VERSION,DIL_REVISION)
 
 /*========================== Firmware ==============================*/

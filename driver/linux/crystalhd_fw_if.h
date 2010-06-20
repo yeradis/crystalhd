@@ -235,7 +235,11 @@ typedef struct {
 
 } C011_PIB;
 
-
+typedef struct
+{
+	uint32_t	eCmd; // eC011_TS_CMD
+	uint32_t	ulParams[63];
+} C011_TS_CMD, C011_TS_RSP;
 
 typedef struct {
     uint32_t	command;
@@ -252,6 +256,23 @@ typedef struct {
     uint32_t	asyncEventQ;
 
 } DecRspChannelStartVideo;
+
+typedef struct
+{
+	unsigned long command;
+	unsigned long sequence;
+	unsigned long status;
+	unsigned long ChannelID;
+	unsigned long picBuf;
+	unsigned long picRelBuf;
+	unsigned long picInfoDeliveryQ;
+	unsigned long picInfoReleaseQ;
+	unsigned long channelStatus;
+	unsigned long userDataDeliveryQ;
+	unsigned long userDataReleaseQ;
+	unsigned long transportStreamCaptureAddr;
+	unsigned long asyncEventQ;
+}DecRspChannelChannelOpen;
 
 #define eCMD_C011_CMD_BASE	  (0x73763000)
 
