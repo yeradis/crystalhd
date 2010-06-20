@@ -947,7 +947,7 @@ BC_STATUS DtsAddStartCode(HANDLE hDevice, uint8_t **ppBuffer, uint32_t *pUlDataS
 	if(Ctx->VidParams.MediaSubType == BC_MSUBTYPE_AVC1 || Ctx->VidParams.MediaSubType == BC_MSUBTYPE_DIVX)
 		return DtsAddH264SCode(hDevice, ppBuffer, pUlDataSize, pTimeStamp);
 
-	if((Ctx->VidParams.MediaSubType == BC_MSUBTYPE_WVC1) || (Ctx->VidParams.MediaSubType == BC_MSUBTYPE_WMV3) || (Ctx->VidParams.MediaSubType == BC_MSUBTYPE_WMVA))
+	if((Ctx->VidParams.MediaSubType == BC_MSUBTYPE_WVC1) || (Ctx->VidParams.MediaSubType == BC_MSUBTYPE_WMV3) || (Ctx->VidParams.MediaSubType == BC_MSUBTYPE_WMVA) || (Ctx->VidParams.MediaSubType == BC_MSUBTYPE_VC1))
 		return DtsAddVC1SCode(hDevice, ppBuffer, pUlDataSize, pTimeStamp);
 
 	return BC_STS_SUCCESS;
