@@ -1799,7 +1799,7 @@ BC_STATUS DtsFetchMdata(DTS_LIB_CONTEXT *Ctx, uint16_t snum, BC_DTS_PROC_OUT *po
 	uint32_t		InTag;
 	DTS_INPUT_MDATA		*temp=NULL;
 	BC_STATUS	sts = BC_STS_NO_DATA;
-	uint16_t tsnum = 0;
+	int16_t tsnum = 0;
 	uint32_t i = 0;
 	
 	if(!Ctx || !pout){
