@@ -29,9 +29,9 @@
 #ifndef _BCM_DRV_IF_PRIV_
 #define _BCM_DRV_IF_PRIV_
 
+#include <semaphore.h>
 #include "bc_dts_glob_lnx.h"
 #include "libcrystalhd_parser.h"
-#include <semaphore.h>
 
 #ifdef __cplusplus
 extern "C" {
