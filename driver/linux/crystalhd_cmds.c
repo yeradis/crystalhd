@@ -825,6 +825,7 @@ BC_STATUS crystalhd_suspend(struct crystalhd_cmd *ctx, crystalhd_ioctl_data *ida
 	bc_cproc_mark_pwr_state(ctx);
 
 	if (ctx->state & BC_LINK_CAP_EN) {
+		idata->udata.u.FlushRxCap.bDiscardOnly = true;
 		sts = bc_cproc_flush_cap_buffs(ctx, idata);
 		if (sts != BC_STS_SUCCESS)
 			return sts;
