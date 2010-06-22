@@ -1533,9 +1533,6 @@ DtsProcOutput(
 	/* Update Counters */
 	DtsUpdateOutStats(Ctx,pOut);
 
-	/* Update Counters */
-	DtsUpdateOutStats(Ctx,pOut);
-
 	/* We need to release the buffers even if we fail to copy..*/
 	stRel = DtsRelRxBuff(Ctx,&Ctx->pOutData->u.RxBuffs,FALSE);
 
