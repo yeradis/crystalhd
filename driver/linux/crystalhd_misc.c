@@ -476,14 +476,14 @@ void *crystalhd_dioq_find_and_fetch(crystalhd_dioq_t *ioq, uint32_t tag)
  * Return element from head if Q is not empty. Wait for new element
  * if Q is empty for Timeout seconds.
  */
-void *crystalhd_dioq_fetch_wait(void *hw, uint32_t to_secs, uint32_t *sig_pend)
+void *crystalhd_dioq_fetch_wait(struct crystalhd_hw *hw, uint32_t to_secs, uint32_t *sig_pend)
 {
 	struct device *dev = chddev();
 	unsigned long flags = 0;
 	int rc = 0;
 
 	crystalhd_rx_dma_pkt *r_pkt = NULL;
-	crystalhd_dioq_t *ioq = ((struct crystalhd_hw *)hw)->rx_rdyq;
+	crystalhd_dioq_t *ioq = hw->rx_rdyq;
 	unsigned long picYcomp = 0;
 
 	unsigned long fetchTimeout = jiffies + msecs_to_jiffies(to_secs * 1000);
@@ -509,8 +509,8 @@ void *crystalhd_dioq_fetch_wait(void *hw, uint32_t to_secs, uint32_t *sig_pend)
 			// If format change packet, then return with out checking anything
 			if (r_pkt->flags & (COMP_FLAG_PIB_VALID | COMP_FLAG_FMT_CHANGE))
 				return r_pkt;
-			if (((struct crystalhd_hw *)hw)->adp->pdev->device == BC_PCI_DEVID_LINK)
-				picYcomp = link_GetRptDropParam(((struct crystalhd_hw *)hw)->PICHeight, ((struct crystalhd_hw *)hw)->PICWidth, (void *)r_pkt);
+			if (hw->adp->pdev->device == BC_PCI_DEVID_LINK)
+				picYcomp = link_GetRptDropParam(hw->PICHeight, hw->PICWidth, (void *)r_pkt);
 			else {
 				// For Flea, we don't have the width and height handy since they
 				// come in the PIB in the picture, so this function will also
@@ -520,22 +520,22 @@ void *crystalhd_dioq_fetch_wait(void *hw, uint32_t to_secs, uint32_t *sig_pend)
 				if(r_pkt->flags & (COMP_FLAG_PIB_VALID | COMP_FLAG_FMT_CHANGE))
 					return r_pkt;
 			}
-			if(!picYcomp || (picYcomp == ((struct crystalhd_hw *)hw)->LastPicNo) ||
-				(picYcomp == ((struct crystalhd_hw *)hw)->LastTwoPicNo)) {
+			if(!picYcomp || (picYcomp == hw->LastPicNo) ||
+				(picYcomp == hw->LastTwoPicNo)) {
 				//Discard picture
 				if(picYcomp != 0) {
-					((struct crystalhd_hw *)hw)->LastTwoPicNo = ((struct crystalhd_hw *)hw)->LastPicNo;
-					((struct crystalhd_hw *)hw)->LastPicNo = picYcomp;
+					hw->LastTwoPicNo = hw->LastPicNo;
+					hw->LastPicNo = picYcomp;
 				}
-				crystalhd_dioq_add(((struct crystalhd_hw *)hw)->rx_freeq, r_pkt, false, r_pkt->pkt_tag);
+				crystalhd_dioq_add(hw->rx_freeq, r_pkt, false, r_pkt->pkt_tag);
 				r_pkt = NULL;
 			} else {
-				if(((struct crystalhd_hw *)hw)->adp->pdev->device == BC_PCI_DEVID_LINK) {
-					if((picYcomp - ((struct crystalhd_hw *)hw)->LastPicNo) > 1)
-						dev_info(dev, "MISSING %lu PICTURES\n", (picYcomp - ((struct crystalhd_hw *)hw)->LastPicNo));
+				if(hw->adp->pdev->device == BC_PCI_DEVID_LINK) {
+					if((picYcomp - hw->LastPicNo) > 1)
+						dev_info(dev, "MISSING %lu PICTURES\n", (picYcomp - hw->LastPicNo));
 				}
-				((struct crystalhd_hw *)hw)->LastTwoPicNo = ((struct crystalhd_hw *)hw)->LastPicNo;
-				((struct crystalhd_hw *)hw)->LastPicNo = picYcomp;
+				hw->LastTwoPicNo = hw->LastPicNo;
+				hw->LastPicNo = picYcomp;
 				return r_pkt;
 			}
 		} else if (rc == -EINTR) {
