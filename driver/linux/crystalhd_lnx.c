@@ -277,7 +277,7 @@ static int chd_dec_ioctl(struct inode *in, struct file *fd,
 		return -EINVAL;
 	}
 
-	uc = (struct crystalhd_user *)fd->private_data;
+	uc = fd->private_data;
 	if (!uc) {
 		dev_err(chddev(), "Failed to get uc\n");
 		return -ENODATA;
@@ -336,7 +336,7 @@ static int chd_dec_close(struct inode *in, struct file *fd)
 		return -EINVAL;
 	}
 
-	uc = (struct crystalhd_user *)fd->private_data;
+	uc = fd->private_data;
 	if (!uc) {
 		dev_err(dev, "Failed to get uc\n");
 		return -ENODATA;
