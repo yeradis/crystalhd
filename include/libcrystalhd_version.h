@@ -1,7 +1,7 @@
 /********************************************************************
  * Copyright(c) 2006-2009 Broadcom Corporation.
  *
- *  Name: version_lnx.h
+ *  Name: libcrystalhd_version.h
  *
  *  Description: Version numbering for the driver use.
  *

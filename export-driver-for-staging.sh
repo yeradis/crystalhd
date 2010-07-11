@@ -24,7 +24,7 @@ cp -a $me/driver/linux/*.h $dest/
 cp -a $me/include/*.h $dest/
 cp -a $me/include/link/bcm_70012_regs.h $dest/
 # except these
-rm -f $dest/vdec_info.h $dest/7411d.h, $dest/version_lnx.h
+rm -f $dest/vdec_info.h $dest/7411d.h, $dest/libcrystalhd_version.h
 
 # Now run unifdef over the source to strip out legacy compat
 pushd $dest
