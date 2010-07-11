@@ -77,7 +77,7 @@ enum _BC_DTS_GLOBALS {
 	BC_LINK_MAX_SGLS	= 1024,		/* Maximum SG elements 4M/4K */
 	BC_TX_LIST_CNT		= 2,		/* Max Tx DMA Rings */
 	BC_RX_LIST_CNT		= 16,		/* Max Rx DMA Rings*/
-	BC_PROC_OUTPUT_TIMEOUT	= 3000,		/* Milliseconds */
+	BC_PROC_OUTPUT_TIMEOUT	= 1000,		/* Milliseconds */
 	BC_INFIFO_THRESHOLD	= 0x10000,
 };
 

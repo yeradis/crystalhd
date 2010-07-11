@@ -23,6 +23,11 @@ static struct class *crystalhd_class;
 
 static struct crystalhd_adp *g_adp_info;
 
+struct device *chddev(void)
+{
+	return &g_adp_info->pdev->dev;
+}
+
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 18)
 static irqreturn_t chd_dec_isr(int irq, void *arg)
 #else
@@ -735,11 +740,6 @@ static struct pci_driver bc_chd_driver = {
 struct crystalhd_adp *chd_get_adp(void)
 {
 	return g_adp_info;
-}
-
-inline struct device *chddev(void)
-{
-	return &chd_get_adp()->pdev->dev;
 }
 
 static int __init chd_dec_module_init(void)

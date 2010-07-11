@@ -304,7 +304,7 @@ bool crystalhd_link_bring_out_of_rst(struct crystalhd_hw *hw)
 	rst_deco_cntrl.stop_bcm_7412_clk = 0;
 	rst_deco_cntrl.bcm7412_rst = 1;
 	hw->pfnWriteFPGARegister(hw->adp, MISC_PERST_DECODER_CTRL, rst_deco_cntrl.whole_reg);
-	msleep_interruptible(10);
+	msleep_interruptible(50);
 
 	rst_deco_cntrl.whole_reg = hw->pfnReadFPGARegister(hw->adp, MISC_PERST_DECODER_CTRL);
 	rst_deco_cntrl.bcm7412_rst = 0;

@@ -494,6 +494,9 @@ DtsDeviceOpen(
 		DebugLog_Trace(LDIL_DBG,"Get Hardware Type Failed\n");
 		return Sts;
 	}
+
+	// set Ctx->DevId early, other depend on it
+	DtsGetContext(*hDevice)->DevId = DeviceID;
 	g_nDeviceID = DeviceID;
 
 	/* NAREN Program clock */

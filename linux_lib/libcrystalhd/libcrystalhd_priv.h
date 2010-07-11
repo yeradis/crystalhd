@@ -58,7 +58,7 @@ enum _bc_ldil_log_level{
  */
 enum _crystalhd_ldil_globals {
 	BC_EOS_PIC_COUNT	= 16,			/* EOS check counter..*/
-	BC_INPUT_MDATA_POOL_SZ  = 512,			/* Input Meta Data Pool size */
+	BC_INPUT_MDATA_POOL_SZ  = 4560,			/* Input Meta Data Pool size */
 	BC_MAX_SW_VOUT_BUFFS    = BC_RX_LIST_CNT,	/* MAX - pre allocated buffers..*/
 	RX_START_DELIVERY_THRESHOLD = 0,
 	PAUSE_DECODER_THRESHOLD = 12,

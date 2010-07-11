@@ -165,7 +165,7 @@ bool crystalhd_flea_detect_ddr3(struct crystalhd_hw *hw)
 
 void crystalhd_flea_init_dram(struct crystalhd_hw *hw)
 {
-	uint32_t ddr2_speed_grade[2];
+	int32_t ddr2_speed_grade[2];
 	uint32_t sd_0_col_size, sd_0_bank_size, sd_0_row_size;
 	uint32_t sd_1_col_size, sd_1_bank_size, sd_1_row_size;
 	uint32_t ddr3_mode[2];
