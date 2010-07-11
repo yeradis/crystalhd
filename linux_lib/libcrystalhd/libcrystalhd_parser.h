@@ -81,11 +81,11 @@ typedef enum
 
 typedef struct
 {
-  int StartcodePrefixLen;		//! 4 for parameter sets and first slice in picture, 3 for everything else (suggested)
-  unsigned int Len;				//! Length of the NAL unit (Excluding the start code, which does not belong to the NALU)
-  unsigned int MaxSize;			//! Nal Unit Buffer size
-  int NalUnitType;				//! NALU_TYPE_xxxx
-  int ForbiddenBit;				//! should be always FALSE
+  int32_t StartcodePrefixLen;		//! 4 for parameter sets and first slice in picture, 3 for everything else (suggested)
+  uint32_t Len;				//! Length of the NAL unit (Excluding the start code, which does not belong to the NALU)
+  uint32_t MaxSize;			//! Nal Unit Buffer size
+  int32_t NalUnitType;				//! NALU_TYPE_xxxx
+  int32_t ForbiddenBit;				//! should be always FALSE
   uint8_t* pNalBuf;
 } NALU_t;
 
@@ -98,7 +98,7 @@ typedef struct stSYMBINT
 	uint32_t	m_ulOffset;
 	uint32_t  m_nSize;
 	uint32_t  m_nUsed;
-	ULONG	m_ulZero;
+	uint32_t	m_ulZero;
 } SYMBINT;
 
 typedef struct stPES_CONVERT_PARAMS
@@ -148,21 +148,16 @@ BC_STATUS DtsAddH264SCode(HANDLE hDevice, uint8_t **ppBuffer, uint32_t *pUlDataS
 BC_STATUS DtsAddVC1SCode(HANDLE hDevice, uint8_t **ppBuffer, uint32_t *pUlDataSize, uint64_t *timeStamp);
 BC_STATUS DtsAddStartCode(HANDLE hDevice, uint8_t **ppBuffer, uint32_t *pUlDataSize, uint64_t *timeStamp);
 
-int DtsFindBSStartCode (unsigned char *Buf, int ZerosInStartcode);
-int DtsGetNaluType(HANDLE hDevice, uint8_t* pInputBuf, ULONG ulSize, NALU_t* pNalu, bool bSkipSyncMarker);
-BC_STATUS DtsParseAVC(HANDLE hDevice, uint8_t* pInputBuf, ULONG ulSize, uint32_t* Offset, bool bIDR, int *pNalType);
+int32_t DtsFindBSStartCode (uint8_t *Buf, int ZerosInStartcode);
+int32_t DtsGetNaluType(HANDLE hDevice, uint8_t* pInputBuf, uint32_t ulSize, NALU_t* pNalu, bool bSkipSyncMarker);
+BC_STATUS DtsParseAVC(HANDLE hDevice, uint8_t* pInputBuf, uint32_t ulSize, uint32_t* Offset, bool bIDR, int32_t *pNalType);
 BC_STATUS DtsFindIDR(HANDLE hDevice, uint8_t* pInputBuffer, uint32_t ulSizeInBytes, uint32_t* pOffset);
 BC_STATUS DtsFindStartCode(HANDLE hDevice, uint8_t* pInputBuffer, uint32_t ulSizeInBytes, uint32_t* pOffset);
 BOOL DtsFindPTSInfoCode(HANDLE hDevice, uint8_t* pInputBuffer, uint32_t ulSizeInBytes);
 
-inline int DtsSymbIntNextBit ( HANDLE hDevice );
-BC_STATUS DtsSymbIntSiUe (HANDLE hDevice, ULONG* pCode);
-BC_STATUS DtsSymbIntSiBuffer (HANDLE hDevice, uint8_t* pInputBuffer, ULONG ulSize);
-
-#if 0
-void *DtsAlignedMalloc(size_t size, size_t alignment);
-void DtsAlignedFree(void *ptr);
-#endif
+inline int32_t DtsSymbIntNextBit ( HANDLE hDevice );
+BC_STATUS DtsSymbIntSiUe (HANDLE hDevice, uint32_t* pCode);
+BC_STATUS DtsSymbIntSiBuffer (HANDLE hDevice, uint8_t* pInputBuffer, uint32_t ulSize);
 
 void PTS2MakerBit5Bytes(uint8_t *pMakerBit, int64_t llPTS);
 uint16_t WORD_SWAP(uint16_t x);

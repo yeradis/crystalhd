@@ -196,7 +196,7 @@ BC_STATUS DtsSetVC1SH(HANDLE hDevice)
 	if((Ctx->VidParams.MediaSubType == BC_MSUBTYPE_WVC1) || (Ctx->VidParams.MediaSubType == BC_MSUBTYPE_WMVA))
 	{
 		Ctx->PESConvParams.m_iSpsPpsLen = Ctx->VidParams.MetaDataSz;
-		posix_memalign((void**)&Ctx->PESConvParams.m_pSpsPpsBuf, 4, Ctx->PESConvParams.m_iSpsPpsLen);
+		posix_memalign((void**)&Ctx->PESConvParams.m_pSpsPpsBuf, 8, Ctx->PESConvParams.m_iSpsPpsLen);
 		memcpy(Ctx->PESConvParams.m_pSpsPpsBuf, Ctx->VidParams.pMetaData, Ctx->PESConvParams.m_iSpsPpsLen);
 	}
 	else
@@ -206,7 +206,7 @@ BC_STATUS DtsSetVC1SH(HANDLE hDevice)
 			if (Ctx->PESConvParams.m_pSpsPpsBuf)
 				free(Ctx->PESConvParams.m_pSpsPpsBuf);
 			Ctx->PESConvParams.m_iSpsPpsLen = 32;
-			posix_memalign((void**)&Ctx->PESConvParams.m_pSpsPpsBuf, 4, Ctx->PESConvParams.m_iSpsPpsLen);
+			posix_memalign((void**)&Ctx->PESConvParams.m_pSpsPpsBuf, 8, Ctx->PESConvParams.m_iSpsPpsLen);
 			memcpy(Ctx->PESConvParams.m_pSpsPpsBuf, b_asf_vc1_sm_codein_seqhdr, Ctx->PESConvParams.m_iSpsPpsLen);
 			*((uint16_t*)(Ctx->PESConvParams.m_pSpsPpsBuf + 17)) = WORD_SWAP((uint16_t)Ctx->VidParams.WidthInPixels);
 			*((uint16_t*)(Ctx->PESConvParams.m_pSpsPpsBuf + 19)) = WORD_SWAP((uint16_t)Ctx->VidParams.HeightInPixels);
@@ -217,7 +217,7 @@ BC_STATUS DtsSetVC1SH(HANDLE hDevice)
 			if (Ctx->PESConvParams.m_pSpsPpsBuf)
 				free(Ctx->PESConvParams.m_pSpsPpsBuf);
 			Ctx->PESConvParams.m_iSpsPpsLen = 12;
-			posix_memalign((void**)&Ctx->PESConvParams.m_pSpsPpsBuf, 4, Ctx->PESConvParams.m_iSpsPpsLen);
+			posix_memalign((void**)&Ctx->PESConvParams.m_pSpsPpsBuf, 8, Ctx->PESConvParams.m_iSpsPpsLen);
 			memcpy(Ctx->PESConvParams.m_pSpsPpsBuf, b_asf_vc1_sm_seqhdr, Ctx->PESConvParams.m_iSpsPpsLen);
 			*((uint16_t*)(Ctx->PESConvParams.m_pSpsPpsBuf + 4)) = WORD_SWAP((uint16_t)Ctx->VidParams.WidthInPixels);
 			*((uint16_t*)(Ctx->PESConvParams.m_pSpsPpsBuf + 6)) = WORD_SWAP((uint16_t)Ctx->VidParams.HeightInPixels);
@@ -307,7 +307,7 @@ BC_STATUS DtsSetSpsPps(HANDLE hDevice)
 			}
 		}
 		Ctx->PESConvParams.m_iSpsPpsLen = iSHSize + (BRCM_START_CODE_SIZE - iStartSize) * (iPktIdx);
-		if(!posix_memalign((void**)&Ctx->PESConvParams.m_pSpsPpsBuf, 4, Ctx->PESConvParams.m_iSpsPpsLen))
+		if(!posix_memalign((void**)&Ctx->PESConvParams.m_pSpsPpsBuf, 8, Ctx->PESConvParams.m_iSpsPpsLen))
 		{
 			memset(Ctx->PESConvParams.m_pSpsPpsBuf, 0, Ctx->PESConvParams.m_iSpsPpsLen);
 			pDes = Ctx->PESConvParams.m_pSpsPpsBuf;
@@ -477,7 +477,7 @@ BOOL DtsChkAVCSps(HANDLE hDevice, uint8_t *pBuffer, uint32_t ulSize)
 {
 	NALU_t Nalu;
 	int ret = 0;
-	ULONG Pos = 0;
+	uint32_t Pos = 0;
 
 	while (1)
 	{
@@ -515,15 +515,17 @@ BC_STATUS DtsAddH264SCode(HANDLE hDevice, uint8_t **ppBuffer, uint32_t *pUlDataS
 	DTS_LIB_CONTEXT *Ctx = NULL;
 	DTS_GET_CTX(hDevice,Ctx);
 
-	ULONG lPendActualSize = 0;
+	uint32_t lPendActualSize = 0;
 	uint8_t *pPendCurrentPos = NULL;
 
 	uint8_t *pStart = NULL;
-	ULONG lDataRemained = 0;
+	uint32_t lDataRemained = 0;
 	//unused uint64_t timestamp = *pTimeStamp;
 
 	uint8_t *pNALU = NULL;
-	ULONG ulNalSize = 0;
+	uint32_t ulNalSize = 0;
+
+	int sts;
 
 	if(Ctx->PESConvParams.lPendBufferSize < (*pUlDataSize*2))
 	{
@@ -533,7 +535,10 @@ BC_STATUS DtsAddH264SCode(HANDLE hDevice, uint8_t **ppBuffer, uint32_t *pUlDataS
 		Ctx->PESConvParams.lPendBufferSize = *pUlDataSize * 2;
 		if (Ctx->PESConvParams.lPendBufferSize < 1024)
 			Ctx->PESConvParams.lPendBufferSize = 1024;
-		posix_memalign((void**)&Ctx->PESConvParams.pStartcodePendBuff, 4, Ctx->PESConvParams.lPendBufferSize);
+		// minimum 8 byte aligned since posix_memalign needs to have min of size of (void *) and on 64-bit this is 8 bytes
+		sts = posix_memalign((void**)&Ctx->PESConvParams.pStartcodePendBuff, 8, Ctx->PESConvParams.lPendBufferSize);
+		if(sts != 0)
+		  return BC_STS_INSUFF_RES;
 	}
 	//Replace Start Code
 	lDataRemained = *pUlDataSize;
@@ -713,7 +718,7 @@ BC_STATUS DtsAddVC1SCode(HANDLE hDevice, uint8_t **ppBuffer, uint32_t *pUlDataSi
 		Ctx->PESConvParams.lPendBufferSize = *pUlDataSize * 2;
 		if (Ctx->PESConvParams.lPendBufferSize < 1024)
 			Ctx->PESConvParams.lPendBufferSize = 1024;
-		posix_memalign((void**)&Ctx->PESConvParams.pStartcodePendBuff, 4, Ctx->PESConvParams.lPendBufferSize);
+		posix_memalign((void**)&Ctx->PESConvParams.pStartcodePendBuff, 8, Ctx->PESConvParams.lPendBufferSize);
 	}
 
 	//unused uint8_t* pSequenceHeader = Ctx->VidParams.pMetaData;
@@ -975,7 +980,7 @@ int DtsGetNaluType(HANDLE hDevice, uint8_t* pInputBuf, uint32_t ulSize, NALU_t* 
 	int nLeadingZero8BitsCount=0, TrailingZero8Bits=0;
 	//unused bool bSetIDR = true;
 	//unused static BOOL fOne = TRUE;
-	ULONG Pos = 0;
+	uint32_t Pos = 0;
 
 	DTS_GET_CTX(hDevice,Ctx);
 
@@ -1086,7 +1091,7 @@ BC_STATUS DtsParseAVC(HANDLE hDevice, uint8_t* pInputBuf, ULONG ulSize, uint32_t
 {
 	NALU_t Nalu;
 	int ret = 0;
-	ULONG Pos = 0;
+	uint32_t Pos = 0;
 	bool bResult = false;
 
 	*pNalType = -1;
@@ -1270,7 +1275,7 @@ BC_STATUS DtsSymbIntSiBuffer (HANDLE hDevice, uint8_t* pInputBuffer, ULONG ulSiz
 
 BC_STATUS DtsSymbIntSiUe (HANDLE hDevice, ULONG* pCode)
 {
-	ULONG	ulSuffix;
+	uint32_t	ulSuffix;
 	int     nLeadingZeros;
 	int     nBit;
 	DTS_LIB_CONTEXT *Ctx = NULL;

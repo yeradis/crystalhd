@@ -184,44 +184,6 @@ gint GetNaluType(Parse *parse, guint8 *pInputBuf, guint32 ulSize, NALU_t *pNalu)
 
 	pNalu->NalUnitType = (pInputBuf[nLeadingZero8BitsCount + pNalu->StartcodePrefixLen]) & 0x1f;
 
-	/* FIXME: jarod: is this broken? */
-	if (0) {
-		gint NalTypePos = nLeadingZero8BitsCount + pNalu->StartcodePrefixLen;
-		guint32 tmp = 0, ulFirstMB;
-		SliceType eSliceType = P_SLICE;
-
-		if (pNalu->NalUnitType == NALU_TYPE_IDR) {
-			//m_bFindIDR = false;
-		} else if (pNalu->NalUnitType == NALU_TYPE_SLICE) {
-			pNalu->pNalBuf = (guint8*) calloc(524 *1024, sizeof(guint8));
-			memcpy (pNalu->pNalBuf, &pInputBuf[NalTypePos + 1], pNalu->Len - 1);
-
-			SiBuffer(&parse->symb_int,pNalu->pNalBuf,pNalu->Len-1);
-
-			if (SiUe(&parse->symb_int, &ulFirstMB)) { ////first mb in slice
-				if (SiUe(&parse->symb_int, &tmp)) { //slice type
-					printf("SliceType1 = %d\n", tmp);
-
-					if (tmp > 4)
-						tmp -= 5;
-
-					eSliceType = (SliceType)tmp;
-				} else {
-					//printf("failed to get Slice type\n");
-				}
-			} else {
-				printf("failed to first slice nr.\n");
-			}
-
-			if ((eSliceType == I_SLICE) || (eSliceType == SI_SLICE)) {
-				pInputBuf[NalTypePos] = (pInputBuf[NalTypePos] & ~0x1f) | NALU_TYPE_IDR;
-				//m_bFindIDR = false;
-				printf("IDR not found REPLACED SliceType = %d\n", eSliceType);
-			}
-
-			free(pNalu->pNalBuf);
-		}
-	}
 	return (Pos+Rewind);
 }
 

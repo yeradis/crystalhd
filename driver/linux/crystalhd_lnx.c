@@ -161,8 +161,10 @@ static int chd_dec_fetch_cdata(struct crystalhd_adp *adp, crystalhd_ioctl_data *
 		dev_err(chddev(), "failed to pull add_cdata sz:%x "
 			"ua_off:%x\n", io->add_cdata_sz,
 			(unsigned int)ua_off);
-		kfree(io->add_cdata);
-		io->add_cdata = NULL;
+		if (io->add_cdata) {
+			kfree(io->add_cdata);
+			io->add_cdata = NULL;
+		}
 		return -ENODATA;
 	}
 
@@ -406,8 +408,7 @@ static int __devinit chd_dec_init_chdev(struct crystalhd_adp *adp)
 
 	/* Allocate general purpose ioctl pool. */
 	for (i = 0; i < CHD_IODATA_POOL_SZ; i++) {
-		/* FIXME: jarod: why atomic? */
-		temp = kzalloc(sizeof(crystalhd_ioctl_data), GFP_ATOMIC);
+		temp = kzalloc(sizeof(crystalhd_ioctl_data), GFP_KERNEL);
 		if (!temp) {
 			dev_err(xdev, "ioctl data pool kzalloc failed\n");
 			rc = -ENOMEM;
@@ -448,7 +449,8 @@ static void __devexit chd_dec_release_chdev(struct crystalhd_adp *adp)
 	/* Clear iodata pool.. */
 	do {
 		temp = chd_dec_alloc_iodata(adp, 0);
-		kfree(temp);
+		if (temp)
+			kfree(temp);
 	} while (temp);
 
 	//crystalhd_delete_elem_pool(adp);

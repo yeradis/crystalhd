@@ -259,19 +259,19 @@ typedef struct {
 
 typedef struct
 {
-	unsigned long command;
-	unsigned long sequence;
-	unsigned long status;
-	unsigned long ChannelID;
-	unsigned long picBuf;
-	unsigned long picRelBuf;
-	unsigned long picInfoDeliveryQ;
-	unsigned long picInfoReleaseQ;
-	unsigned long channelStatus;
-	unsigned long userDataDeliveryQ;
-	unsigned long userDataReleaseQ;
-	unsigned long transportStreamCaptureAddr;
-	unsigned long asyncEventQ;
+	uint32_t command;
+	uint32_t sequence;
+	uint32_t status;
+	uint32_t ChannelID;
+	uint32_t picBuf;
+	uint32_t picRelBuf;
+	uint32_t picInfoDeliveryQ;
+	uint32_t picInfoReleaseQ;
+	uint32_t channelStatus;
+	uint32_t userDataDeliveryQ;
+	uint32_t userDataReleaseQ;
+	uint32_t transportStreamCaptureAddr;
+	uint32_t asyncEventQ;
 }DecRspChannelChannelOpen;
 
 #define eCMD_C011_CMD_BASE	  (0x73763000)

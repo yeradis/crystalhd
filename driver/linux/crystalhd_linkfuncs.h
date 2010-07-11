@@ -224,4 +224,5 @@ BC_STATUS crystalhd_link_download_fw(struct crystalhd_hw* hw, uint8_t* buffer, u
 BC_STATUS crystalhd_link_do_fw_cmd(struct crystalhd_hw *hw, BC_FW_CMD *fw_cmd);
 bool crystalhd_link_hw_interrupt_handle(struct crystalhd_adp *adp, struct crystalhd_hw *hw);
 void crystalhd_link_notify_fll_change(struct crystalhd_hw *hw, bool bCleanupContext);
+bool crystalhd_link_notify_event(struct crystalhd_hw *hw, BRCM_EVENT EventCode);
 #endif

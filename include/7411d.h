@@ -546,7 +546,7 @@ typedef struct {
     uint32_t	stcValue;
     uint32_t	stcWritten;	  // 1 -> host updated STC, 0 -> stream ARC ack
     int32_t	ptsStcOffset;	// PTS - STC
-    void	*pVdecStatusBlk;     /* pointer to vdec status block */
+    uint32_t	pVdecStatusBlk;     /* pointer to vdec status block */ /* Change from void * to make it 64-bit safe */
     uint32_t	lastPicture;	 // 1 -> decoder last picture indication
     uint32_t	pictureTag;	  /* Picture Tag from VDEC */
     uint32_t	tsmLockTime;	     /* Time when the First Picture passed TSM */
@@ -1133,6 +1133,10 @@ typedef struct {
     uint32_t	command;
     uint32_t	sequence;
     eC011_TEST_ID testId;
+    uint32_t	mode;
+    uint32_t	height;
+    uint32_t	width;
+    uint32_t	rsvd[5];
 } C011CmdSelfTest;
 
 typedef struct {
@@ -1274,10 +1278,10 @@ typedef struct {
 
 //For Single Field
 typedef struct {
-	unsigned long             command;
-	unsigned long             sequence;
-	unsigned long             channelId;
-	unsigned long             SingleField;
+	uint32_t command;
+	uint32_t sequence;
+	uint32_t channelId;
+	uint32_t SingleField;
 } DecCmdChannelSingleField;
 
 /* DecChannelStatus */

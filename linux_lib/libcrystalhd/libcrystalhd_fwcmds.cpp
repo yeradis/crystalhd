@@ -1,7 +1,13 @@
 /********************************************************************
- * Copyright(c) 2006-2009 Broadcom Corporation.
+ * Copyright(c) 2006 Broadcom Corporation, all rights reserved.
+ * Contains proprietary and confidential information.
  *
- *  Name: libcrystalhd_fwcmds.cpp
+ * This source file is the property of Broadcom Corporation, and
+ * may not be copied or distributed in any isomorphic form without
+ * the prior written consent of Broadcom Corporation.
+ *
+ *
+ *  Name: bc_fwcmds.cpp
  *
  *  Description: FW commands.
  *
@@ -9,30 +15,15 @@
  *
  *  HISTORY:
  *
- ********************************************************************
- *
- * This file is part of libcrystalhd.
- *
- * This library is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as published
- * by the Free Software Foundation, either version 2.1 of the License.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- * You should have received a copy of the GNU Lesser General Public License
- * along with this library.  If not, see <http://www.gnu.org/licenses/>.
- *
  *******************************************************************/
-
 #include "7411d.h"
 #include "libcrystalhd_fwcmds.h"
+#include "libcrystalhd_priv.h"
 
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
 DtsFWInitialize(
     HANDLE  hDevice,
-	uint32_t		resrv1
+	uint32_t	resrv1
     )
 {
 	BC_STATUS	sts = BC_STS_SUCCESS;
@@ -40,7 +31,7 @@ DtsFWInitialize(
 
 	DTS_LIB_CONTEXT		*Ctx = NULL;
 	BC_IOCTL_DATA *pIocData = NULL;
-	
+
 	DTS_GET_CTX(hDevice,Ctx);
 
 	if(!(pIocData = DtsAllocIoctlData(Ctx)))
@@ -58,11 +49,11 @@ DtsFWInitialize(
 	vi->brcmMode		= eC011_BRCM_ECG_MODE_ON;
 	vi->fgtEnable		= 0x00000001;
 	vi->openMode        = Ctx->FixFlags;
-	
+
 	if(Ctx->DevId == BC_PCI_DEVID_LINK)
 		vi->rsaDecrypt = 0x00000001;
-	
-	if( (sts=DtsDrvCmd(Ctx,BCM_IOC_FW_CMD,1,pIocData,FALSE)) != BC_STS_SUCCESS){
+
+	if( (sts=DtsDrvCmd(Ctx, BCM_IOC_FW_CMD,1,pIocData,FALSE)) != BC_STS_SUCCESS){
 		DtsRelIoctlData(Ctx,pIocData);
 		DebugLog_Trace(LDIL_DBG,"DtsInitialize: Ioctl failed: %d\n",sts);
 		return sts;
@@ -73,7 +64,7 @@ DtsFWInitialize(
 		DebugLog_Trace(LDIL_DBG,"DtsInitialize: Failed %d\n",pIocData->u.fwCmd.rsp[2]);
 		return BC_STS_FW_CMD_ERR;
 	}
-	
+
 	DtsRelIoctlData(Ctx,pIocData);
 
 	return BC_STS_SUCCESS;
@@ -81,18 +72,24 @@ DtsFWInitialize(
 
 DRVIFLIB_INT_API BC_STATUS
 DtsFWOpenChannel(
-    HANDLE    hDevice,
-    uint32_t  StreamType,
-	uint32_t  reserved
+    HANDLE  hDevice,
+	uint32_t	StreamType,
+	uint32_t	reserved
     )
 {
-	BC_STATUS sts = BC_STS_SUCCESS;
-	DTS_LIB_CONTEXT	*Ctx = NULL;
+	BC_STATUS	sts = BC_STS_SUCCESS;
+	DTS_LIB_CONTEXT		*Ctx = NULL;
 	BC_IOCTL_DATA *pIocData = NULL;
-
+	uint32_t	ScaledWidth=0;
 	DTS_GET_CTX(hDevice,Ctx);
 
-	if (!(pIocData = DtsAllocIoctlData(Ctx)))
+	if(Ctx->State != BC_DEC_STATE_CLOSE)
+	{
+		DebugLog_Trace(LDIL_DBG,"DtsFWOpenChannel: No Active Decoder\n");
+		return BC_STS_ERR_USAGE;
+	}
+
+	if(!(pIocData = DtsAllocIoctlData(Ctx)))
 		return BC_STS_INSUFF_RES;
 
 	if (Ctx->DevId != BC_PCI_DEVID_FLEA)
@@ -102,9 +99,9 @@ DtsFWOpenChannel(
 		pOpen = (DecCmdChannelStreamOpen *)&pIocData->u.fwCmd.cmd;
 		pOpen->command						= eCMD_C011_DEC_CHAN_STREAM_OPEN;
 		pOpen->sequence						= ++Ctx->fwcmdseq;
-		pOpen->inPort						= eC011_IN_PORT0;		//CSI 
+		pOpen->inPort						= eC011_IN_PORT0;		//CSI
 		pOpen->streamType					= (eC011_STREAM_TYPE)StreamType;
-		
+
 		if( (sts=DtsDrvCmd(Ctx,BCM_IOC_FW_CMD,1,pIocData,FALSE)) != BC_STS_SUCCESS){
 			DtsRelIoctlData(Ctx,pIocData);
 			DebugLog_Trace(LDIL_DBG,"DtsOpenDecoder: Ioctl failed: %d\n",sts);
@@ -129,9 +126,30 @@ DtsFWOpenChannel(
 		pOpen->sequence		= ++Ctx->fwcmdseq;
 		pOpen->videoAlg		= (eC011_VIDEO_ALG) Ctx->VidParams.VideoAlgo;
 		pOpen->streamType	= (eC011_STREAM_TYPE)StreamType;
+		pOpen->reservedWord8 =0;
+		if (Ctx->EnableScaling & 0x00000001){
 
-		if (Ctx->bScaling)
-			pOpen->reservedWord8 = 1;
+			ScaledWidth  = (Ctx->EnableScaling>>20)& 0xFFF;
+			if((ScaledWidth>=1920)||(ScaledWidth<128))
+				ScaledWidth = 960;
+			if(ScaledWidth%2)
+				ScaledWidth+=1;
+			pOpen->reservedWord8 |= ScaledWidth<<20;
+			ScaledWidth=(Ctx->EnableScaling>>8)& 0xFFF;
+			if((ScaledWidth>=1920)||(ScaledWidth<128))
+				ScaledWidth = 1280;
+			if(ScaledWidth%2)
+				ScaledWidth+=1;
+			pOpen->reservedWord8 |= ScaledWidth<<8;
+
+			pOpen->reservedWord8 |=1;
+		}
+
+
+		DebugLog_Trace(LDIL_DBG,"Scaling command param 0x%x,ctx_scal:0x%x\n",pOpen->reservedWord8,Ctx->EnableScaling);
+		if (Ctx->bEnable720pDropHalf)
+			pOpen->reservedWord14 = 1;
+
 		if( (sts=DtsDrvCmd(Ctx,BCM_IOC_FW_CMD,1,pIocData,FALSE)) != BC_STS_SUCCESS){
 			DtsRelIoctlData(Ctx,pIocData);
 			DebugLog_Trace(LDIL_DBG,"DtsOpenDecoder: Ioctl failed: %d\n",sts);
@@ -145,18 +163,18 @@ DtsFWOpenChannel(
 			DtsRelIoctlData(Ctx,pIocData);
 			return BC_STS_FW_CMD_ERR;
 		}
-		
+
 		Ctx->OpenRsp.channelId = pRsp->ChannelID;
 	}
 
 	// For deconf backward compatibility only...
-	Ctx->State = BC_DEC_STATE_OPEN;
+	Ctx->State = BC_DEC_STATE_STOP;
 	DtsRelIoctlData(Ctx,pIocData);
 	return BC_STS_SUCCESS;
 }
 
 
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
 DtsFWActivateDecoder(
     HANDLE  hDevice
     )
@@ -167,19 +185,19 @@ DtsFWActivateDecoder(
 
 	DTS_LIB_CONTEXT		*Ctx = NULL;
 	BC_IOCTL_DATA *pIocData = NULL;
-	
+
 	DTS_GET_CTX(hDevice,Ctx);
 
-	if(Ctx->State == BC_DEC_STATE_STOP) 
+	if(Ctx->State == BC_DEC_STATE_CLOSE)
+	{
+		DebugLog_Trace(LDIL_DBG,"DtsActChannel: Channel is NOT Opened\n");
+		return BC_STS_DEC_NOT_OPEN;
+	}
+
+	if(Ctx->State == BC_DEC_STATE_START)
 	{
 		DebugLog_Trace(LDIL_DBG,"DtsActChannel: Channel is already Opened\n");
 		return BC_STS_SUCCESS;
-	}
-
-	if(Ctx->State != BC_DEC_STATE_OPEN)
-	{
-		DebugLog_Trace(LDIL_DBG,"DtsActChannel: Channel Not Opened\n");
-		return BC_STS_DEC_NOT_OPEN;
 	}
 
 	if(!(pIocData = DtsAllocIoctlData(Ctx)))
@@ -197,24 +215,24 @@ DtsFWActivateDecoder(
 		DtsRelIoctlData(Ctx,pIocData);
 		return sts;
 	}
-	
+
 	pActRsp = (DecRspChannelActivate*)&pIocData->u.fwCmd.rsp;
 
 	if(pActRsp->status){
-		DebugLog_Trace(LDIL_DBG,"DtsActChannel: ChannelActivate Failed %u\n",pActRsp->status);
+		DebugLog_Trace(LDIL_DBG,"DtsActChannel: ChannelActivate Failed %d\n",pActRsp->status);
 		DtsRelIoctlData(Ctx,pIocData);
 		return BC_STS_FW_CMD_ERR;
 	}
-	
+
 	DtsRelIoctlData(Ctx,pIocData);
 
 	return BC_STS_SUCCESS;
 }
 
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
 DtsFWSetSingleField(
     HANDLE  hDevice,
-	BOOL bSingleField 
+	bool bSingleField
     )
 {
 	BC_STATUS	sts = BC_STS_SUCCESS;
@@ -223,10 +241,10 @@ DtsFWSetSingleField(
 
 	DTS_LIB_CONTEXT		*Ctx = NULL;
 	BC_IOCTL_DATA *pIocData = NULL;
-	
+
 	DTS_GET_CTX(hDevice,Ctx);
 
-	if(Ctx->State != BC_DEC_STATE_OPEN) 
+	if(Ctx->State == BC_DEC_STATE_CLOSE)
 	{
 		DebugLog_Trace(LDIL_DBG,"DtsFWSetSingleField: Channel Not Opened\n");
 		return BC_STS_DEC_NOT_OPEN;
@@ -248,7 +266,7 @@ DtsFWSetSingleField(
 		DtsRelIoctlData(Ctx,pIocData);
 		return sts;
 	}
-	
+
 	pActRsp = (DecRspChannelSingleField*)&pIocData->u.fwCmd.rsp;
 
 	if(pActRsp->status){
@@ -256,16 +274,17 @@ DtsFWSetSingleField(
 		DtsRelIoctlData(Ctx,pIocData);
 		return BC_STS_FW_CMD_ERR;
 	}
-	
+
 	DtsRelIoctlData(Ctx,pIocData);
 
 	return BC_STS_SUCCESS;
 }
 
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
 DtsFWHwSelfTest(
     HANDLE  hDevice,
-    uint32_t     testID
+	uint32_t	testID
+
     )
 {
 	BC_STATUS	sts = BC_STS_SUCCESS;
@@ -275,7 +294,7 @@ DtsFWHwSelfTest(
 	DTS_LIB_CONTEXT		*Ctx = NULL;
 	BC_IOCTL_DATA *pIocData = NULL;
 
-	
+
 	DTS_GET_CTX(hDevice,Ctx);
 
 	if(!(pIocData = DtsAllocIoctlData(Ctx)))
@@ -285,6 +304,14 @@ DtsFWHwSelfTest(
 	stest->command = eCMD_C011_SELF_TEST;
 	stest->sequence = ++Ctx->fwcmdseq;
 	stest->testId = (eC011_TEST_ID)testID;
+	if(Ctx->DevId==BC_PCI_DEVID_FLEA)
+	{
+		if (testID>3 || testID<6){
+			stest->mode = testID;
+			stest->height = Ctx->picHeight;
+			stest->width = Ctx->picWidth;
+		}
+	}
 
 	if( (sts=DtsDrvCmd(Ctx,BCM_IOC_FW_CMD,1,pIocData,FALSE)) != BC_STS_SUCCESS){
 		DebugLog_Trace(LDIL_DBG,"DtsHwSelfTest: Ioctl failed: %d\n",sts);
@@ -295,7 +322,7 @@ DtsFWHwSelfTest(
 	pRsp = (C011RspSelfTest*)&pIocData->u.fwCmd.rsp;
 
 	if(pRsp->status){
-		DebugLog_Trace(LDIL_DBG,"DtsHwSelfTest: SetVideoOut Failed %u\n",pRsp->status);
+		DebugLog_Trace(LDIL_DBG,"DtsHwSelfTest: SetVideoOut Failed %d\n",pRsp->status);
 		DtsRelIoctlData(Ctx,pIocData);
 		return BC_STS_FW_CMD_ERR;
 	}
@@ -305,12 +332,12 @@ DtsFWHwSelfTest(
 }
 
 
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
 DtsFWVersion(
     HANDLE  hDevice,
-    uint32_t     *Stream,
-    uint32_t     *DecCore,
-	uint32_t		*HwNumber
+	uint32_t	*Stream,
+	uint32_t	*DecCore,
+	uint32_t	*HwNumber
     )
 {
 	BC_STATUS	sts = BC_STS_SUCCESS;
@@ -327,7 +354,7 @@ DtsFWVersion(
 		DebugLog_Trace(LDIL_DBG,"DtsFWVersion: Invalid Handle\n");
 		return BC_STS_INV_ARG;
 	}
-	
+
 	if(!(pIocData = DtsAllocIoctlData(Ctx)))
 		return BC_STS_INSUFF_RES;
 
@@ -344,11 +371,11 @@ DtsFWVersion(
 	pRsp = (C011RspGetVersion*)&pIocData->u.fwCmd.rsp;
 
 	if(pRsp->status){
-		DebugLog_Trace(LDIL_DBG,"DtsHwSelfTest: SetVideoOut Failed %u\n",pRsp->status);
+		DebugLog_Trace(LDIL_DBG,"DtsHwSelfTest: SetVideoOut Failed %d\n",pRsp->status);
 		DtsRelIoctlData(Ctx,pIocData);
 		return BC_STS_FW_CMD_ERR;
 	}
-	
+
 	*Stream  = pRsp->streamSwVersion;
 	*DecCore = pRsp->decoderSwVersion;
 	*HwNumber = pRsp->chipHwVersion;
@@ -358,11 +385,11 @@ DtsFWVersion(
 	return BC_STS_SUCCESS;
 }
 
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
 DtsFWFifoStatus(
     HANDLE  hDevice,
-    uint32_t     *CpbSize,
-	uint32_t		*CpbFullness
+	uint32_t	*CpbSize,
+	uint32_t	*CpbFullness
     )
 {
 	BC_STATUS	sts = BC_STS_SUCCESS;
@@ -374,8 +401,8 @@ DtsFWFifoStatus(
 
 	DTS_GET_CTX(hDevice,Ctx);
 
-	if(Ctx->State == BC_DEC_STATE_INVALID){
-		DebugLog_Trace(LDIL_DBG,"DtsFifoStatus: No Active Decoder\n");
+	if(Ctx->State == BC_DEC_STATE_CLOSE){
+		DebugLog_Trace(LDIL_DBG,"DtsFifoStatus: No Open Decoder\n");
 		return BC_STS_DEC_NOT_OPEN;
 	}
 
@@ -402,23 +429,23 @@ DtsFWFifoStatus(
 	pRsp = (DecRspChannelStatus*)&pIocData->u.fwCmd.rsp;
 
 	if(pRsp->status){
-		DebugLog_Trace(LDIL_DBG,"DtsChannelStatus: Failed %u\n",pRsp->status);
+		DebugLog_Trace(LDIL_DBG,"DtsChannelStatus: Failed %d\n",pRsp->status);
 		DtsRelIoctlData(Ctx,pIocData);
 		return BC_STS_FW_CMD_ERR;
 	}
-	
+
 	*CpbSize = pRsp->cpbSize;
 	*CpbFullness = pRsp->cpbFullness;
 
 	DtsRelIoctlData(Ctx,pIocData);
-	
+
 	return BC_STS_SUCCESS;
 }
 
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
 DtsFWCloseChannel(
     HANDLE  hDevice,
-	uint32_t		ChannelID
+	uint32_t	ChannelID
     )
 {
 	BC_STATUS	sts = BC_STS_SUCCESS;
@@ -429,8 +456,10 @@ DtsFWCloseChannel(
 
 	DTS_GET_CTX(hDevice,Ctx);
 
-	if(Ctx->State == BC_DEC_STATE_INVALID){
+	if(Ctx->State == BC_DEC_STATE_CLOSE)
+	{
 		DebugLog_Trace(LDIL_DBG,"DtsCloseDecoder: Channel is not Open\n");
+		return BC_STS_SUCCESS;
 	}
 
 	if(!(pIocData = DtsAllocIoctlData(Ctx)))
@@ -444,7 +473,7 @@ DtsFWCloseChannel(
 	pCmd->channelId        = ChannelID;
 	pCmd->pictureRelease   = eC011_PIC_REL_INTERNAL;
 	pCmd->lastPicDisplay   = eC011_LASTPIC_DISPLAY_ON;
-	
+
 	if( (sts=DtsDrvCmd(Ctx,BCM_IOC_FW_CMD,1,pIocData,FALSE)) != BC_STS_SUCCESS){
 		DebugLog_Trace(LDIL_DBG,"DtsCloseDecoder: Ioctl failed: %d\n",sts);
 		DtsRelIoctlData(Ctx,pIocData);
@@ -454,7 +483,7 @@ DtsFWCloseChannel(
 	pRsp = (DecRspChannelClose*)&pIocData->u.fwCmd.rsp;
 
 	if(pRsp->status){
-		DebugLog_Trace(LDIL_DBG,"DtsCloseDecoder: Failed %u\n",pRsp->status);
+		DebugLog_Trace(LDIL_DBG,"DtsCloseDecoder: Failed %d\n",pRsp->status);
 		DtsRelIoctlData(Ctx,pIocData);
 		return BC_STS_FW_CMD_ERR;
 	}
@@ -466,7 +495,7 @@ DtsFWCloseChannel(
 	return BC_STS_SUCCESS;
 }
 
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
 DtsFWSetVideoInput(
     HANDLE  hDevice
     )
@@ -477,10 +506,10 @@ DtsFWSetVideoInput(
 	DTS_LIB_CONTEXT		*Ctx = NULL;
 	BC_IOCTL_DATA *pIocData = NULL;
 
-	
+
 	DTS_GET_CTX(hDevice,Ctx);
 
-	if((Ctx->State != BC_DEC_STATE_OPEN)){
+	if((Ctx->State == BC_DEC_STATE_CLOSE)){
 		DebugLog_Trace(LDIL_DBG,"DtsSetVideoInput: Channel not opened\n");
 		return BC_STS_DEC_NOT_OPEN;
 	}
@@ -493,7 +522,7 @@ DtsFWSetVideoInput(
 	vi->command			= eCMD_C011_DEC_CHAN_INPUT_PARAMS;
 	vi->sequence		= ++Ctx->fwcmdseq;
 	vi->syncMode		= eC011_SYNC_MODE_SYNCPIN;
-	
+
 	if( (sts=DtsDrvCmd(Ctx,BCM_IOC_FW_CMD,1,pIocData,FALSE)) != BC_STS_SUCCESS){
 		DebugLog_Trace(LDIL_DBG,"DtsSetVideoInput: Ioctl failed: %d\n",sts);
 		DtsRelIoctlData(Ctx,pIocData);
@@ -509,10 +538,10 @@ DtsFWSetVideoInput(
 	return sts;
 }
 
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
 DtsFWSetVideoPID(
     HANDLE  hDevice,
-	uint32_t		pid
+	uint32_t	pid
     )
 {
 	BC_STATUS	sts = BC_STS_SUCCESS;
@@ -523,8 +552,9 @@ DtsFWSetVideoPID(
 
 	DTS_GET_CTX(hDevice,Ctx);
 
-	if((Ctx->State != BC_DEC_STATE_OPEN)){
-		DebugLog_Trace(LDIL_DBG,"DtsSetTSPIDs: Channel not opened\n");
+	if((Ctx->State == BC_DEC_STATE_CLOSE))
+	{
+		DebugLog_Trace(LDIL_DBG,"DtsFWSetVideoPID: Channel not opened\n");
 		return BC_STS_DEC_NOT_OPEN;
 	}
 
@@ -537,28 +567,28 @@ DtsFWSetVideoPID(
 	spid->sequence		= ++Ctx->fwcmdseq;
 	spid->channelId		= Ctx->OpenRsp.channelId;
 	spid->videoPid		= pid;
-	
+
 	if( (sts=DtsDrvCmd(Ctx,BCM_IOC_FW_CMD,1,pIocData,FALSE)) != BC_STS_SUCCESS){
-		DebugLog_Trace(LDIL_DBG,"DtsSetTSPIDS: Ioctl failed: %d\n",sts);
+		DebugLog_Trace(LDIL_DBG,"DtsFWSetVideoPID: Ioctl failed: %d\n",sts);
 		DtsRelIoctlData(Ctx,pIocData);
 		return sts;
 	}
 
 	if(pIocData->u.fwCmd.rsp[2]){
-		DebugLog_Trace(LDIL_DBG,"DtsSetTSPIDs:  Failed %d\n",pIocData->u.fwCmd.rsp[2]);
+		DebugLog_Trace(LDIL_DBG,"DtsFWSetVideoPID:  Failed %d\n",pIocData->u.fwCmd.rsp[2]);
 		DtsRelIoctlData(Ctx,pIocData);
 		return BC_STS_FW_CMD_ERR;
 	}
-	
+
 	DtsRelIoctlData(Ctx,pIocData);
 
 	return BC_STS_SUCCESS;
 }
 
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
 DtsFWFlushDecoder(
     HANDLE  hDevice,
-    uint32_t     rsrv
+	uint32_t	rsrv
 	)
 {
 	BC_STATUS	sts = BC_STS_SUCCESS;
@@ -570,7 +600,8 @@ DtsFWFlushDecoder(
 
 	DTS_GET_CTX(hDevice,Ctx);
 
-	if( (Ctx->State != BC_DEC_STATE_OPEN) && ((Ctx->State != BC_DEC_STATE_START)) ){
+	if(Ctx->State == BC_DEC_STATE_CLOSE)
+	{
 		DebugLog_Trace(LDIL_DBG,"DtsFlushDecoder: Channel Not Opened\n");
 		return BC_STS_DEC_NOT_OPEN;
 	}
@@ -592,24 +623,24 @@ DtsFWFlushDecoder(
 	}
 	flRsp = (DecRspChannelFlush*)&pIocData->u.fwCmd.rsp;
 	if(flRsp->status){
-		DebugLog_Trace(LDIL_DBG,"DtsFlushDecoder: Flush Decoder Failed %u\n",flRsp->status);
+		DebugLog_Trace(LDIL_DBG,"DtsFlushDecoder: Flush Decoder Failed %d\n",flRsp->status);
 		DtsRelIoctlData(Ctx,pIocData);
 		return BC_STS_FW_CMD_ERR;
 	}
-	
+
 	DtsRelIoctlData(Ctx,pIocData);
 
 	return BC_STS_SUCCESS;
 }
 
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
 DtsFWStartVideo(
     HANDLE  hDevice,
-	uint32_t		videoAlg,
-	uint32_t		FGTEnable,
-	uint32_t		MetaDataEnable,
-	uint32_t		Progressive,
-    uint32_t     OptFlags
+	uint32_t	videoAlg,
+	uint32_t	FGTEnable,
+	uint32_t	MetaDataEnable,
+	uint32_t	Progressive,
+	uint32_t	OptFlags
 	)
 {
 	BC_STATUS	sts = BC_STS_SUCCESS;
@@ -621,20 +652,14 @@ DtsFWStartVideo(
 
 	DTS_GET_CTX(hDevice,Ctx);
 
-	if((Ctx->State != BC_DEC_STATE_OPEN) && (Ctx->State != BC_DEC_STATE_STOP) ){
+	if(Ctx->State == BC_DEC_STATE_CLOSE)
+	{
 		DebugLog_Trace(LDIL_DBG,"DtsStartVideo: Channel Not Opened\n");
 		return BC_STS_DEC_NOT_OPEN;
 	}
 
 	if(!(pIocData = DtsAllocIoctlData(Ctx)))
 		return BC_STS_INSUFF_RES;
-
-#if 0
-// sdd, not sure if we still need this
-	/* Let Driver know the Response offset for PIB Delivery and Response Qs.*/
-	pIocData->u.fwCmd.flags = BC_FW_CMD_PIB_QS;
-	pIocData->u.fwCmd.add_data = ((long) &((DecRspChannelStartVideo *)0)->picInfoDeliveryQ);
-#endif
 
 	sVid = (DecCmdChannelStartVideo *)&pIocData->u.fwCmd.cmd;
 
@@ -668,7 +693,7 @@ DtsFWStartVideo(
 
 	sVid->defaultFrameRate = (OptFlags&0x0f);
 	sVid->decOperationMode = (OptFlags&0x30)>>4;
-	sVid->MaxFrameRateMode = (OptFlags&0x40)>>6;
+	sVid->MaxFrameRateMode = (OptFlags&0x40)>>6 | (OptFlags&0x80)>>6; // Bit 1 is used to indicate to ignore pulldown in the firmware.
 
 	if( (sts=DtsDrvCmd(Ctx,BCM_IOC_FW_CMD,1,pIocData,FALSE)) != BC_STS_SUCCESS){
 		DebugLog_Trace(LDIL_DBG,"DtsStartVideo: Ioctl failed: %d\n",sts);
@@ -679,7 +704,7 @@ DtsFWStartVideo(
 
 	sVidRsp = (DecRspChannelStartVideo*)&pIocData->u.fwCmd.rsp;
 	if(sVidRsp->status){
-		DebugLog_Trace(LDIL_DBG,"DtsStartVideo: StartVideo Failed %u\n",sVidRsp->status);
+		DebugLog_Trace(LDIL_DBG,"DtsStartVideo: StartVideo Failed %d\n",sVidRsp->status);
 		DtsRelIoctlData(Ctx,pIocData);
 		return BC_STS_FW_CMD_ERR;
 	}
@@ -693,11 +718,11 @@ DtsFWStartVideo(
 	return BC_STS_SUCCESS;
 }
 
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
 DtsFWStopVideo(
     HANDLE  hDevice,
-	uint32_t     ChannelId,
-	BOOL	ForceStop
+	uint32_t	ChannelId,
+	bool	ForceStop
 	)
 {
 	BC_STATUS	sts = BC_STS_SUCCESS;
@@ -710,9 +735,11 @@ DtsFWStopVideo(
 	DTS_GET_CTX(hDevice,Ctx);
 
 	if(!(ForceStop) && (Ctx->State != BC_DEC_STATE_START)
-					&& (Ctx->State != BC_DEC_STATE_PAUSE)){
+					&& (Ctx->State != BC_DEC_STATE_PAUSE)
+					&& (Ctx->State != BC_DEC_STATE_FLUSH))
+	{
 		DebugLog_Trace(LDIL_DBG,"DtsStopVideo: Channel Not Opened\n");
-		return BC_STS_DEC_NOT_OPEN;
+		return BC_STS_DEC_NOT_STARTED;
 	}
 
 	if(!(pIocData = DtsAllocIoctlData(Ctx)))
@@ -735,7 +762,7 @@ DtsFWStopVideo(
 
 	sVidRsp = (DecRspChannelStopVideo*)&pIocData->u.fwCmd.rsp;
 	if(sVidRsp->status){
-		DebugLog_Trace(LDIL_DBG,"DtsStopVideo: StopVideo Failed %u\n",sVidRsp->status);
+		DebugLog_Trace(LDIL_DBG,"DtsStopVideo: StopVideo Failed %d\n",sVidRsp->status);
 		DtsRelIoctlData(Ctx,pIocData);
 		return BC_STS_FW_CMD_ERR;
 	}
@@ -747,13 +774,15 @@ DtsFWStopVideo(
 	return BC_STS_SUCCESS;
 }
 
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
 DtsFWDecFlushChannel(
     HANDLE  hDevice,
-	uint32_t		Operation
+	uint32_t	Operation
 	)
 {
 	BC_STATUS	sts = BC_STS_SUCCESS;
+
+	uint32_t i = 10;
 
 	DecCmdChannelFlush	*cFlush;
 	DecRspChannelFlush	*rspFlush;
@@ -763,6 +792,10 @@ DtsFWDecFlushChannel(
 
 	DTS_GET_CTX(hDevice,Ctx);
 
+	if (Ctx->State == BC_DEC_STATE_CLOSE)
+	{
+		return BC_STS_DEC_NOT_OPEN;
+	}
 	if( (Operation <0) || (Operation > 2) )
 		return BC_STS_INV_ARG;
 
@@ -788,11 +821,14 @@ DtsFWDecFlushChannel(
 			break;
 		bc_sleep_ms(5);
 
+		if(0 == i--)
+			break; // Only try to FLUSH the decoder 10 times. Not hang infinitely if the FW is stuck
+
 	} while (rspFlush->status == BC_FW_CMD_TIMEOUT);
 
 
 	if(rspFlush->status){
-		DebugLog_Trace(LDIL_DBG,"DtsFWDecFlushChannel: FlushChannel Failed %u\n",rspFlush->status);
+		DebugLog_Trace(LDIL_DBG,"DtsFWDecFlushChannel: FlushChannel Failed %d\n",rspFlush->status);
 		DtsRelIoctlData(Ctx,pIocData);
 		return BC_STS_FW_CMD_ERR;
 	}
@@ -802,7 +838,7 @@ DtsFWDecFlushChannel(
 	return BC_STS_SUCCESS;
 }
 
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
 DtsFWPauseVideo(
     HANDLE  hDevice,
 	uint32_t	Operation
@@ -818,6 +854,16 @@ DtsFWPauseVideo(
 	BC_IOCTL_DATA *pIocData = NULL;
 
 	DTS_GET_CTX(hDevice,Ctx);
+	if(Ctx->State == BC_DEC_STATE_CLOSE)
+	{
+		DebugLog_Trace(LDIL_DBG,"DtsFWPauseVideo: Channel is NOT Opened\n");
+		return BC_STS_DEC_NOT_OPEN;
+	}
+	if(Ctx->State == BC_DEC_STATE_STOP)
+	{
+		DebugLog_Trace(LDIL_DBG,"DtsFWPauseVideo: Channel is already Opened\n");
+		return BC_STS_DEC_NOT_STARTED;
+	}
 
 	if(!(pIocData = DtsAllocIoctlData(Ctx)))
 		return BC_STS_INSUFF_RES;
@@ -827,8 +873,8 @@ DtsFWPauseVideo(
 	cPause->sequence	= ++Ctx->fwcmdseq;
 	cPause->channelId	= Ctx->OpenRsp.channelId;
 	cPause->enableState   = (eC011_PAUSE_MODE)Operation;
-	
-	
+
+
 	if( (sts=DtsDrvCmd(Ctx,BCM_IOC_FW_CMD,1,pIocData,FALSE)) != BC_STS_SUCCESS){
 		DebugLog_Trace(LDIL_DBG,"DtsFWPauseVideo: Ioctl failed: %d\n",sts);
 		DtsRelIoctlData(Ctx,pIocData);
@@ -837,7 +883,7 @@ DtsFWPauseVideo(
 
 	rspPause = (DecRspChannelPause*)&pIocData->u.fwCmd.rsp;
 	if(rspPause->status){
-		DebugLog_Trace(LDIL_DBG,"DtsFWPauseVideo: PauseChannel Failed %u\n",rspPause->status);
+		DebugLog_Trace(LDIL_DBG,"DtsFWPauseVideo: PauseChannel Failed %d\n",rspPause->status);
 		DtsRelIoctlData(Ctx,pIocData);
 		return BC_STS_FW_CMD_ERR;
 	}
@@ -847,11 +893,11 @@ DtsFWPauseVideo(
 	return BC_STS_SUCCESS;
 }
 
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
 DtsFWSetTrickPlay(
 	HANDLE hDevice,
 	uint32_t	trickMode,
-	uint8_t direction
+	uint8_t		direction
 	)
 {
 	BC_STATUS	sts = BC_STS_SUCCESS;
@@ -874,8 +920,8 @@ DtsFWSetTrickPlay(
 	cTrickPlay->channelId	= Ctx->OpenRsp.channelId;
 	cTrickPlay->direction   = (eC011_DIR)direction;
 	cTrickPlay->speed = (eC011_SPEED)trickMode;
-	
-	
+
+
 	if( (sts=DtsDrvCmd(Ctx,BCM_IOC_FW_CMD,1,pIocData,FALSE)) != BC_STS_SUCCESS){
 		DebugLog_Trace(LDIL_DBG,"DtsFWSetTrickPlay: Ioctl failed: %d\n",sts);
 		DtsRelIoctlData(Ctx,pIocData);
@@ -884,7 +930,7 @@ DtsFWSetTrickPlay(
 
 	rspTrickPlay = (DecRspChannelTrickPlay*)&pIocData->u.fwCmd.rsp;
 	if(rspTrickPlay->status){
-		DebugLog_Trace(LDIL_DBG,"DtsFWSetTrickPlay: TrickPlay Failed %u\n",rspTrickPlay->status);
+		DebugLog_Trace(LDIL_DBG,"DtsFWSetTrickPlay: TrickPlay Failed %d\n",rspTrickPlay->status);
 		DtsRelIoctlData(Ctx,pIocData);
 		return BC_STS_FW_CMD_ERR;
 	}
@@ -895,10 +941,10 @@ DtsFWSetTrickPlay(
 
 }
 
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
 DtsFWSetHostTrickMode(
 	HANDLE hDevice,
-	uint32_t	enable	
+	uint32_t	enable
 	)
 {
 	BC_STATUS	sts = BC_STS_SUCCESS;
@@ -913,6 +959,9 @@ DtsFWSetHostTrickMode(
 	DTS_GET_CTX(hDevice,Ctx);
 
 
+	if (Ctx->DevId == BC_PCI_DEVID_FLEA)
+		return BC_STS_SUCCESS;
+
 	if(!(pIocData = DtsAllocIoctlData(Ctx)))
 		return BC_STS_INSUFF_RES;
 
@@ -920,8 +969,8 @@ DtsFWSetHostTrickMode(
 	cHostTrickMode->command		= eCMD_C011_DEC_CHAN_SET_HOST_TRICK_MODE;
 	cHostTrickMode->sequence	= ++Ctx->fwcmdseq;
 	cHostTrickMode->channelId	= Ctx->OpenRsp.channelId;
-	cHostTrickMode->enable   = enable;	
-	
+	cHostTrickMode->enable   = enable;
+
 	if( (sts=DtsDrvCmd(Ctx,BCM_IOC_FW_CMD,1,pIocData,FALSE)) != BC_STS_SUCCESS){
 		DebugLog_Trace(LDIL_DBG,"DtsFWSetHostTrickMode: Ioctl failed: %d\n",sts);
 		DtsRelIoctlData(Ctx,pIocData);
@@ -930,7 +979,7 @@ DtsFWSetHostTrickMode(
 
 	rspHostTrickMode = (DecRspChannelSetHostTrickMode*)&pIocData->u.fwCmd.rsp;
 	if(rspHostTrickMode->status){
-		DebugLog_Trace(LDIL_DBG,"DtsFWSetHostTrickMode:  Failed %u\n",rspHostTrickMode->status);
+		DebugLog_Trace(LDIL_DBG,"DtsFWSetHostTrickMode:  Failed %d\n",rspHostTrickMode->status);
 		DtsRelIoctlData(Ctx,pIocData);
 		return BC_STS_FW_CMD_ERR;
 	}
@@ -941,10 +990,10 @@ DtsFWSetHostTrickMode(
 
 }
 
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
 DtsFWSetFFRate(
 	HANDLE hDevice,
-	uint32_t	Rate	
+	uint32_t	Rate
 	)
 {
 	BC_STATUS	sts = BC_STS_SUCCESS;
@@ -965,8 +1014,8 @@ DtsFWSetFFRate(
 	cFFRate->command		= eCMD_C011_DEC_CHAN_SET_FF_RATE;
 	cFFRate->sequence	= ++Ctx->fwcmdseq;
 	cFFRate->channelId	= Ctx->OpenRsp.channelId;
-	cFFRate->rate   = Rate;	
-	
+	cFFRate->rate   = Rate;
+
 	if( (sts=DtsDrvCmd(Ctx,BCM_IOC_FW_CMD,1,pIocData,FALSE)) != BC_STS_SUCCESS){
 		DebugLog_Trace(LDIL_DBG,"DtsFWSetFFRate: Ioctl failed: %d\n",sts);
 		DtsRelIoctlData(Ctx,pIocData);
@@ -975,7 +1024,7 @@ DtsFWSetFFRate(
 
 	rspFFRate = (DecRspChannelSetFFRate*)&pIocData->u.fwCmd.rsp;
 	if(rspFFRate->status){
-		DebugLog_Trace(LDIL_DBG,"DtsFWSetFFRate: SetFFRate Failed %u\n",rspFFRate->status);
+		DebugLog_Trace(LDIL_DBG,"DtsFWSetFFRate: SetFFRate Failed %d\n",rspFFRate->status);
 		DtsRelIoctlData(Ctx,pIocData);
 		return BC_STS_FW_CMD_ERR;
 	}
@@ -986,10 +1035,10 @@ DtsFWSetFFRate(
 
 }
 
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
 DtsFWSetSlowMotionRate(
 	HANDLE hDevice,
-	uint32_t	Rate	
+	uint32_t	Rate
 	)
 {
 	BC_STATUS	sts = BC_STS_SUCCESS;
@@ -1013,8 +1062,8 @@ DtsFWSetSlowMotionRate(
 	cSMRate->command = eCMD_C011_DEC_CHAN_SET_SLOWM_RATE;
 	cSMRate->sequence = ++Ctx->fwcmdseq;
 	cSMRate->channelId = Ctx->OpenRsp.channelId;
-	cSMRate->rate = Rate;	
-	
+	cSMRate->rate = Rate;
+
 	if( (sts=DtsDrvCmd(Ctx,BCM_IOC_FW_CMD,1,pIocData,FALSE)) != BC_STS_SUCCESS){
 		DebugLog_Trace(LDIL_DBG,"DtsFWSetFFRate: Ioctl failed: %d\n",sts);
 		DtsRelIoctlData(Ctx,pIocData);
@@ -1023,7 +1072,7 @@ DtsFWSetSlowMotionRate(
 
 	rspSMRate = (DecRspChannelSetSlowMotionRate*)&pIocData->u.fwCmd.rsp;
 	if(rspSMRate->status){
-		DebugLog_Trace(LDIL_DBG,"DtsFWSetFFRate: SetSMRate Failed %u\n",rspSMRate->status);
+		DebugLog_Trace(LDIL_DBG,"DtsFWSetFFRate: SetSMRate Failed %d\n",rspSMRate->status);
 		DtsRelIoctlData(Ctx,pIocData);
 		return BC_STS_FW_CMD_ERR;
 	}
@@ -1034,10 +1083,10 @@ DtsFWSetSlowMotionRate(
 
 }
 
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
 DtsFWSetSkipPictureMode(
 	HANDLE hDevice,
-	uint32_t	SkipMode	
+	uint32_t	SkipMode
 	)
 {
 	BC_STATUS	sts = BC_STS_SUCCESS;
@@ -1058,8 +1107,8 @@ DtsFWSetSkipPictureMode(
 	cSkipPictureMode->command		= eCMD_C011_DEC_CHAN_SET_SKIP_PIC_MODE;
 	cSkipPictureMode->sequence	= ++Ctx->fwcmdseq;
 	cSkipPictureMode->channelId	= Ctx->OpenRsp.channelId;
-	cSkipPictureMode->skipMode   = (eC011_SKIP_PIC_MODE)SkipMode;	
-	
+	cSkipPictureMode->skipMode   = (eC011_SKIP_PIC_MODE)SkipMode;
+
 	if( (sts=DtsDrvCmd(Ctx,BCM_IOC_FW_CMD,1,pIocData,FALSE)) != BC_STS_SUCCESS){
 		DebugLog_Trace(LDIL_DBG,"DtsFWSetSkipPictureMode: Ioctl failed: %d\n",sts);
 		DtsRelIoctlData(Ctx,pIocData);
@@ -1068,7 +1117,7 @@ DtsFWSetSkipPictureMode(
 
 	rspSkipPictureMode = (DecRspChannelSetSkipPictureMode*)&pIocData->u.fwCmd.rsp;
 	if(rspSkipPictureMode->status){
-		DebugLog_Trace(LDIL_DBG,"DtsFWSetSkipPictureMode: SkipPictureMode Failed %u\n",rspSkipPictureMode->status);
+		DebugLog_Trace(LDIL_DBG,"DtsFWSetSkipPictureMode: SkipPictureMode Failed %d\n",rspSkipPictureMode->status);
 		DtsRelIoctlData(Ctx,pIocData);
 		return BC_STS_FW_CMD_ERR;
 	}
@@ -1079,9 +1128,9 @@ DtsFWSetSkipPictureMode(
 
 }
 
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
 DtsFWFrameAdvance(
-    HANDLE  hDevice	
+    HANDLE  hDevice
 	)
 {
 	BC_STATUS	sts = BC_STS_SUCCESS;
@@ -1101,8 +1150,8 @@ DtsFWFrameAdvance(
 	cFrameAdvance = (DecCmdChannelFrameAdvance *)&pIocData->u.fwCmd.cmd;
 	cFrameAdvance->command		= eCMD_C011_DEC_CHAN_FRAME_ADVANCE;
 	cFrameAdvance->sequence	= ++Ctx->fwcmdseq;
-	cFrameAdvance->channelId	= Ctx->OpenRsp.channelId;	
-	
+	cFrameAdvance->channelId	= Ctx->OpenRsp.channelId;
+
 	if( (sts=DtsDrvCmd(Ctx,BCM_IOC_FW_CMD,1,pIocData,FALSE)) != BC_STS_SUCCESS){
 		DebugLog_Trace(LDIL_DBG,"DtsFWFrameAdvance: Ioctl failed: %d\n",sts);
 		DtsRelIoctlData(Ctx,pIocData);
@@ -1111,7 +1160,7 @@ DtsFWFrameAdvance(
 
 	rspFrameAdvance = (DecRspChannelFrameAdvance*)&pIocData->u.fwCmd.rsp;
 	if(rspFrameAdvance->status){
-		DebugLog_Trace(LDIL_DBG,"DtsFWFrameAdvance: Failed %u\n",rspFrameAdvance->status);
+		DebugLog_Trace(LDIL_DBG,"DtsFWFrameAdvance: Failed %d\n",rspFrameAdvance->status);
 		DtsRelIoctlData(Ctx,pIocData);
 		return BC_STS_FW_CMD_ERR;
 	}
@@ -1121,10 +1170,10 @@ DtsFWFrameAdvance(
 	return BC_STS_SUCCESS;
 }
 
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
 DtsFWSetContentKeys(
 	HANDLE hDevice,
-	uint8_t	*buffer,
+	uint8_t		*buffer,
 	uint32_t	Length,
 	uint32_t	flags
 	)
@@ -1156,7 +1205,7 @@ DtsFWSetContentKeys(
 		cKeys->flags |= BC_BIT(17);
 	temp = ((uint8_t *)cKeys) + 16;
 	memcpy(temp, buffer, Length);
-	
+
 	if( (sts=DtsDrvCmd(Ctx,BCM_IOC_FW_CMD,1,pIocData,FALSE)) != BC_STS_SUCCESS){
 		DebugLog_Trace(LDIL_DBG,"DtsFWSetFFRate: Ioctl failed: %d\n",sts);
 		DtsRelIoctlData(Ctx,pIocData);
@@ -1165,7 +1214,7 @@ DtsFWSetContentKeys(
 
 	rspcKeys = (DecRspSetContentKey*)&pIocData->u.fwCmd.rsp;
 	if(rspcKeys->status){
-		DebugLog_Trace(LDIL_DBG,"DtsFWSetContentKeys: Failed %u\n",rspcKeys->status);
+		DebugLog_Trace(LDIL_DBG,"DtsFWSetContentKeys: Failed %d\n",rspcKeys->status);
 		DtsRelIoctlData(Ctx,pIocData);
 		return BC_STS_FW_CMD_ERR;
 	}
@@ -1175,7 +1224,7 @@ DtsFWSetContentKeys(
 	return BC_STS_SUCCESS;
 }
 
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
 DtsFWSetSessionKeys(
 	HANDLE hDevice,
 	uint8_t	*buffer,
@@ -1208,7 +1257,7 @@ DtsFWSetSessionKeys(
 	sKey->flags = flags;
 	temp = ((uint8_t *)sKey) + 16;
 	memcpy(temp, buffer, Length);
-	
+
 	if( (sts=DtsDrvCmd(Ctx,BCM_IOC_FW_CMD,1,pIocData,FALSE)) != BC_STS_SUCCESS){
 		DebugLog_Trace(LDIL_DBG,"DtsFWSetFFRate: Ioctl failed: %d\n",sts);
 		DtsRelIoctlData(Ctx,pIocData);
@@ -1217,7 +1266,7 @@ DtsFWSetSessionKeys(
 
 	rspsKey = (DecRspSetSessionKey*)&pIocData->u.fwCmd.rsp;
 	if(rspsKey->status){
-		DebugLog_Trace(LDIL_DBG,"DtsFWSetSessionKey: Failed %u\n",rspsKey->status);
+		DebugLog_Trace(LDIL_DBG,"DtsFWSetSessionKey: Failed %d\n",rspsKey->status);
 		DtsRelIoctlData(Ctx,pIocData);
 		return BC_STS_FW_CMD_ERR;
 	}
@@ -1246,7 +1295,7 @@ DtsFormatChangeAck(HANDLE hDevice, uint32_t flags)
 	Ack->sequence = ++Ctx->fwcmdseq;
 	Ack->channelId = Ctx->OpenRsp.channelId;
 	Ack->flags = flags;
-	
+
 	if( (sts=DtsDrvCmd(Ctx,BCM_IOC_FW_CMD,1,pIocData,FALSE)) != BC_STS_SUCCESS){
 		DebugLog_Trace(LDIL_DBG,"DtsFormatChangeAck: Ioctl failed: %d\n",sts);
 		DtsRelIoctlData(Ctx,pIocData);
@@ -1255,7 +1304,7 @@ DtsFormatChangeAck(HANDLE hDevice, uint32_t flags)
 
 	rspAck = (DecRspFormatChangeAck*) &pIocData->u.fwCmd.rsp;
 	if(rspAck->status){
-		DebugLog_Trace(LDIL_DBG,"DtsFormatChangeAck: Failed %u\n",rspAck->status);
+		DebugLog_Trace(LDIL_DBG,"DtsFormatChangeAck: Failed %d\n",rspAck->status);
 		DtsRelIoctlData(Ctx,pIocData);
 		return BC_STS_FW_CMD_ERR;
 	}
@@ -1264,7 +1313,7 @@ DtsFormatChangeAck(HANDLE hDevice, uint32_t flags)
 	return BC_STS_SUCCESS;
 }
 
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
 DtsFWDrop(
 	HANDLE hDevice,
 	uint32_t	Pictures
@@ -1281,6 +1330,17 @@ DtsFWDrop(
 
 	DTS_GET_CTX(hDevice,Ctx);
 
+	if(Ctx->State == BC_DEC_STATE_CLOSE)
+	{
+		DebugLog_Trace(LDIL_DBG,"DtsFWDrop: Channel is not Open\n");
+		return BC_STS_DEC_NOT_OPEN;
+	}
+
+	if(Ctx->State == BC_DEC_STATE_STOP)
+	{
+		DebugLog_Trace(LDIL_DBG,"DtsFWDrop: Channel is not Start\n");
+		return BC_STS_DEC_NOT_STARTED;
+	}
 	if(!(pIocData = DtsAllocIoctlData(Ctx)))
 		return BC_STS_INSUFF_RES;
 
@@ -1290,7 +1350,7 @@ DtsFWDrop(
 	cDrop->channelId    = Ctx->OpenRsp.channelId;
     cDrop->numPicDrop   = Pictures;
 	cDrop->dropType     = eC011_DROP_TYPE_DECODER; // Do not skip reference types.
-	
+
 	if( (sts=DtsDrvCmd(Ctx,BCM_IOC_FW_CMD,1,pIocData,FALSE)) != BC_STS_SUCCESS){
 		DebugLog_Trace(LDIL_DBG,"DtsFWDrop: Ioctl failed: %d\n",sts);
 		DtsRelIoctlData(Ctx,pIocData);
@@ -1299,7 +1359,7 @@ DtsFWDrop(
 
 	rspDrop = (DecRspChannelDrop*)&pIocData->u.fwCmd.rsp;
 	if(rspDrop->status){
-		DebugLog_Trace(LDIL_DBG,"DtsFWDrop: Drop Failed %u\n",rspDrop->status);
+		DebugLog_Trace(LDIL_DBG,"DtsFWDrop: Drop Failed %d\n",rspDrop->status);
 		DtsRelIoctlData(Ctx,pIocData);
 		return BC_STS_FW_CMD_ERR;
 	}

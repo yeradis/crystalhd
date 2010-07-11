@@ -41,6 +41,10 @@
 
 #define	 BC_EOS_DETECTED		0xffffffff
 
+uint32_t	g_nRefNum = 0;
+
+uint32_t	g_nDrvHandleCnt = 0;
+
 /*============== Global shared area usage ======================*/
 /* Global mode settings */
 /*
@@ -250,6 +254,12 @@ BC_DTS_STATS * DtsGetgStats ( void )
 
 }
 
+uint32_t DtsGetRefNum()
+{
+	return g_nRefNum++;
+}
+
+
 /*============== Global shared area usage End.. ======================*/
 
 #define TOP_FIELD_FLAG				0x01
@@ -273,19 +283,28 @@ static void DtsGetMaxSize(DTS_LIB_CONTEXT *Ctx, uint32_t *Sz)
 static void DtsInitLock(DTS_LIB_CONTEXT	*Ctx)
 {
 	//Create mutex
-	pthread_mutex_init(&Ctx->thLock, NULL);
-
+	int ret;
+	pthread_mutexattr_t thLockattr;
+	ret = pthread_mutexattr_init(&thLockattr);
+	if(ret)
+		DebugLog_Trace(LDIL_DBG, "Error initializing attributes\n");
+	ret = pthread_mutexattr_settype(&thLockattr, PTHREAD_MUTEX_RECURSIVE);
+	if(ret)
+		DebugLog_Trace(LDIL_DBG, "Error setting type of mutex\n");
+	ret = pthread_mutex_init(&Ctx->thLock, &thLockattr);
+	if(ret)
+		DebugLog_Trace(LDIL_DBG, "Error initializing mutex\n");
 }
 static void DtsDelLock(DTS_LIB_CONTEXT	*Ctx)
 {
 	pthread_mutex_destroy(&Ctx->thLock);
 
 }
-static void DtsLock(DTS_LIB_CONTEXT	*Ctx)
+void DtsLock(DTS_LIB_CONTEXT	*Ctx)
 {
 	pthread_mutex_lock(&Ctx->thLock);
 }
-static void DtsUnLock(DTS_LIB_CONTEXT	*Ctx)
+void DtsUnLock(DTS_LIB_CONTEXT	*Ctx)
 {
 	pthread_mutex_unlock(&Ctx->thLock);
 }
@@ -431,28 +450,28 @@ static BC_STATUS DtsGetPictureInfo(DTS_LIB_CONTEXT *Ctx, BC_DTS_PROC_OUT *pOut)
 
 	if (Ctx->DevId == BC_PCI_DEVID_FLEA)
 	{
-		PicInfoLineNum = *(ULONG *)(pOut->Ybuff);
+		PicInfoLineNum = *(uint32_t *)(pOut->Ybuff);
 	}
 	else if (Ctx->b422Mode == OUTPUT_MODE422_YUY2)
 	{
-		PicInfoLineNum = ((ULONG)(*(pOut->Ybuff + 6)) & 0xff)
-						| (((ULONG)(*(pOut->Ybuff + 4)) << 8)  & 0x0000ff00)
-						| (((ULONG)(*(pOut->Ybuff + 2)) << 16) & 0x00ff0000)
-						| (((ULONG)(*(pOut->Ybuff + 0)) << 24) & 0xff000000);
+		PicInfoLineNum = ((uint32_t)(*(pOut->Ybuff + 6)) & 0xff)
+						| (((uint32_t)(*(pOut->Ybuff + 4)) << 8)  & 0x0000ff00)
+						| (((uint32_t)(*(pOut->Ybuff + 2)) << 16) & 0x00ff0000)
+						| (((uint32_t)(*(pOut->Ybuff + 0)) << 24) & 0xff000000);
 	}
 	else if (Ctx->b422Mode == OUTPUT_MODE422_UYVY)
 	{
-		PicInfoLineNum = ((ULONG)(*(pOut->Ybuff + 7)) & 0xff)
-						| (((ULONG)(*(pOut->Ybuff + 5)) << 8)  & 0x0000ff00)
-						| (((ULONG)(*(pOut->Ybuff + 3)) << 16) & 0x00ff0000)
-						| (((ULONG)(*(pOut->Ybuff + 1)) << 24) & 0xff000000);
+		PicInfoLineNum = ((uint32_t)(*(pOut->Ybuff + 7)) & 0xff)
+						| (((uint32_t)(*(pOut->Ybuff + 5)) << 8)  & 0x0000ff00)
+						| (((uint32_t)(*(pOut->Ybuff + 3)) << 16) & 0x00ff0000)
+						| (((uint32_t)(*(pOut->Ybuff + 1)) << 24) & 0xff000000);
 	}
 	else
 	{
-		PicInfoLineNum = ((ULONG)(*(pOut->Ybuff + 3)) & 0xff)
-						| (((ULONG)(*(pOut->Ybuff + 2)) << 8)  & 0x0000ff00)
-						| (((ULONG)(*(pOut->Ybuff + 1)) << 16) & 0x00ff0000)
-						| (((ULONG)(*(pOut->Ybuff + 0)) << 24) & 0xff000000);
+		PicInfoLineNum = ((uint32_t)(*(pOut->Ybuff + 3)) & 0xff)
+						| (((uint32_t)(*(pOut->Ybuff + 2)) << 8)  & 0x0000ff00)
+						| (((uint32_t)(*(pOut->Ybuff + 1)) << 16) & 0x00ff0000)
+						| (((uint32_t)(*(pOut->Ybuff + 0)) << 24) & 0xff000000);
 	}
 
 	if (PicInfoLineNum == BC_EOS_DETECTED)  // EOS
@@ -615,16 +634,16 @@ BOOL DtsCheckRptPic(DTS_LIB_CONTEXT *Ctx, BC_DTS_PROC_OUT *pOut)
 {
 	BOOL bRepeat = FALSE;
 	uint8_t nCheckFlag = TOP_FIELD_FLAG;
-	
+
 	if (pOut->PicInfo.picture_number  <3)
 		return FALSE;
-	
+
 	if (Ctx->bEOS == TRUE)
 	{
 		pOut->PicInfo.flags |= VDEC_FLAG_LAST_PICTURE;
 		return TRUE;
 	}
-	
+
 	if (Ctx->LastPicNum == pOut->PicInfo.picture_number && Ctx->LastSessNum == pOut->PicInfo.sess_num)
 	{
 		if (Ctx->VidParams.Progressive)
@@ -633,12 +652,12 @@ BOOL DtsCheckRptPic(DTS_LIB_CONTEXT *Ctx, BC_DTS_PROC_OUT *pOut)
 			nCheckFlag = BOTTOM_FIELD_FLAG;
 		else
 			nCheckFlag = TOP_FIELD_FLAG;
-		
+
 		//Discard for PullDown
 		int nShift = 2;
 		uint8_t nFlag = Ctx->PullDownFlag;
 		bool bFound = false;
-		
+
 		while(nFlag)
 		{
 			if((nFlag & 0x03) == nCheckFlag)
@@ -649,10 +668,10 @@ BOOL DtsCheckRptPic(DTS_LIB_CONTEXT *Ctx, BC_DTS_PROC_OUT *pOut)
 			nFlag = nFlag >> 2;
 			nShift += 2;
 		}
-		
+
 		if(!bFound)
 			bRepeat = true;
-		
+
 		Ctx->PullDownFlag = Ctx->PullDownFlag >> nShift;
 	}
 	else
@@ -707,13 +726,13 @@ BOOL DtsCheckRptPic(DTS_LIB_CONTEXT *Ctx, BC_DTS_PROC_OUT *pOut)
 		}
 		Ctx->EOSCnt = 0;
 	}
-	
-	
+
+
 	if (Ctx->bEOSCheck && Ctx->bEOS == FALSE)
 	{
 		if (bRepeat == TRUE)
 			Ctx->EOSCnt ++;
-		
+
 		if (Ctx->EOSCnt >= BC_EOS_PIC_COUNT)
 		{
 			Ctx->bEOS = TRUE;
@@ -722,7 +741,7 @@ BOOL DtsCheckRptPic(DTS_LIB_CONTEXT *Ctx, BC_DTS_PROC_OUT *pOut)
 	}
 	Ctx->LastPicNum = pOut->PicInfo.picture_number;
 	Ctx->LastSessNum = pOut->PicInfo.sess_num;
-	
+
 	return bRepeat;
 }
 
@@ -759,7 +778,7 @@ static void DtsSetupProcOutInfo(DTS_LIB_CONTEXT *Ctx, BC_DTS_PROC_OUT *pOut, BC_
 		Ctx->picHeight = pIo->u.DecOutData.PibInfo.height;
 		pOut->PoutFlags |= BC_POUT_FLAGS_FMT_CHANGE;
 		pOut->PicInfo.frame_rate = pIo->u.DecOutData.PibInfo.frame_rate;
-		DebugLog_Trace(LDIL_DBG,"FormatCh:Height:%x Width:%x Res:%x\n",pOut->PicInfo.height,pOut->PicInfo.width,pOut->PicInfo.frame_rate);
+		DebugLog_Trace(LDIL_DBG,"FormatCh:Height:%d Width:%d Res:%x\n",pOut->PicInfo.height,pOut->PicInfo.width,pOut->PicInfo.frame_rate);
 		if(pIo->u.DecOutData.Flags & COMP_FLAG_DATA_VALID){
 			DebugLog_Trace(LDIL_DBG,"Error: Data not expected with F/C \n");
 			return;
@@ -816,8 +835,6 @@ static BC_STATUS	DtsCreateMdataPool(DTS_LIB_CONTEXT *Ctx)
 	Ctx->MDPendTail = DTS_MDATA_PEND_LINK(Ctx);
 	Ctx->InMdataTag = 0;
 
-	DebugLog_Trace(LDIL_DBG,"Mdata Pool Created...\n");
-
 	return BC_STS_SUCCESS;
 }
 
@@ -861,7 +878,6 @@ static BC_STATUS DtsDeleteMdataPool(DTS_LIB_CONTEXT *Ctx)
 	temp = Ctx->MDPendHead;
 
 	while(temp && temp != DTS_MDATA_PEND_LINK(Ctx)){
-		DebugLog_Trace(LDIL_DBG,"Clearing InMdata %p %x \n", temp->Spes.SeqNum, temp->IntTag);
 		DtsRemoveMdata(Ctx,temp,FALSE);
 		temp = Ctx->MDPendHead;
 	}
@@ -875,8 +891,6 @@ static BC_STATUS DtsDeleteMdataPool(DTS_LIB_CONTEXT *Ctx)
 	}
 
 	DtsUnLock(Ctx);
-
-	DebugLog_Trace(LDIL_DBG,"Deleted Mdata Pool...\n");
 
 	return BC_STS_SUCCESS;
 }
@@ -992,7 +1006,7 @@ BC_STATUS DtsDrvCmd(DTS_LIB_CONTEXT	*Ctx,
 	Sts = pIo->RetSts;
 	if (locRel || Rel)
 		DtsRelIoctlData(Ctx, pIo);
-	
+
 	if (rc < 0) {
 		DebugLog_Trace(LDIL_DBG,"IOCTL Command Failed %d cmd %x sts %d\n", rc, Code, Sts);
 		return BC_STS_ERROR;
@@ -1041,7 +1055,6 @@ BC_IOCTL_DATA *DtsAllocIoctlData(DTS_LIB_CONTEXT *Ctx)
 BC_STATUS DtsAllocMemPools(DTS_LIB_CONTEXT *Ctx)
 {
 	uint32_t	i, Sz;
-	int ret=0;
 	DTS_MPOOL_TYPE	*mp;
 	BC_IOCTL_DATA *pIoData;
 	BC_STATUS	sts = BC_STS_SUCCESS;
@@ -1064,12 +1077,6 @@ BC_STATUS DtsAllocMemPools(DTS_LIB_CONTEXT *Ctx)
 	Ctx->pOutData = (BC_IOCTL_DATA *) malloc(sizeof(BC_IOCTL_DATA));
 	if(!Ctx->pOutData){
 		DebugLog_Trace(LDIL_DBG,"DtsInitMemPools: pOutData \n");
-		return BC_STS_INSUFF_RES;
-	}
-
-	ret = sem_init(&Ctx->CancelProcOut,0,0);
-	if(ret == -1) {
-		DebugLog_Trace(LDIL_DBG,"Unable to create event\n");
 		return BC_STS_INSUFF_RES;
 	}
 
@@ -1172,6 +1179,7 @@ void DtsReleaseMemPools(DTS_LIB_CONTEXT *Ctx)
 		}
 		free(Ctx->Mpools);
 	}
+
 	/* Release IOCTL_DATA pool */
     while((pIoData=DtsAllocIoctlData(Ctx))!=NULL){
 		free(pIoData);
@@ -1185,15 +1193,12 @@ void DtsReleaseMemPools(DTS_LIB_CONTEXT *Ctx)
 	if(Ctx->pOutData)
 		free(Ctx->pOutData);
 
-	if(&Ctx->CancelProcOut)
-		sem_destroy(&Ctx->CancelProcOut);
-
-
 	if(Ctx->MdataPoolPtr)
 		DtsDeleteMdataPool(Ctx);
 
 	if (Ctx->VidParams.pMetaData)
 		free(Ctx->VidParams.pMetaData);
+
 	DtsDelLock(Ctx);
 }
 void DtsReleaseMemPools_dbg(DTS_LIB_CONTEXT *Ctx)
@@ -1339,9 +1344,6 @@ BC_STATUS DtsFetchOutInterruptible(DTS_LIB_CONTEXT *Ctx, BC_DTS_PROC_OUT *pOut, 
 		DtsRelRxBuff(Ctx,&Ctx->pOutData->u.RxBuffs,FALSE);
 	}
 
-	if(sem_post(&Ctx->CancelProcOut) == -1) {
-		DebugLog_Trace(LDIL_DBG, "SetEvent for CancelProcOut Failed (Error)\n");
-	}
 	return sts;
 }
 //------------------------------------------------------------------------
@@ -1350,27 +1352,29 @@ BC_STATUS DtsFetchOutInterruptible(DTS_LIB_CONTEXT *Ctx, BC_DTS_PROC_OUT *pOut, 
 //------------------------------------------------------------------------
 BC_STATUS DtsCancelFetchOutInt(DTS_LIB_CONTEXT *Ctx)
 {
-	struct timespec ts;
-
-	DebugLog_Trace(LDIL_DBG,"DtsCancelFetchOutInt: Called\n");
+	bool pend = false;
+	uint32_t cnt;
 
 	if(!(DtsIsPend(Ctx))){
-		DebugLog_Trace(LDIL_DBG,"DtsCancelFetchOutInt: No Pending Req\n");
 		return BC_STS_SUCCESS;
 	}
 
 	Ctx->CancelWaiting = 1;
 
-	ts.tv_sec=time(NULL)+(BC_PROC_OUTPUT_TIMEOUT/1000)+2;
-        ts.tv_nsec=0;
+	/* Worst case scenerio the timeout should happen.. */
+	cnt = BC_PROC_OUTPUT_TIMEOUT / 100;
 
-	if(sem_timedwait(&Ctx->CancelProcOut,&ts)){
-		if(errno == ETIMEDOUT){
-			DebugLog_Trace(LDIL_DBG,"DtsCancelFetchOutInt: TimeOut\n");
-			Ctx->CancelWaiting = 0;
-			return BC_STS_TIMEOUT;
-		}
+	do{
+		usleep(100 * 1000);
+		pend = DtsIsPend(Ctx);
+	}while( (pend) && (cnt--) );
+
+	if(pend){
+		DebugLog_Trace(LDIL_DBG,"DtsCancelFetchOutInt: TimeOut\n");
+		Ctx->CancelWaiting = 0;
+		return BC_STS_TIMEOUT;
 	}
+
 	Ctx->CancelWaiting = 0;
 
 	return BC_STS_SUCCESS;
@@ -1416,7 +1420,7 @@ BC_STATUS DtsInitInterface(int hDevice,HANDLE *RetCtx, uint32_t mode)
 	DTS_LIB_CONTEXT *Ctx = NULL;
 	BC_STATUS	sts = BC_STS_SUCCESS;
 	pthread_attr_t thread_attr;
-	
+
 	Ctx = (DTS_LIB_CONTEXT*)malloc(sizeof(*Ctx));
 	if(!Ctx){
 		DebugLog_Trace(LDIL_DBG,"DtsInitInterface: Ctx alloc failed\n");
@@ -1435,7 +1439,7 @@ BC_STATUS DtsInitInterface(int hDevice,HANDLE *RetCtx, uint32_t mode)
 	Ctx->VidParams.MediaSubType = BC_MSUBTYPE_INVALID;
 	Ctx->VidParams.StartCodeSz = 0;
 	Ctx->VidParams.StreamType = BC_STREAM_TYPE_ES;
-	Ctx->InSampleCount = 0;
+//	Ctx->InSampleCount = 0;
 	/* Set Pixel height & width */
 	if(Ctx->CfgFlags & BC_PIX_WID_1080){
 		Ctx->VidParams.HeightInPixels = 1080;
@@ -1470,7 +1474,7 @@ BC_STATUS DtsInitInterface(int hDevice,HANDLE *RetCtx, uint32_t mode)
 	pthread_attr_destroy(&thread_attr);
 
 	posix_memalign((void**)&Ctx->alignBuf, 128, ALIGN_BUF_SIZE);
-	
+
 	*RetCtx = (HANDLE)Ctx;
 
 	return sts;
@@ -1568,8 +1572,6 @@ BC_STATUS DtsReleaseInterface(DTS_LIB_CONTEXT *Ctx)
 #ifdef _USE_SHMEM_
 	DtsDelDilShMem();
 #endif
-
-	DebugLog_Trace(LDIL_DBG,"DtsDeviceClose: Invoked\n");
 
 	if(close(Ctx->DevHandle)!=0) //Zero if success
 	{
@@ -1801,7 +1803,7 @@ BC_STATUS DtsFetchMdata(DTS_LIB_CONTEXT *Ctx, uint16_t snum, BC_DTS_PROC_OUT *po
 	BC_STATUS	sts = BC_STS_NO_DATA;
 	int16_t tsnum = 0;
 	uint32_t i = 0;
-	
+
 	if(!Ctx || !pout){
 		return BC_STS_INV_ARG;
 	}
@@ -1974,9 +1976,9 @@ void DtsUpdateInStats(DTS_LIB_CONTEXT	*Ctx, uint32_t	size)
 	pDtsStat->ipTotalSize += size;
 	pDtsStat->TxFifoBsyCnt = 0;
 
-	Ctx->InSampleCount ++;
-	if (Ctx->InSampleCount > 65530)
-		Ctx->InSampleCount = 1;
+// 	Ctx->InSampleCount ++;
+// 	if (Ctx->InSampleCount > 65530)
+// 		Ctx->InSampleCount = 1;
 
 	return;
 }
@@ -2178,13 +2180,13 @@ BC_STATUS txBufPush(pTXBUFFER txBuf, uint8_t* bufToPush, uint32_t sizeToPush)
 {
 	uint32_t mcpySz = 0, sizeTop = 0;
 	uint8_t* bufRemain = bufToPush;
-	
+
 	if(txBuf == NULL || bufToPush == NULL)
 		return BC_STS_INV_ARG;
-	
+
 	if(txBuf->freeSize < sizeToPush)
 		return BC_STS_INSUFF_RES;
-	
+
 	// How much will fit before we need to wrap
 	sizeTop = (uint32_t)(txBuf->endPointer - (txBuf->basePointer + txBuf->writePointer) + 1);
 	if(sizeToPush <= sizeTop)
@@ -2193,14 +2195,14 @@ BC_STATUS txBufPush(pTXBUFFER txBuf, uint8_t* bufToPush, uint32_t sizeToPush)
 		mcpySz = sizeTop;
 
 	memcpy(txBuf->basePointer + txBuf->writePointer, bufToPush, mcpySz);
-	
+
 	txBuf->writePointer = (txBuf->writePointer + mcpySz) % txBuf->totalSize;
 
 	pthread_mutex_lock(&txBuf->pushpopLock);
 	txBuf->busySize += mcpySz;
 	txBuf->freeSize -= mcpySz;
 	pthread_mutex_unlock(&txBuf->pushpopLock);
-	
+
 	if((sizeToPush - mcpySz) != 0)
 	{
 		// Can only get here if we wrap at the top
@@ -2215,7 +2217,7 @@ BC_STATUS txBufPush(pTXBUFFER txBuf, uint8_t* bufToPush, uint32_t sizeToPush)
 		txBuf->freeSize -= mcpySz;
 		pthread_mutex_unlock(&txBuf->pushpopLock);
 	}
-	
+
 	return BC_STS_SUCCESS;
 }
 
@@ -2226,29 +2228,29 @@ BC_STATUS txBufPop(pTXBUFFER txBuf, uint8_t* bufToPop, uint32_t sizeToPop)
 {
 	uint32_t popSz = 0, sizeTop = 0;
 	uint8_t* bufRemain = bufToPop;
-	
+
 	if(txBuf == NULL)
 		return BC_STS_INV_ARG;
-	
+
 	if(sizeToPop > txBuf->busySize)
 		return BC_STS_INV_ARG;
-	
+
 	pthread_mutex_lock(&txBuf->flushLock);
 	sizeTop = (uint32_t)(txBuf->endPointer - (txBuf->basePointer + txBuf->readPointer) + 1);
 	if(sizeToPop <= sizeTop)
 		popSz = sizeToPop;
 	else
 		popSz = sizeTop;
-	
+
 	memcpy(bufToPop, txBuf->basePointer + txBuf->readPointer, popSz);
-	
+
 	txBuf->readPointer = (txBuf->readPointer + popSz) % txBuf->totalSize;
 
 	pthread_mutex_lock(&txBuf->pushpopLock);
 	txBuf->busySize -= popSz;
 	txBuf->freeSize += popSz;
 	pthread_mutex_unlock(&txBuf->pushpopLock);
-	
+
 	if((sizeToPop - popSz) != 0)
 	{
 		// Can only get here if we wrap at the top
@@ -2263,7 +2265,7 @@ BC_STATUS txBufPop(pTXBUFFER txBuf, uint8_t* bufToPop, uint32_t sizeToPop)
 		txBuf->freeSize += popSz;
 		pthread_mutex_unlock(&txBuf->pushpopLock);
 	}
-	
+
 	pthread_mutex_unlock(&txBuf->flushLock);
 	return BC_STS_SUCCESS;
 }
@@ -2310,15 +2312,15 @@ void * txThreadProc(void *ctx)
 	BC_DTS_STATUS pStat;
 
 	posix_memalign((void**)&localBuffer, 128, CIRC_TX_BUF_SIZE);
-	
+
 	while(!Ctx->txThreadExit)
 	{
-		// Check if we have data to send. Not really necessary, but just leave it here for sanity checking
+		// Check if we have data to send.
 		if(Ctx->circBuf.busySize != 0)
 		{
 			// Get the real HW free size and also mark as we want TX information only
 			pStat.cpbEmptySize = (0x3 << 31);
-			
+
 			sts = DtsGetDriverStatus(hDevice, &pStat);
 			if(sts != BC_STS_SUCCESS)
 			{
@@ -2326,13 +2328,13 @@ void * txThreadProc(void *ctx)
 				// For now just try again
 				pStat.cpbEmptySize = 0;
 			}
-			
+
 			if(pStat.cpbEmptySize == 0)
 			{
-				usleep(100);
+				usleep(3000);
 				continue;
 			}
-			
+
 			if(Ctx->circBuf.busySize < pStat.cpbEmptySize)
 				szDataToSend = Ctx->circBuf.busySize;
 			else
@@ -2341,7 +2343,7 @@ void * txThreadProc(void *ctx)
 			if(Ctx->VidParams.VideoAlgo == BC_VID_ALGO_VC1MP)
 				encrypted |= 0x2;
 			sts = DtsTxDmaText(hDevice, localBuffer, szDataToSend, &dramOff, encrypted);
-			
+
 			if(sts == BC_STS_SUCCESS)
 			{
 				DtsUpdateInStats(Ctx, szDataToSend);
@@ -2352,7 +2354,7 @@ void * txThreadProc(void *ctx)
 			}
 		} else
 			usleep(5 * 1000);
-		
+
 	}
 	free(localBuffer);
 	localBuffer = NULL;

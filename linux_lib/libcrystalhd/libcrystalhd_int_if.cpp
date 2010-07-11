@@ -386,7 +386,6 @@ DtsSetProgressive(
 	DTS_GET_CTX(hDevice,Ctx);
 	if(Ctx->DevId != BC_PCI_DEVID_LINK && Ctx->DevId != BC_PCI_DEVID_DOZER)
 	{
-		DebugLog_Trace(LDIL_DBG,"DtsSetProgressive Not Supported for Flea. Returning Success\n");
 		return BC_STS_SUCCESS;
 	}
 
@@ -1254,8 +1253,6 @@ DtsRstDrvStat(
 
 	/* DIL related counters */
 	DtsRstStats( );
-
-	DebugLog_Trace(LDIL_DBG,"Cleared all stats\n");
 
 	DtsRelIoctlData(Ctx,pIocData);
 

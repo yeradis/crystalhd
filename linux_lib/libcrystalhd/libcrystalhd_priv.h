@@ -70,11 +70,11 @@ enum _crystalhd_ldil_globals {
 };
 
 enum _DtsRunState {
-	BC_DEC_STATE_INVALID	= 0x00,
-	BC_DEC_STATE_OPEN	= 0x01,
-	BC_DEC_STATE_START	= 0x02,
-	BC_DEC_STATE_PAUSE	= 0x03,
-	BC_DEC_STATE_STOP	= 0x04
+	BC_DEC_STATE_CLOSE		= 0x00,
+	BC_DEC_STATE_STOP		= 0x01,
+	BC_DEC_STATE_START		= 0x02,
+	BC_DEC_STATE_PAUSE		= 0x03,
+	BC_DEC_STATE_FLUSH		= 0x04
 };
 
 /* Bit fields */
@@ -228,7 +228,6 @@ typedef struct _DTS_LIB_CONTEXT{
 	/* Proc Output Related */
 	BOOL			ProcOutPending;	/* To avoid muliple ProcOuts */
 	BOOL			CancelWaiting;	/* Notify FetchOut to signal */
-	sem_t			CancelProcOut;	/* Cancel outstanding ProcOut Request */
 
 	/* pOutData is dedicated for ProcOut() use only. Every other
 	 * Interface should use the memory from IocData pool. This
@@ -286,7 +285,7 @@ typedef struct _DTS_LIB_CONTEXT{
 	uint8_t			SingleThreadedAppMode;	/* flag to indicate that we are running in single threaded mode */
 	PES_CONVERT_PARAMS PESConvParams;
 	BC_HW_CAPS		capInfo;
-	uint16_t		InSampleCount;
+//	uint16_t		InSampleCount;
 	uint8_t			bMapOutBufDone;
 
 	BC_PIC_INFO_BLOCK	FormatInfo;
@@ -296,8 +295,12 @@ typedef struct _DTS_LIB_CONTEXT{
 	pthread_t		htxThread; // Handle to TX thread
     uint8_t* 		alignBuf;
 
-	uint8_t			bScaling;
-	
+	uint32_t		EnableScaling;
+	uint8_t			bEnable720pDropHalf;
+	pid_t			ProcessID;
+	uint32_t		nRefNum;
+	uint32_t		DrvMode;
+
 }DTS_LIB_CONTEXT;
 
 /* Helper macro to get lib context from user handle */
@@ -390,7 +393,10 @@ BC_STATUS DtsUpdateVidParams(DTS_LIB_CONTEXT *Ctx, BC_DTS_PROC_OUT *pOut);
 
 /*============== Global shared area usage ======================*/
 
-#define BC_DIL_HWINIT_IN_PROGRESS 1
+#define BC_DIL_HWINIT_NOT_YET		0
+#define BC_DIL_HWINIT_IN_PROGRESS	1
+#define BC_DIL_HWINIT_DONE			2
+
 #ifdef _USE_SHMEM_
 #define BC_DIL_SHMEM_KEY 0xBABEFACE
 
@@ -412,6 +418,17 @@ uint32_t DtsGetHwInitSts( void );
 void DtsSetHwInitSts( uint32_t value );
 void DtsRstStats( void ) ;
 BC_DTS_STATS * DtsGetgStats ( void );
+
+uint32_t DtsGetRefNum();
+BC_STATUS DtsGetDevType(uint32_t *pDevID, uint32_t *pVendID, uint32_t *pRevID);
+uint32_t DtsGetDevID();
+
+uint8_t DtsIsDecOpened(pid_t nNewPID);
+void DtsSetDecStat(bool bDecOpen, pid_t PID);
+bool DtsChkPID(pid_t nCurPID);
+
+void DtsLock(DTS_LIB_CONTEXT	*Ctx);
+void DtsUnLock(DTS_LIB_CONTEXT	*Ctx);
 
 #ifdef __cplusplus
 }

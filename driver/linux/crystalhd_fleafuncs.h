@@ -55,6 +55,7 @@ bool crystalhd_flea_rx_list0_handler(struct crystalhd_hw *hw,FLEA_INTR_STS_REG i
 bool crystalhd_flea_rx_list1_handler(struct crystalhd_hw *hw,FLEA_INTR_STS_REG int_sts,uint32_t y_err_sts,uint32_t uv_err_sts);
 void crystalhd_flea_rx_isr(struct crystalhd_hw *hw, FLEA_INTR_STS_REG intr_sts);
 void crystalhd_flea_notify_fll_change(struct crystalhd_hw *hw, bool bCleanupContext);
+bool crystalhd_flea_notify_event(struct crystalhd_hw *hw, BRCM_EVENT EventCode);
 
 bool flea_GetPictureInfo(struct crystalhd_hw *hw, crystalhd_rx_dma_pkt * rx_pkt,
 						 uint32_t *PicNumber, uint64_t *PicMetaData);

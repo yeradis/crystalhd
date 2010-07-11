@@ -30,6 +30,7 @@
 #include "crystalhd_fw_if.h"
 #include "crystalhd_misc.h"
 #include "DriverFwShare.h"
+#include "FleaDefs.h"
 
 /* HW constants..*/
 #define DMA_ENGINE_CNT		2
@@ -38,7 +39,10 @@
 #define WR_POINTER_OFF		4
 #define MAX_VALID_POLL_CNT	1000
 
-#define TX_WRAP_THRESHOLD	(128 * 1024)
+#define TX_WRAP_THRESHOLD 128 * 1024
+
+#define	NUMBER_OF_TRANSFERS_TX_SIDE				1
+#define NUMBER_OF_TRANSFERS_RX_SIDE				2
 
 typedef struct _BC_DRV_PIC_INFO_{
 	C011_PIB			DecoPIB;
@@ -191,6 +195,33 @@ typedef enum _ERR_STATUS_
 	FORCE_CANCEL		=0x8000
 }ERROR_STATUS;
 
+typedef enum _LIST_STATUS_ 
+{
+	ListStsFree=0,				// Initial state and state the buffer is moved to Ready Buffer list.	
+	RxListWaitingForYIntr=1,	// When the Y Descriptor is posted.		
+	RxListWaitingForUVIntr=2,	// When the UV descriptor is posted.
+	TxListWaitingForIntr =4, 
+}LIST_STATUS;
+
+typedef struct _RX_LIST_{
+	LIST_STATUS		ListSts;	
+	//LIST_ENTRY		ActiveList;
+	uint32_t			ActiveListLen;
+	uint32_t			ListLockInd;					/* To Be Filled up During Init */
+	uint32_t			ulDiscCount;					/* Discontinuity On this list */
+	uint32_t			RxYFirstDescLADDRReg;			/* First Desc Low Addr Y	*/
+	uint32_t			RxYFirstDescUADDRReg;			/* First Desc UPPER Addr Y	*/
+	uint32_t			RxYCurDescLADDRReg;				/* Current Desc Low Addr Y	*/
+	uint32_t			RxYCurDescUADDRReg;				/* First Desc Low Addr Y	*/
+	uint32_t			RxYCurByteCntRemReg;			/* Cur Byte Cnt Rem Y		*/
+
+	uint32_t			RxUVFirstDescLADDRReg;			/* First Desc Low Addr UV		*/
+	uint32_t			RxUVFirstDescUADDRReg;			/* First Desc UPPER Addr UV		*/
+	uint32_t			RxUVCurDescLADDRReg;			/* Current Desc Low Addr UV		*/
+	uint32_t			RxUVCurDescUADDRReg;			/* Current Desc UPPER Addr UV	*/		
+	uint32_t			RxUVCurByteCntRemReg;			/* Cur Byte Cnt Rem UV			*/		
+}RX_DMA_LIST,*PRX_DMA_LIST;
+
 typedef struct _tx_dma_pkt_ {
 	dma_desc_mem		desc_mem;
 	hw_comp_callback	call_back;
@@ -223,11 +254,40 @@ struct crystalhd_hw_stats{
 	uint32_t	rx_success;
 };
 
-struct crystalhd_hw; /* forward declaration for the types */
+typedef enum _DECODER_STATE_
+{
+	DECO_OPERATIONAL				= 0,			/* We start with this state.ST_FW_DWNLD,ST_CAPTURE,STOP_CAPTURE */
+	DECO_INTER_PAUSED				= 1,			/* Driver Issued Pause To Decoder */
+	DECO_INTER_PAUSE_IN_PROGRESS	= 2,			/* Pause CMD is pending with F/W  */
+	DECO_INTER_RESUME_IN_PROGRESS	= 3,			/* Resume CMD is pending with F/W */
+	DECO_STOPPED_BY_APP				= 4				/* After STOP Video I do not want to Throttle Decoder.So Special State */
+}DECO_STATE;
 
-/* typedef void*	(*HW_VERIFY_DEVICE)(struct crystalhd_adp*); */
-/* typedef bool	(*HW_INIT_DEVICE_RESOURCES)(struct crystalhd_adp*); */
-/* typedef bool	(*HW_CLEAN_DEVICE_RESOURCES)(struct crystalhd_adp*); */
+//
+// These events can be used to notify the hardware layer 
+// to set up it adapter in proper state...or for anyother 
+// purpose for that matter.
+// We will use this for intermediae events as defined below
+
+typedef enum _BRCM_EVENT_{
+	BC_EVENT_ADAPTER_INIT_FAILED	=0,
+	BC_EVENT_ADAPTER_INIT_SUCCESS	=1,
+	BC_EVENT_FW_DNLD_STARTED		=2,		
+	BC_EVENT_FW_DNLD_ERR			=3,
+	BC_EVENT_FW_DNLD_DONE			=4,	
+	BC_EVENT_SYS_SHUT_DOWN			=5,
+	BC_EVENT_START_CAPTURE			=6,
+	BC_EVENT_START_CAPTURE_IMMI		=7,
+	BC_EVENT_STOP_CAPTURE			=8,		/* Stop Capturing the Rx buffers Stop the DMA engines UnMapBuffers Discard Free and Ready list */
+	BC_EVENT_DO_CLEANUP				=9,		/* Total Cleanup Rx And Tx side */
+	BC_DISCARD_RX_BUFFERS			=10		/* Move all the Ready buffers to free list. Stop RX DMA. Post Rx Side buffers. */
+}BRCM_EVENT,*PBRCM_EVENT;
+
+struct crystalhd_hw; // forward declaration for the types
+
+//typedef void*		(*HW_VERIFY_DEVICE)(struct crystalhd_adp*);
+//typedef bool		(*HW_INIT_DEVICE_RESOURCES)(struct crystalhd_adp*);
+//typedef bool		(*HW_CLEAN_DEVICE_RESOURCES)(struct crystalhd_adp*);
 typedef bool		(*HW_START_DEVICE)(struct crystalhd_hw*);
 typedef bool		(*HW_STOP_DEVICE)(struct crystalhd_hw*);
 /* typedef bool	(*HW_XLAT_AND_FIRE_SGL)(struct crystalhd_adp*,PVOID,PSCATTER_GATHER_LIST,uint32_t); */
@@ -267,7 +327,8 @@ typedef BOOLEAN		(*PIC_POST_PROC)	(PHW_EXTENSION,PRX_DMA_LIST,PULONG);
 typedef BOOLEAN		(*HW_ISSUE_DECO_PAUSE)	(PHW_EXTENSION,BOOLEAN,BOOLEAN);
 typedef BOOLEAN		(*FIRE_TX_CMD_TO_HW)	(PCONTEXT_FOR_POST_TX);
 */
-typedef void		(*NOTIFY_FLL_CHANGE)	(struct crystalhd_hw*, bool);
+typedef void		(*NOTIFY_FLL_CHANGE)(struct crystalhd_hw*,bool);
+typedef bool		(*HW_EVENT_NOTIFICATION)(struct crystalhd_hw*, BRCM_EVENT);
 
 struct crystalhd_hw {
 	tx_dma_pkt		tx_pkt_pool[DMA_ENGINE_CNT];
@@ -331,9 +392,57 @@ struct crystalhd_hw {
 
 	uint32_t	SkipDropBadFrames;
 	uint32_t	TemperatureRegVal;
-	TX_INPUT_BUFFER_INFO	TxFwInputBuffInfo;
+	TX_INPUT_BUFFER_INFO	TxFwInputBuffInfo;	
 
-	bool		SingleThreadAppFIFOEmpty;
+	DECO_STATE			DecoderSt;				/* Weather the decoder is paused or not*/
+	uint32_t			PauseThreshold;
+	uint32_t			ResumeThreshold;
+
+	uint32_t				RxListPointer;					/* Treat the Rx List As Circular List */
+	LIST_STATUS				TxList0Sts;
+	LIST_STATUS				TxList1Sts;
+
+	uint32_t			FleaEnablePWM;
+	uint32_t			FleaWaitFirstPlaybackNotify;
+	FLEA_POWER_STATES	FleaPowerState;
+	uint32_t			EmptyCnt;
+	bool				SingleThreadAppFIFOEmpty;
+	bool				PwrDwnTxIntr; /* Got an TX FIFO status interrupt when in power down state */
+	bool				PwrDwnPiQIntr; /* Got a Picture Q interrupt when in power down state */
+	uint32_t			OLWatchDogTimer;
+	uint32_t			ILWatchDogTimer;
+	uint32_t			FwCmdCnt;
+	bool				WakeUpDecodeDone; /* Used to indicate that the HW is awake to RX is running so we can actively manage power */
+
+	uint64_t			TickCntDecodePU; /* Time when we first powered up to decode */
+	uint64_t			TickSpentInPD; /* Total amount of time spent in PD */
+	uint64_t			TickStartInPD; /* Tick count when we start in PD */
+	uint32_t			PDRatio; /* % of time spent in power down. Goal is to keep this close to 50 */
+	uint32_t			DefaultPauseThreshold; /* default threshold to set when we start power management */
+
+	uint32_t			EnWorkArounds;		/*Firmware Tells us to enable the workaround for backward compatibility*/
+
+//	uint32_t			FreeListLen;
+//	uint32_t			ReadyListLen;
+
+//
+//	Counters needed for monitoring purposes.
+//	These counters are per session and will be reset to zero in 
+//  start capture.
+//
+	uint32_t					DrvPauseCnt;					 /* Number of Times the driver has issued pause.*/
+	//uint32_t					DrvServiceIntrCnt;				 /* Number of interrutps the driver serviced. */	
+	//uint32_t					DrvIgnIntrCnt;					 /* Number of Interrupts Driver Ignored.NOT OUR INTR. */
+	//uint32_t					DrvTotalFrmDropped;				 /* Number of frames dropped by the driver.*/
+	uint32_t					DrvTotalFrmCaptured;			 /* Numner of Good Frames Captured*/	
+	//uint32_t					DrvTotalHWErrs;					 /* Total HW Errors.*/
+	//uint32_t					DrvTotalPIBFlushCnt;			 /* Number of Times the driver flushed PIB Queues.*/
+	//uint32_t					DrvMissedPIBCnt;				 /* Number of Frames for which the PIB was not found.*/
+	//uint64_t					TickCntOnPause;
+	//uint32_t					TotalTimeInPause;				/* In Milliseconds */
+	//uint32_t					RepeatedFramesCnt;
+//
+
 //	HW_VERIFY_DEVICE			pfnVerifyDevice;
 //	HW_INIT_DEVICE_RESOURCES		pfnInitDevResources;
 //	HW_CLEAN_DEVICE_RESOURCES		pfnCleanDevResources;
@@ -341,7 +450,7 @@ struct crystalhd_hw {
 	HW_STOP_DEVICE				pfnStopDevice;
 //	HW_XLAT_AND_FIRE_SGL			pfnTxXlatAndFireSGL;
 //	HW_RX_XLAT_SGL				pfnRxXlatSgl;
-	HW_FIND_AND_CLEAR_INTR			pfnFindAndClearIntr;
+	HW_FIND_AND_CLEAR_INTR		pfnFindAndClearIntr;
 	HW_READ_DEVICE_REG			pfnReadDevRegister;
 	HW_WRITE_DEVICE_REG			pfnWriteDevRegister;
 	HW_READ_FPGA_REG			pfnReadFPGARegister;
@@ -373,6 +482,7 @@ struct crystalhd_hw {
 //	PIC_POST_PROC				pfnPostProcessPicture;
 //	FIRE_TX_CMD_TO_HW			pfnFireTx;
 	NOTIFY_FLL_CHANGE			pfnNotifyFLLChange;
+	HW_EVENT_NOTIFICATION		pfnNotifyHardware;
 };
 
 crystalhd_rx_dma_pkt *crystalhd_hw_alloc_rx_pkt(struct crystalhd_hw *hw);

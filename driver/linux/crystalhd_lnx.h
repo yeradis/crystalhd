@@ -90,6 +90,7 @@ struct crystalhd_adp {
 
 struct crystalhd_adp *chd_get_adp(void);
 struct device *chddev(void);
+void chd_set_log_level(struct crystalhd_adp *adp, char *arg);
 
 #endif
 

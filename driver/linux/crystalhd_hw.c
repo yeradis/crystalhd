@@ -28,6 +28,7 @@
 #include <linux/delay.h>
 #include <linux/device.h>
 #include <asm/tsc.h>
+#include <asm/msr.h>
 #include "crystalhd_lnx.h"
 #include "crystalhd_linkfuncs.h"
 #include "crystalhd_fleafuncs.h"
@@ -44,6 +45,10 @@ BC_STATUS crystalhd_hw_open(struct crystalhd_hw *hw, struct crystalhd_adp *adp)
 	printk(KERN_ERR "opening HW\n");
 	if (hw->dev_started)
 		return BC_STS_SUCCESS;
+
+	hw->PauseThreshold = BC_RX_LIST_CNT - 2;
+	hw->DefaultPauseThreshold = BC_RX_LIST_CNT - 2;
+	hw->ResumeThreshold = 3;
 
 	// Setup HW specific functions appropriately
 	if (adp->pdev->device == BC_PCI_DEVID_FLEA) {
@@ -68,6 +73,7 @@ BC_STATUS crystalhd_hw_open(struct crystalhd_hw *hw, struct crystalhd_adp *adp)
 		hw->pfnStopTxDMA = crystalhd_flea_stop_tx_dma_engine;
 		hw->pfnStopRXDMAEngines = crystalhd_flea_stop_rx_dma_engine;
 		hw->pfnNotifyFLLChange = crystalhd_flea_notify_fll_change;
+		hw->pfnNotifyHardware = crystalhd_flea_notify_event;
 	} else {
 		printk(KERN_ERR "crystalhd_hw_open: setting up functions, device = Link\n");
 		hw->pfnStartDevice = crystalhd_link_start_device;
@@ -90,12 +96,14 @@ BC_STATUS crystalhd_hw_open(struct crystalhd_hw *hw, struct crystalhd_adp *adp)
 		hw->pfnStopTxDMA = crystalhd_link_stop_tx_dma_engine;
 		hw->pfnStopRXDMAEngines = crystalhd_link_stop_rx_dma_engine;
 		hw->pfnNotifyFLLChange = crystalhd_link_notify_fll_change;
+		hw->pfnNotifyHardware = crystalhd_link_notify_event;
 	}
-				
+
 	hw->adp = adp;
 	spin_lock_init(&hw->lock);
 	spin_lock_init(&hw->rx_lock);
-	/* FIXME: jarod: what are these magic numbers?!? */
+
+	// Seed for error checking and debugging. Random numbers */
 	hw->tx_ioq_tag_seed = 0x70023070;
 	hw->rx_pkt_tag_seed = 0x70029070;
 
@@ -470,7 +478,7 @@ BC_STATUS crystalhd_hw_fill_desc(crystalhd_dio_req *ioreq,
 		}
 		else
 			desc[ix].sdram_buff_addr = 0;
-			
+
 		desc_phy_addr += sizeof(dma_descriptor);
 	}
 
@@ -509,7 +517,7 @@ BC_STATUS crystalhd_hw_fill_desc(crystalhd_dio_req *ioreq,
 
 	return BC_STS_SUCCESS;
 }
-										
+
 BC_STATUS crystalhd_xlat_sgl_to_dma_desc(crystalhd_dio_req *ioreq,
 												pdma_desc_mem pdesc_mem,
 												uint32_t *uv_desc_index,
@@ -584,6 +592,13 @@ BC_STATUS crystalhd_rx_pkt_done(struct crystalhd_hw *hw,
 	crystalhd_rx_dma_pkt *rx_pkt = NULL;
 	uint32_t y_dw_dnsz, uv_dw_dnsz;
 	BC_STATUS sts = BC_STS_SUCCESS;
+	uint64_t currTick;
+
+	uint32_t totalTick_Hi;
+	uint32_t TickSpentInPD_Hi;
+	uint64_t temp_64;
+	int32_t totalTick_Hi_f;
+	int32_t TickSpentInPD_Hi_f;
 
 	if (!hw || list_index >= DMA_ENGINE_CNT) {
 		printk(KERN_ERR "%s: Invalid Arguments\n", __func__);
@@ -601,7 +616,10 @@ BC_STATUS crystalhd_rx_pkt_done(struct crystalhd_hw *hw,
 				return BC_STS_INV_ARG;
 	}
 
-	if (comp_sts == BC_STS_SUCCESS) {
+	if (comp_sts == BC_STS_SUCCESS)
+	{
+		hw->DrvTotalFrmCaptured++;
+
 		hw->pfnHWGetDoneSize(hw, list_index, &y_dw_dnsz, &uv_dw_dnsz);
 		rx_pkt->dio_req->uinfo.y_done_sz = y_dw_dnsz;
 		rx_pkt->flags = COMP_FLAG_DATA_VALID;
@@ -609,12 +627,74 @@ BC_STATUS crystalhd_rx_pkt_done(struct crystalhd_hw *hw,
 			rx_pkt->dio_req->uinfo.uv_done_sz = uv_dw_dnsz;
 		crystalhd_dioq_add(hw->rx_rdyq, rx_pkt, true,
 							hw->rx_pkt_tag_seed + list_index);
-		if(crystalhd_dioq_count(hw->rx_rdyq) > HW_PAUSE_THRESHOLD)
+		if( hw->adp->pdev->device == BC_PCI_DEVID_FLEA)
 		{
-			dev_info(&hw->adp->pdev->dev, "HW PAUSE\n");
-			hw->pfnIssuePause(hw, true);
-			hw->hw_pause_issued = true;
+			//printk("pre-PD state %x RLL %x Ptsh %x ratio %d currentPS %d\n",
+			//	hw->FleaPowerState, crystalhd_dioq_count(hw->rx_rdyq) , hw->PauseThreshold, hw->PDRatio, hw->FleaPowerState);
+			if(hw->FleaPowerState == FLEA_PS_ACTIVE)
+			{
+				if(crystalhd_dioq_count(hw->rx_rdyq) >= hw->PauseThreshold)
+				{
+					hw->pfnIssuePause(hw, true);
+					hw->hw_pause_issued = true;
+				}
+				/* NAREN check if the PD ratio is less than 50. If so, try to reduce the PauseThreshold to improve the ratio */
+				/* never go lower than 6 pictures */
+				/* Only do this when we have some data to determine PDRatio */
+				/* For now assume that if we have captured 100 pictures then we should have enough data for the analysis to start */
+				if((hw->PDRatio < 50) && (hw->PauseThreshold > 6) && (hw->DrvTotalFrmCaptured > 100))
+				{
+					//printk("Current PDRatio:%u, PauseThreshold:%u, DrvTotalFrmCaptured:%u  decress PauseThreshold\n",
+					//	hw->PDRatio, hw->PauseThreshold, hw->DrvTotalFrmCaptured);
+					hw->PauseThreshold--;
+				}
+				else {
+					rdtscll(currTick);
+
+					temp_64 = (hw->TickSpentInPD)>>24;
+					TickSpentInPD_Hi = (uint32_t)(temp_64);
+					TickSpentInPD_Hi_f = (int32_t)TickSpentInPD_Hi;
+
+					temp_64 = (currTick - hw->TickCntDecodePU)>>24;
+					totalTick_Hi = (uint32_t)(temp_64);
+					totalTick_Hi_f = (int32_t)totalTick_Hi;
+
+					if( totalTick_Hi_f <= 0 )
+					{
+						temp_64 = (hw->TickSpentInPD);
+						TickSpentInPD_Hi = (uint32_t)(temp_64);
+						TickSpentInPD_Hi_f = (int32_t)TickSpentInPD_Hi;
+
+						temp_64 = (currTick - hw->TickCntDecodePU);
+						totalTick_Hi = (uint32_t)(temp_64);
+						totalTick_Hi_f = (int32_t)totalTick_Hi;
+					}
+
+					if( totalTick_Hi_f <= 0 )
+					{
+						printk("totalTick_Hi_f <= 0, set hw->PDRatio = 60\n");
+						hw->PDRatio = 60;
+					}
+					else
+						hw->PDRatio = (TickSpentInPD_Hi_f * 100) / totalTick_Hi_f;
+
+					//printk("Current PDRatio:%u, PauseThreshold:%u, DrvTotalFrmCaptured:%u  don't decress PauseThreshold\n",
+					//	hw->PDRatio, hw->PauseThreshold, hw->DrvTotalFrmCaptured);
+
+					//hw->PDRatio = ((uint32_t)(hw->TickSpentInPD))/((uint32_t)(currTick - hw->TickCntDecodePU)/100);
+				}
+			}
 		}
+		else if( hw->hw_pause_issued == false )
+		{
+			if(crystalhd_dioq_count(hw->rx_rdyq) > hw->PauseThreshold)//HW_PAUSE_THRESHOLD
+			{
+				dev_info(&hw->adp->pdev->dev, "HW PAUSE\n");
+				hw->pfnIssuePause(hw, true);
+				hw->hw_pause_issued = true;
+			}
+		}
+
 		return sts;
 	}
 	/* Check if we can post this DIO again. */
@@ -663,7 +743,7 @@ BC_STATUS crystalhd_hw_post_tx(struct crystalhd_hw *hw, crystalhd_dio_req *ioreq
 
 	if(local_flags & BC_BIT(7))
 		destDRAMaddr = hw->TxFwInputBuffInfo.DramBuffAdd;
-	
+
 	/* Get a list from TxFreeQ */
 	tx_dma_packet = (tx_dma_pkt *)crystalhd_dioq_fetch(hw->tx_freeq);
 	if (!tx_dma_packet) {
@@ -698,6 +778,14 @@ BC_STATUS crystalhd_hw_post_tx(struct crystalhd_hw *hw, crystalhd_dio_req *ioreq
 	*list_id = tx_dma_packet->list_tag = hw->tx_ioq_tag_seed +
 					     hw->tx_list_post_index;
 
+
+	if( hw->tx_list_post_index % DMA_ENGINE_CNT) {
+		hw->TxList1Sts |= TxListWaitingForIntr;
+	}
+	else {
+		hw->TxList0Sts |= TxListWaitingForIntr;
+	}
+
 	hw->tx_list_post_index = (hw->tx_list_post_index + 1) % DMA_ENGINE_CNT;
 
 	spin_unlock_irqrestore(&hw->lock, flags);
@@ -715,7 +803,7 @@ BC_STATUS crystalhd_hw_post_tx(struct crystalhd_hw *hw, crystalhd_dio_req *ioreq
 
 	// Save the transfer length
 	hw->TxFwInputBuffInfo.HostXferSzInBytes = ioreq->uinfo.xfr_len;
-	
+
 	hw->pfnStartTxDMA(hw, list_posted, desc_addr);
 
 	return BC_STS_SUCCESS;
@@ -800,12 +888,29 @@ BC_STATUS crystalhd_hw_get_cap_buffer(struct crystalhd_hw *hw,
 	}
 
 	rpkt = crystalhd_dioq_fetch_wait(hw, timeout, &sig_pending);
-	if((crystalhd_dioq_count(hw->rx_rdyq) < HW_RESUME_THRESHOLD) && hw->hw_pause_issued)
+
+		if( hw->adp->pdev->device == BC_PCI_DEVID_FLEA)
 	{
-		dev_info(&hw->adp->pdev->dev, "HW RESUME with rdy list %u \n",crystalhd_dioq_count(hw->rx_rdyq));
-		hw->pfnIssuePause(hw, false);
-		hw->hw_pause_issued = false;
+		//printk("pre-PU state %x RLL %x Rtsh %x, currentPS %d,\n",
+		//	hw->FleaPowerState, crystalhd_dioq_count(hw->rx_rdyq) , hw->ResumeThreshold, hw->FleaPowerState);
+		if( (hw->FleaPowerState == FLEA_PS_LP_PENDING) ||
+			(hw->FleaPowerState == FLEA_PS_LP_COMPLETE))
+		{
+			if(crystalhd_dioq_count(hw->rx_rdyq)  <= hw->ResumeThreshold)
+				hw->pfnIssuePause(hw, false);	/*Need this Notification For Flea*/
+				hw->hw_pause_issued = false;
+		}
 	}
+	else if( hw->hw_pause_issued)
+	{
+		if(crystalhd_dioq_count(hw->rx_rdyq) < hw->PauseThreshold ) //HW_RESUME_THRESHOLD
+		{
+			dev_info(&hw->adp->pdev->dev, "HW RESUME with rdy list %u \n",crystalhd_dioq_count(hw->rx_rdyq));
+			hw->pfnIssuePause(hw, false);
+			hw->hw_pause_issued = false;
+		}
+	}
+
 	if (!rpkt) {
 		if (sig_pending) {
 			return BC_STS_IO_USER_ABORT;
@@ -864,7 +969,7 @@ BC_STATUS crystalhd_hw_stop_capture(struct crystalhd_hw *hw, bool unmap)
 
 	if(!unmap)
 		return BC_STS_SUCCESS;
-	
+
 	// Clear up Active, Ready and Free lists one by one and release resources
 	do {
 		temp = crystalhd_dioq_fetch(hw->rx_actq);
@@ -911,6 +1016,7 @@ void crystalhd_hw_stats(struct crystalhd_hw *hw, struct crystalhd_hw_stats *stat
 
 	/* if called w/NULL stats, its a req to zero out the stats */
 	if (!stats) {
+		hw->DrvTotalFrmCaptured = 0;
 		memset(&hw->stats, 0, sizeof(hw->stats));
 		return;
 	}
