@@ -1368,7 +1368,7 @@ DtsCancelTxRequest(
 	HANDLE	hDevice,
 	uint32_t Operation)
 {
-	return BC_STS_NOT_IMPL;
+	return BC_STS_SUCCESS; // Since we always check before TX, there can never be a TX holding   in the Driver. FIXME
 }
 
 
