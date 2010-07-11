@@ -1327,10 +1327,13 @@ DtsCopyRawDataToOutBuff(DTS_LIB_CONTEXT	*Ctx,
 		else
 			dstHeightInPixels = Vout->PicInfo.height;
 		/* Check for Valid data based on the filter information */
+/* interlaced frames currently don't get delivered from the library if this check is in place */
+#if 0
 		if(Vout->YBuffDoneSz < (dstWidthInPixels * dstHeightInPixels / 2)) {
 			DebugLog_Trace(LDIL_DBG,"DtsCopy422: XFER ERROR dnsz %u, w %u, h %u\n", Vout->YBuffDoneSz, dstWidthInPixels, dstHeightInPixels);
 			return BC_STS_IO_XFR_ERROR;
 		}
+#endif
 		srcWidthInPixels = Ctx->picWidth;
 		srcHeightInPixels = dstHeightInPixels;
 	} else {

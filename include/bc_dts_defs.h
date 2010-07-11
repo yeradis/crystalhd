@@ -584,6 +584,7 @@ typedef struct _BC_INPUT_FORMAT_ {
 	uint8_t     *pMetaData;     /*Metadata buffer that is used to pass sequence header*/
 	uint32_t    metaDataSz;     /*Metadata size*/
 	uint8_t     bEnableScaling;
+	BC_SCALING_PARAMS ScalingParams;
 } BC_INPUT_FORMAT;
 
 typedef struct _BC_INFO_CRYSTAL_ {

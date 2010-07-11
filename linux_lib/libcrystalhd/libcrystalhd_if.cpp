@@ -1185,6 +1185,7 @@ DtsSetInputFormat(
 {
 	DTS_LIB_CONTEXT *Ctx = NULL;
 	uint32_t videoAlgo = BC_VID_ALGO_H264;
+	uint32_t	ScaledWidth = 0;
 
 	DTS_GET_CTX(hDevice,Ctx);
 
@@ -1239,8 +1240,19 @@ DtsSetInputFormat(
 
 	if(Ctx->DevId == BC_PCI_DEVID_FLEA)
 	{
-		//Ctx->EnableScaling = 0; // Disable Scaling
-		Ctx->EnableScaling = 0x32032000|1; // Enable Scaling and Scaling Width
+		if(pInputFormat->bEnableScaling) {
+			if((pInputFormat->ScalingParams.sWidth > 1920)||
+			   (pInputFormat->ScalingParams.sWidth < 1280))
+				ScaledWidth = 1280;
+			else
+				ScaledWidth = pInputFormat->ScalingParams.sWidth;
+
+			Ctx->EnableScaling = (ScaledWidth << 20) | (ScaledWidth << 8) |
+					     pInputFormat->bEnableScaling;
+		} else {
+			Ctx->EnableScaling = 0;
+		}
+
 		Ctx->bEnable720pDropHalf = 0;
 	}
 
@@ -3083,9 +3095,26 @@ DRVIFLIB_API BC_STATUS DtsGetCapabilities (HANDLE  hDevice, PBC_HW_CAPS	pCapsBuf
 	return BC_STS_SUCCESS;
 }
 
-DRVIFLIB_API BC_STATUS DtsSetScaleParams (HANDLE  hDevice,PBC_SCALING_PARAMS pScaleParams)
+DRVIFLIB_API BC_STATUS DtsSetScaleParams(HANDLE hDevice, PBC_SCALING_PARAMS pScaleParams)
 {
-	return BC_STS_NOT_IMPL;
+	DTS_LIB_CONTEXT *Ctx = NULL;
+	DTS_GET_CTX(hDevice, Ctx);
+	uint32_t ScaledWidth = 0;
+
+	if (Ctx->DevId == BC_PCI_DEVID_FLEA) {
+		if ((pScaleParams->sWidth > 1920) || (pScaleParams->sWidth < 1280))
+			ScaledWidth = 1280;
+		else
+			ScaledWidth = pScaleParams->sWidth;
+
+		Ctx->EnableScaling = (ScaledWidth << 20) | (ScaledWidth << 8) | 1;
+
+	} else {
+		DebugLog_Trace(LDIL_ERR,"DtsSetScaleParams: not supported\n");
+		return BC_STS_INV_ARG;
+	}
+
+	return DtsCheckProfile(hDevice);
 }
 
 DRVIFLIB_API BC_STATUS DtsCrystalHDVersion(HANDLE  hDevice, PBC_INFO_CRYSTAL bCrystalInfo)
