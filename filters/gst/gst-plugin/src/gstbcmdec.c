@@ -2175,20 +2175,20 @@ static void * bcmdec_process_output(void *ctx)
 					if (!(pout.PicInfo.flags &  VDEC_FLAG_LAST_PICTURE))
 						continue;
 				}*/
-				
-				if (bcmdec->ses_nbr  == pout.PicInfo.sess_num) {
-					if (bcmdec->ses_change) {
-						GST_DEBUG_OBJECT(bcmdec, "discard old ses nbr picture , old = %d new = %d pic = %d",
-								bcmdec->ses_nbr, pout.PicInfo.sess_num, pic_number);
-						continue;
-					}
-				} else {
-					GST_DEBUG_OBJECT(bcmdec, "session changed old ses nbr picture , old = %d new = %d pic = %d",
-							bcmdec->ses_nbr, pout.PicInfo.sess_num, pic_number);
-					bcmdec->ses_nbr = pout.PicInfo.sess_num;
-					bcmdec->ses_change = FALSE;
-					first_frame_after_seek = TRUE;
-				}
+// NAREN - FIXME				
+// 				if (bcmdec->ses_nbr  == pout.PicInfo.sess_num) {
+// 					if (bcmdec->ses_change) {
+// 						GST_DEBUG_OBJECT(bcmdec, "discard old ses nbr picture , old = %d new = %d pic = %d",
+// 								bcmdec->ses_nbr, pout.PicInfo.sess_num, pic_number);
+// 						continue;
+// 					}
+// 				} else {
+// 					GST_DEBUG_OBJECT(bcmdec, "session changed old ses nbr picture , old = %d new = %d pic = %d",
+// 							bcmdec->ses_nbr, pout.PicInfo.sess_num, pic_number);
+// 					bcmdec->ses_nbr = pout.PicInfo.sess_num;
+// 					bcmdec->ses_change = FALSE;
+// 					first_frame_after_seek = TRUE;
+// 				}
 
 				if (!bcmdec->interlace || bcmdec->sec_field) {
 					GST_BUFFER_OFFSET(gstbuf) = 0;
@@ -2490,7 +2490,7 @@ static void bcmdec_process_flush_start(GstBcmDec *bcmdec)
 	}
 	sts = decif_flush_dec(&bcmdec->decif, 2);
 	if (sts != BC_STS_SUCCESS)
-		GST_ERROR_OBJECT(bcmdec, "flush_dec failed");
+		GST_ERROR_OBJECT(bcmdec, "flush_dec failed sts %d", sts);
 }
 
 static BC_STATUS gst_bcmdec_cleanup(GstBcmDec *bcmdec)
