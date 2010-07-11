@@ -1729,6 +1729,7 @@ BC_STATUS DtsFreeMdata(DTS_LIB_CONTEXT *Ctx, DTS_INPUT_MDATA	*Mdata, BOOL sync)
 BC_STATUS DtsClrPendMdataList(DTS_LIB_CONTEXT *Ctx)
 {
 	DTS_INPUT_MDATA		*temp=NULL;
+	int mdata_count = 0;
 
 	if(!Ctx || !Ctx->MdataPoolPtr){
 		return BC_STS_INV_ARG;
@@ -1739,10 +1740,13 @@ BC_STATUS DtsClrPendMdataList(DTS_LIB_CONTEXT *Ctx)
 	temp = Ctx->MDPendHead;
 
 	while(temp && temp != DTS_MDATA_PEND_LINK(Ctx)){
-		DebugLog_Trace(LDIL_DBG,"Clearing PendMdata %p %x \n", temp->Spes.SeqNum, temp->IntTag);
 		DtsRemoveMdata(Ctx,temp,FALSE);
 		temp = Ctx->MDPendHead;
+		mdata_count++
 	}
+
+	if (mdata_count)
+		DebugLog_Trace(LDIL_DBG,"Clearing PendMdata %p %x \n", temp->Spes.SeqNum, temp->IntTag);
 
 	DtsUnLock(Ctx);
 
@@ -1832,10 +1836,10 @@ BC_STATUS DtsFetchMdata(DTS_LIB_CONTEXT *Ctx, uint16_t snum, BC_DTS_PROC_OUT *po
 		temp = temp->flink;
 	}
 	DtsUnLock(Ctx);
-	// If we found a tag, clear out all the old entries - from (tag - 10) to (tag-20)
+	// If we found a tag, clear out all the old entries - from (tag - 10) to (tag-110)
 	// This is to work around the issue of lost pictures for which tags will never get freed
 	if(sts == BC_STS_SUCCESS) {
-		for(i = 0; i < 10; i++) {
+		for(i = 0; i < 100; i++) {
 			tsnum = snum - (10 + i);
 			if(tsnum < 0)
 				break;
