@@ -37,6 +37,10 @@
 #include <linux/sched.h>
 #include <asm/system.h>
 #include "bc_dts_glob_lnx.h"
+#include "crystalhd_hw.h"
+
+// forward declare
+struct crystalhd_hw;
 
 /* Global element pool for all Queue management.
  * TX: Active = BC_TX_LIST_CNT, Free = BC_TX_LIST_CNT.
@@ -166,14 +170,12 @@ extern void crystalhd_delete_dioq(struct crystalhd_adp *, crystalhd_dioq_t *);
 extern BC_STATUS crystalhd_dioq_add(crystalhd_dioq_t *ioq, void *data, bool wake, uint32_t tag);
 extern void *crystalhd_dioq_fetch(crystalhd_dioq_t *ioq);
 extern void *crystalhd_dioq_find_and_fetch(crystalhd_dioq_t *ioq, uint32_t tag);
-extern void *crystalhd_dioq_fetch_wait(void *, uint32_t , uint32_t *);
+extern void *crystalhd_dioq_fetch_wait(struct crystalhd_hw *hw, uint32_t to_secs, uint32_t *sig_pend);
 
 #define crystalhd_dioq_count(_ioq)	((_ioq) ? _ioq->count : 0)
 
 extern int crystalhd_create_elem_pool(struct crystalhd_adp *, uint32_t);
 extern void crystalhd_delete_elem_pool(struct crystalhd_adp *);
-// Some HW specific code defines
-extern uint32_t link_GetRptDropParam(uint32_t picHeight, uint32_t picWidth, void *);
 
 /*================ Debug routines/macros .. ================================*/
 extern void crystalhd_show_buffer(uint32_t off, uint8_t *buff, uint32_t dwcount);

@@ -67,7 +67,7 @@ static GstFlowReturn bcmdec_send_buff_detect_error(GstBcmDec *bcmdec, GstBuffer 
 	uint32_t rll=0;
 
 	sts = decif_send_buffer(&bcmdec->decif, pbuffer, size, tCurrent, flags);
-	
+
 	if (sts != BC_STS_SUCCESS) {
 		GST_ERROR_OBJECT(bcmdec, "proc input failed sts = %d", sts);
 		GST_ERROR_OBJECT(bcmdec, "Chain: timeStamp = %llu size = %d data = %p",
@@ -1033,7 +1033,7 @@ static gboolean gst_bcmdec_sink_event(GstPad* pad, GstEvent* event)
 
 	gst_object_unref(bcmdec);
 	if (!bcmdec->silent)
-		GST_DEBUG_OBJECT(bcmdec, "gst_bcmdec_sink_event");
+		GST_DEBUG_OBJECT(bcmdec, "gst_bcmdec_sink_event %u", GST_EVENT_TYPE(event));
 	return result;
 }
 
@@ -1463,7 +1463,6 @@ static GstStateChangeReturn gst_bcmdec_change_state(GstElement *element, GstStat
 			sts = decif_open(&bcmdec->decif);
 			if (sts == BC_STS_SUCCESS) {
 				GST_DEBUG_OBJECT(bcmdec, "dev open success");
-				printf("OPEN success\n");
 				parse_init(&bcmdec->parse);
 			} else {
 				GST_ERROR_OBJECT(bcmdec, "dev open failed %d",sts);
@@ -1906,6 +1905,7 @@ static int bcmdec_wait_for_event(GstBcmDec *bcmdec)
 static void bcmdec_flush_gstbuf_queue(GstBcmDec *bcmdec)
 {
 	GSTBUF_LIST *gst_queue_element;
+	int sval;
 
 	do {
 		gst_queue_element = bcmdec_rem_buf(bcmdec);
@@ -1918,6 +1918,12 @@ static void bcmdec_flush_gstbuf_queue(GstBcmDec *bcmdec)
 			GST_DEBUG_OBJECT(bcmdec, "no gst_queue_element");
 		}
 	} while (gst_queue_element && gst_queue_element->gstbuf);
+
+	// Re-initialize the buf_event semaphone since we have just flushed the entire queued
+	sem_destroy(&bcmdec->buf_event);
+	sem_init(&bcmdec->buf_event, 0, 0);
+	sem_getvalue(&bcmdec->buf_event, &sval);
+	GST_DEBUG_OBJECT(bcmdec, "sem value after flush is %d", sval);
 }
 
 static void * bcmdec_process_push(void *ctx)
@@ -1957,7 +1963,6 @@ static void * bcmdec_process_push(void *ctx)
 		ts.tv_nsec = 0;
 
 		while (bcmdec->streaming && !done) {
-
 			ret = sem_timedwait(&bcmdec->buf_event, &ts);
 			if (ret < 0) {
 				switch (errno) {
@@ -2007,7 +2012,8 @@ static void * bcmdec_process_push(void *ctx)
 						GST_DEBUG_OBJECT(bcmdec, "eos sent, cnt:%d", bcmdec->gst_que_cnt);
 					}
 					bcmdec_put_que_mem_buf(bcmdec, gst_queue_element);
-				}
+				} else
+					GST_DEBUG_OBJECT(bcmdec, "NO BUFFER FOUND");
 			}
 			if (bcmdec->flushing && bcmdec->push_exit) {
 				GST_DEBUG_OBJECT(bcmdec, "push -flush exit");
@@ -2015,6 +2021,7 @@ static void * bcmdec_process_push(void *ctx)
 			}
 		}
 		if (bcmdec->flushing) {
+			GST_DEBUG_OBJECT(bcmdec, "flushing gstbuf queue");
 			bcmdec_flush_gstbuf_queue(bcmdec);
 			if (sem_post(&bcmdec->push_stop_event) == -1)
 				GST_ERROR_OBJECT(bcmdec, "push_stop sem_post failed");
@@ -2041,7 +2048,7 @@ static void * bcmdec_process_output(void *ctx)
 	int wait_cnt = 0;
 
 	gboolean is_paused = FALSE;
-	
+
 	GSTBUF_LIST *gst_queue_element = NULL;
 
 	if (!bcmdec->silent)
@@ -2070,7 +2077,7 @@ static void * bcmdec_process_output(void *ctx)
 				decif_pause(&(bcmdec->decif), false);
 				is_paused = FALSE;
 			}
-			
+
 			guint8* data_ptr;
 			if (gstbuf == NULL) {
 				if (!bcmdec->rbuf_thread_running) {
@@ -2158,7 +2165,7 @@ static void * bcmdec_process_output(void *ctx)
 
 				if (!bcmdec->silent)
 					GST_DEBUG_OBJECT(bcmdec, "pic_number is %u", pic_number);
-				
+
 				if (bcmdec->flushing) {
 					GST_DEBUG_OBJECT(bcmdec, "flushing discard, pic = %d", pic_number);
 					continue;
@@ -2175,20 +2182,6 @@ static void * bcmdec_process_output(void *ctx)
 					if (!(pout.PicInfo.flags &  VDEC_FLAG_LAST_PICTURE))
 						continue;
 				}*/
-				
-				if (bcmdec->ses_nbr  == pout.PicInfo.sess_num) {
-					if (bcmdec->ses_change) {
-						GST_DEBUG_OBJECT(bcmdec, "discard old ses nbr picture , old = %d new = %d pic = %d",
-								bcmdec->ses_nbr, pout.PicInfo.sess_num, pic_number);
-						continue;
-					}
-				} else {
-					GST_DEBUG_OBJECT(bcmdec, "session changed old ses nbr picture , old = %d new = %d pic = %d",
-							bcmdec->ses_nbr, pout.PicInfo.sess_num, pic_number);
-					bcmdec->ses_nbr = pout.PicInfo.sess_num;
-					bcmdec->ses_change = FALSE;
-					first_frame_after_seek = TRUE;
-				}
 
 				if (!bcmdec->interlace || bcmdec->sec_field) {
 					GST_BUFFER_OFFSET(gstbuf) = 0;
@@ -2443,6 +2436,8 @@ static void bcmdec_process_flush_stop(GstBcmDec *bcmdec)
 	if (sem_post(&bcmdec->push_start_event) == -1)
 		GST_ERROR_OBJECT(bcmdec, "push_start post failed");
 
+	GST_DEBUG_OBJECT(bcmdec, "flush stop complete");
+
 }
 
 static void bcmdec_process_flush_start(GstBcmDec *bcmdec)
@@ -2490,7 +2485,7 @@ static void bcmdec_process_flush_start(GstBcmDec *bcmdec)
 	}
 	sts = decif_flush_dec(&bcmdec->decif, 2);
 	if (sts != BC_STS_SUCCESS)
-		GST_ERROR_OBJECT(bcmdec, "flush_dec failed");
+		GST_ERROR_OBJECT(bcmdec, "flush_dec failed sts %d", sts);
 }
 
 static BC_STATUS gst_bcmdec_cleanup(GstBcmDec *bcmdec)
@@ -2659,7 +2654,7 @@ static void bcmdec_put_que_mem_buf(GstBcmDec *bcmdec, GSTBUF_LIST *gst_queue_ele
 
 	bcmdec->gst_que_cnt++;
 	GST_DEBUG_OBJECT(bcmdec, "mem pool inc is %u", bcmdec->gst_que_cnt);
-	
+
 	pthread_mutex_unlock(&bcmdec->gst_buf_que_lock);
 }
 
@@ -2673,10 +2668,10 @@ static GSTBUF_LIST * bcmdec_get_que_mem_buf(GstBcmDec *bcmdec)
 	if (gst_queue_element) {
 		bcmdec->gst_mem_buf_que_hd = bcmdec->gst_mem_buf_que_hd->next;
 		bcmdec->gst_que_cnt--;
-	
+
 		GST_DEBUG_OBJECT(bcmdec, "mem pool dec is %u", bcmdec->gst_que_cnt);
 	}
-	
+
 	pthread_mutex_unlock(&bcmdec->gst_buf_que_lock);
 
 	return gst_queue_element;
@@ -2733,6 +2728,8 @@ static void bcmdec_ins_buf(GstBcmDec *bcmdec,GSTBUF_LIST	*gst_queue_element)
 
 	if (sem_post(&bcmdec->buf_event) == -1)
 		GST_ERROR_OBJECT(bcmdec, "buf sem_post failed");
+	else
+		GST_DEBUG_OBJECT(bcmdec, "buffer inserted and buf_event signalled");
 
 	pthread_mutex_unlock(&bcmdec->gst_buf_que_lock);
 }
@@ -2859,143 +2856,6 @@ static BC_STATUS bcmdec_insert_sps_pps(GstBcmDec *bcmdec, GstBuffer* gstbuf)
 	return sts;
 }
 
-#if 0
-static guint32 insert_strtcode(GstBcmDec *bcmdec, guint8 *data_buf, guint32 offset)
-{
-	guint32 nal_sz = 0;
-	guint i;
-
-	for (i = 0; i < bcmdec->avcc_params.nal_size_bytes; i++) {
-		nal_sz <<= 8;
-		nal_sz += data_buf[offset + i];
-	}
-
-	if (nal_sz == 0)
-		return nal_sz;
-
-	if (bcmdec->avcc_params.nal_size_bytes == 4) {
-		for (i = 0; i < 3; i++)
-			data_buf[offset + i] = 0;
-		data_buf[offset + 3] = 1;
-	}
-
-	return nal_sz;
-}
-
-static BC_STATUS bcmdec_insert_startcode(GstBcmDec *bcmdec, GstBuffer *gst_buf,
-					 guint8 *dest_buf, guint32 *dest_buf_sz)
-{
-	guint8 *gst_data_buf = GST_BUFFER_DATA(gst_buf);
-	guint32 gst_buf_sz = GST_BUFFER_SIZE(gst_buf);
-	guint32 data_remaining = gst_buf_sz;
-	guint8 start_code_buf[4] = { 0, 0, 0, 1 };
-	BC_STATUS sts = BC_STS_SUCCESS;
-	guint32 data_buf_pos = 0;
-	guint32 dest_buf_pos = 0;
-	guint8* temp_data_buf = NULL;
-
-	/* FIXME: jarod: Why all the sts != BC_STS_SUCCESS checks when sts is NEVER set anywhere? */
-	while (data_remaining > 0) {
-		if (bcmdec->avcc_params.inside_buffer) {
-			bcmdec->avcc_params.nal_sz = insert_strtcode(bcmdec, gst_data_buf, bcmdec->avcc_params.strtcode_offset);
-			if (bcmdec->avcc_params.nal_sz == 0)
-				return BC_STS_IO_USER_ABORT;
-
-			if (bcmdec->avcc_params.nal_size_bytes == 2) {
-				memcpy(bcmdec->dest_buf + dest_buf_pos, start_code_buf, 4);
-				if (sts != BC_STS_SUCCESS)
-					return sts;
-
-				data_buf_pos += bcmdec->avcc_params.nal_size_bytes;
-				dest_buf_pos += 4;
-			}
-			data_remaining -= bcmdec->avcc_params.nal_size_bytes;
-			bcmdec->avcc_params.strtcode_offset += bcmdec->avcc_params.nal_size_bytes;
-#if 0
-			printf(" 1 .......dataR = %d, stoff = %d, nalS = %d datapo = %d, destpo = %d\n",
-			       data_remaining, bcmdec->avcc_params.strtcode_offset,
-			       bcmdec->avcc_params.nal_sz,data_buf_pos,dest_buf_pos);
-#endif
-		} else {
-			if (data_remaining > (bcmdec->avcc_params.nal_sz - bcmdec->avcc_params.consumed_offset)) {
-				bcmdec->avcc_params.strtcode_offset = bcmdec->avcc_params.nal_sz - bcmdec->avcc_params.consumed_offset;
-				data_remaining -= bcmdec->avcc_params.nal_sz - bcmdec->avcc_params.consumed_offset;
-				if (bcmdec->avcc_params.nal_size_bytes == 2) {
-					memcpy(bcmdec->dest_buf + dest_buf_pos, gst_data_buf + data_buf_pos, bcmdec->avcc_params.strtcode_offset);
-					if (sts != BC_STS_SUCCESS)
-						return sts;
-					data_buf_pos += bcmdec->avcc_params.strtcode_offset;
-					dest_buf_pos += bcmdec->avcc_params.strtcode_offset;
-				}
-				bcmdec->avcc_params.nal_sz = insert_strtcode(bcmdec, gst_data_buf, bcmdec->avcc_params.strtcode_offset);
-				if (bcmdec->avcc_params.nal_sz == 0)
-					return BC_STS_IO_USER_ABORT;
-
-				if (bcmdec->avcc_params.nal_size_bytes == 2) {
-					memcpy(bcmdec->dest_buf + dest_buf_pos, start_code_buf, 4);
-					if (sts != BC_STS_SUCCESS)
-						return sts;
-					data_buf_pos += bcmdec->avcc_params.nal_size_bytes;
-					dest_buf_pos += 4;
-				}
-				data_remaining -= bcmdec->avcc_params.nal_size_bytes;
-				bcmdec->avcc_params.strtcode_offset += bcmdec->avcc_params.nal_size_bytes;
-
-			} else {
-				bcmdec->avcc_params.consumed_offset += data_remaining;
-				data_remaining = 0;
-				break;
-			}
-		}
-		if (data_remaining > bcmdec->avcc_params.nal_sz) {
-			if (bcmdec->avcc_params.nal_size_bytes == 2) {
-				temp_data_buf = gst_data_buf + data_buf_pos;
-				memcpy(bcmdec->dest_buf + dest_buf_pos, gst_data_buf + data_buf_pos, bcmdec->avcc_params.nal_sz);
-				if (sts != BC_STS_SUCCESS)
-					return sts;
-				data_buf_pos += bcmdec->avcc_params.nal_sz;
-				dest_buf_pos += bcmdec->avcc_params.nal_sz;
-			}
-
-			bcmdec->avcc_params.strtcode_offset += bcmdec->avcc_params.nal_sz;
-			data_remaining -= bcmdec->avcc_params.nal_sz;
-			bcmdec->avcc_params.inside_buffer = TRUE;
-			continue;
-		} else if (data_remaining < bcmdec->avcc_params.nal_sz) {
-			if (bcmdec->avcc_params.nal_size_bytes == 2) {
-				temp_data_buf = gst_data_buf + data_buf_pos;
-				memcpy(bcmdec->dest_buf + dest_buf_pos, gst_data_buf + data_buf_pos, data_remaining);
-				if (sts != BC_STS_SUCCESS)
-					return sts;
-				data_buf_pos += data_remaining;
-				dest_buf_pos += data_remaining;
-			}
-			bcmdec->avcc_params.inside_buffer = FALSE;
-			bcmdec->avcc_params.consumed_offset = data_remaining;
-			data_remaining = 0;
-			break;
-		} else {
-			if (bcmdec->avcc_params.nal_size_bytes == 2) {
-				temp_data_buf = gst_data_buf + data_buf_pos;
-				memcpy(bcmdec->dest_buf + dest_buf_pos, gst_data_buf + data_buf_pos, bcmdec->avcc_params.nal_sz);
-				if (sts != BC_STS_SUCCESS)
-					return sts;
-				data_buf_pos += bcmdec->avcc_params.nal_sz;
-				dest_buf_pos += bcmdec->avcc_params.nal_sz;
-			}
-			bcmdec->avcc_params.inside_buffer = FALSE;
-			bcmdec->avcc_params.consumed_offset = data_remaining;
-			bcmdec->avcc_params.strtcode_offset = 0;
-			data_remaining = 0;
-			break;
-		}
-	}
-
-	*dest_buf_sz = dest_buf_pos;
-
-	return BC_STS_SUCCESS;
-}
-#endif
 static BC_STATUS bcmdec_suspend_callback(GstBcmDec *bcmdec)
 {
 	BC_STATUS sts = BC_STS_SUCCESS;
@@ -3298,8 +3158,10 @@ static void * bcmdec_process_get_rbuf(void *ctx)
 			break;
 		}
 
-		if (!bcmdec->streaming || !get_buf_start)
+		if (!bcmdec->streaming || !get_buf_start) {
+			GST_DEBUG_OBJECT(bcmdec, "SLEEPING in get bufs");
 			usleep(100 * 1000);
+		}
 
 		while (bcmdec->streaming && get_buf_start)
 		{
@@ -3316,12 +3178,13 @@ static void * bcmdec_process_get_rbuf(void *ctx)
 			// If we have enough buffers from the renderer then don't get any more
 			if(bcmdec->gst_padbuf_que_cnt >= GST_RENDERER_BUF_POOL_SZ) {
 				usleep(100 * 1000);
+				GST_DEBUG_OBJECT(bcmdec, "SLEEPING because we have enough buffers");
 				continue;
 			}
-			
+
 			if (gst_queue_element == NULL)
 				gst_queue_element = bcmdec_get_que_mem_buf(bcmdec);
-			
+
 			if (!gst_queue_element) {
 				if (!bcmdec->silent)
 					GST_DEBUG_OBJECT(bcmdec, "mbuf full == TRUE %u", bcmdec->gst_buf_que_sz);
@@ -3409,33 +3272,33 @@ static gboolean bcmdec_start_get_rbuf_thread(GstBcmDec *bcmdec)
 // static void bcmdec_put_que_mem_padbuf(GstBcmDec *bcmdec, GSTBUF_LIST *gst_queue_element)
 // {
 // 	pthread_mutex_lock(&bcmdec->gst_padbuf_que_lock);
-// 
+//
 // 	gst_queue_element->next = bcmdec->gst_mem_padbuf_que_hd;
 // 	bcmdec->gst_mem_padbuf_que_hd = gst_queue_element;
-// 
+//
 // 	pthread_mutex_unlock(&bcmdec->gst_padbuf_que_lock);
 // }
-// 
+//
 // static GSTBUF_LIST * bcmdec_get_que_mem_padbuf(GstBcmDec *bcmdec)
 // {
 // 	GSTBUF_LIST *gst_queue_element;
-// 
+//
 // 	pthread_mutex_lock(&bcmdec->gst_padbuf_que_lock);
-// 
+//
 // 	gst_queue_element = bcmdec->gst_mem_padbuf_que_hd;
 // 	if (gst_queue_element !=NULL)
 // 		bcmdec->gst_mem_padbuf_que_hd = bcmdec->gst_mem_padbuf_que_hd->next;
-// 
+//
 // 	pthread_mutex_unlock(&bcmdec->gst_padbuf_que_lock);
-// 
+//
 // 	return gst_queue_element;
 // }
-// 
+//
 // static gboolean bcmdec_alloc_mem_rbuf_que_pool(GstBcmDec *bcmdec)
 // {
 // 	GSTBUF_LIST *gst_queue_element;
 // 	guint i;
-// 
+//
 // 	bcmdec->gst_mem_padbuf_que_hd = NULL;
 // 	for (i = 1; i < bcmdec->gst_padbuf_que_sz; i++) {
 // 		gst_queue_element = (GSTBUF_LIST *)malloc(sizeof(GSTBUF_LIST));
@@ -3446,15 +3309,15 @@ static gboolean bcmdec_start_get_rbuf_thread(GstBcmDec *bcmdec)
 // 		memset(gst_queue_element, 0, sizeof(GSTBUF_LIST));
 // 		bcmdec_put_que_mem_padbuf(bcmdec, gst_queue_element);
 // 	}
-// 
+//
 // 	return TRUE;
 // }
-// 
+//
 // static gboolean bcmdec_release_mem_rbuf_que_pool(GstBcmDec *bcmdec)
 // {
 // 	GSTBUF_LIST *gst_queue_element;
 // 	guint i = 0;
-// 
+//
 // 	do {
 // 		gst_queue_element = bcmdec_get_que_mem_padbuf(bcmdec);
 // 		if (gst_queue_element) {
@@ -3462,11 +3325,11 @@ static gboolean bcmdec_start_get_rbuf_thread(GstBcmDec *bcmdec)
 // 			i++;
 // 		}
 // 	} while (gst_queue_element);
-// 
+//
 // 	bcmdec->gst_mem_padbuf_que_hd = NULL;
 // 	if (!bcmdec->silent)
 // 		GST_DEBUG_OBJECT(bcmdec, "rend_rbuf_que_pool released... %d", i);
-// 
+//
 // 	return TRUE;
 // }
 
@@ -3484,7 +3347,7 @@ static void bcmdec_ins_padbuf(GstBcmDec *bcmdec, GSTBUF_LIST *gst_queue_element)
 
 	bcmdec->gst_padbuf_que_cnt++;
 	GST_DEBUG_OBJECT(bcmdec, "Inc rbuf:%d", bcmdec->gst_padbuf_que_cnt);
-	
+
 	if (sem_post(&bcmdec->rbuf_ins_event) == -1)
 		GST_ERROR_OBJECT(bcmdec, "rbuf sem_post failed");
 
@@ -3509,7 +3372,7 @@ static GSTBUF_LIST *bcmdec_rem_padbuf(GstBcmDec *bcmdec)
 		bcmdec->gst_padbuf_que_cnt--;
 
 	GST_DEBUG_OBJECT(bcmdec, "Dec rbuf:%d", bcmdec->gst_padbuf_que_cnt);
-	
+
 	pthread_mutex_unlock(&bcmdec->gst_padbuf_que_lock);
 
 	return temp;

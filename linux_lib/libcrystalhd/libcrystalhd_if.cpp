@@ -30,8 +30,10 @@
 #include <sys/ipc.h>
 #include <sys/shm.h>
 #include <stdlib.h>
+#include <sys/ioctl.h>
+#include <unistd.h>
 #include "7411d.h"
-#include "version_lnx.h"
+#include "libcrystalhd_version.h"
 #include "bc_decoder_regs.h"
 #include "libcrystalhd_if.h"
 #include "libcrystalhd_priv.h"
@@ -272,6 +274,96 @@ static __attribute__((aligned(4))) uint8_t ExtData[] =
 { 0x00, 0x00};
 
 static uint32_t g_nDeviceID = BC_PCI_DEVID_INVALID;
+pid_t		g_nProcID = 0;
+uint8_t		g_bDecOpened = 0;
+
+uint32_t	g_nDevID = BC_PCI_DEVID_INVALID;
+uint32_t	g_nRevID = 0;
+uint32_t	g_nVendID = 0;
+
+uint32_t DtsGetDevID()
+{
+	uint32_t nDevID, nRevID, nVendID;
+
+	if (g_nDevID == BC_PCI_DEVID_INVALID)
+		DtsGetDevType(&nDevID, &nRevID, &nVendID);
+
+	return g_nDevID;
+}
+
+uint8_t DtsIsDecOpened(pid_t nNewPID)
+{
+	if (nNewPID == 0)
+		return g_bDecOpened;
+
+	if (nNewPID == g_nProcID)
+		return false;
+
+	return g_bDecOpened;
+}
+
+bool DtsChkPID(pid_t nCurPID)
+{
+	if (!g_nProcID)
+		return true;
+
+	return (nCurPID == g_nProcID);
+}
+
+void DtsSetDecStat(bool bDecOpen, pid_t PID)
+{
+	if (bDecOpen == true)
+		g_nProcID = PID;
+	else
+		g_nProcID = 0;
+
+	g_bDecOpened = bDecOpen;
+}
+
+BC_STATUS DtsGetDevType(uint32_t *pDevID, uint32_t *pVendID, uint32_t *pRevID)
+{
+	int drvHandle = 1;
+	BC_IOCTL_DATA IO;
+	int rc;
+
+	if (g_nDevID == BC_PCI_DEVID_INVALID)
+	{
+		drvHandle =open(CRYSTALHD_API_DEV_NAME, O_RDWR);
+
+		if(drvHandle >= 0)
+		{
+			memset(&IO, 0, sizeof(BC_IOCTL_DATA));
+			IO.Timeout = 0;
+			IO.RetSts = BC_STS_SUCCESS;
+			IO.u.hwType.PciDevId = 0xffff;
+			IO.u.hwType.PciVenId =  0xffff;
+			IO.u.hwType.HwRev = 0xff;
+
+			IO.RetSts = BC_STS_SUCCESS;
+
+			rc = ioctl(drvHandle, BCM_IOC_GET_HWTYPE, &IO);
+
+			if (rc >= 0 && IO.RetSts == BC_STS_SUCCESS)
+			{
+				g_nDevID = IO.u.hwType.PciDevId;
+				g_nRevID = IO.u.hwType.HwRev;
+				g_nVendID = IO.u.hwType.PciVenId;
+			}
+			close(drvHandle);
+		}
+	}
+
+	if (g_nDevID != BC_PCI_DEVID_INVALID)
+	{
+		*pDevID = g_nDevID;
+		*pRevID = g_nRevID;
+		*pVendID = g_nVendID;
+		return BC_STS_SUCCESS;
+	}
+
+	return BC_STS_ERROR;
+
+}
 
 static BC_STATUS DtsSetupHardware(HANDLE hDevice, BOOL IgnClkChk)
 {
@@ -282,14 +374,18 @@ static BC_STATUS DtsSetupHardware(HANDLE hDevice, BOOL IgnClkChk)
 
 	if( !IgnClkChk){
 		if(Ctx->DevId == BC_PCI_DEVID_LINK || Ctx->DevId == BC_PCI_DEVID_FLEA){
-			if((DtsGetOPMode() & 0x08) && (DtsGetHwInitSts() != BC_DIL_HWINIT_IN_PROGRESS)){
+			if(DtsGetHwInitSts() != BC_DIL_HWINIT_NOT_YET){
 				return BC_STS_SUCCESS;
 			}
 		}
 	}
 
+	DtsSetHwInitSts(BC_DIL_HWINIT_IN_PROGRESS);
+
     if (Ctx->DevId == BC_PCI_DEVID_LINK)
         sts = DtsPushAuthFwToLink(hDevice,NULL);
+	else if (Ctx->DevId == BC_PCI_DEVID_FLEA)
+		sts = DtsPushFwToFlea(hDevice,NULL);
 
 	if(sts != BC_STS_SUCCESS){
 		return sts;
@@ -297,17 +393,20 @@ static BC_STATUS DtsSetupHardware(HANDLE hDevice, BOOL IgnClkChk)
 
 	/* Initialize Firmware interface */
 	sts = DtsFWInitialize(hDevice,0);
-	if(sts != BC_STS_SUCCESS ){
-		return sts;
-	}
+
+	if (sts == BC_STS_SUCCESS)
+		DtsSetHwInitSts(BC_DIL_HWINIT_DONE);
+	else
+		DtsSetHwInitSts(BC_DIL_HWINIT_NOT_YET);
+
 	return sts;
 }
 
-static BC_STATUS DtsReleaseChannel(HANDLE  hDevice,uint32_t ChannelID, BOOL Stop)
+static BC_STATUS DtsReleaseChannel(HANDLE  hDevice, uint32_t ChannelID, bool Stop)
 {
 	BC_STATUS	sts = BC_STS_SUCCESS;
 	if(Stop){
-		sts = DtsFWStopVideo(hDevice, ChannelID, TRUE);
+		sts = DtsFWStopVideo(hDevice, ChannelID, true);
 		if(sts != BC_STS_SUCCESS){
 			DebugLog_Trace(LDIL_DBG,"DtsReleaseChannel: StopVideoFailed Ignoring error\n");
 		}
@@ -328,6 +427,9 @@ static BC_STATUS DtsRecoverableDecOpen(HANDLE  hDevice,uint32_t StreamType)
 	DTS_LIB_CONTEXT		*Ctx = NULL;
 
 	DTS_GET_CTX(hDevice,Ctx);
+
+	if (!DtsChkPID(Ctx->ProcessID))
+		return BC_STS_ERROR;
 
 	if (Ctx->DevId == BC_PCI_DEVID_FLEA)
 	{
@@ -387,11 +489,12 @@ DtsDeviceOpen(
 {
 	int 		drvHandle=1;
 	BC_STATUS	Sts=BC_STS_SUCCESS;
-	uint32_t globMode = 0, cnt = 100;
+	uint32_t globMode = 0;
 	uint8_t	nTry=1;
 	uint32_t		VendorID, DeviceID, RevID, FixFlags, drvMode;
 	uint32_t		drvVer, dilVer;
 	uint32_t		fwVer, decVer, hwVer;
+	pid_t	processID;
 #ifdef _USE_SHMEM_
 	int shmid=0;
 #endif
@@ -401,8 +504,22 @@ DtsDeviceOpen(
 
 	uint32_t clkSet = (mode >> 19) & 0x7;
 
+	processID = getpid();
+
+	if (DtsGetDevID() == BC_PCI_DEVID_INVALID)
+	{
+		DebugLog_Trace(LDIL_DBG, "DtsDeviceOpen: DtsGetDevID Failed\n");
+		return BC_STS_ERROR;
+	}
+
 	FixFlags = mode;
 	mode &= 0xFF;
+
+	if (mode != DTS_MONITOR_MODE && DtsIsDecOpened(processID))
+	{
+		DebugLog_Trace(LDIL_DBG, "DtsDeviceOpen: Decoder is already opened\n");
+		return BC_STS_ERROR;
+	}
 
 	switch (clkSet) {
 		case 6: clkSet = 200;
@@ -452,6 +569,8 @@ DtsDeviceOpen(
 #else
 	globMode = DtsGetOPMode();
 #endif
+
+#if 0
 	if(((globMode & 0x3) && (mode != DTS_MONITOR_MODE)) ||
 	   ((globMode & 0x4) && (mode == DTS_MONITOR_MODE)) ||
 	   ((globMode & 0x8) && (mode == DTS_HWINIT_MODE))){
@@ -474,6 +593,10 @@ DtsDeviceOpen(
 	}else if(mode == DTS_HWINIT_MODE){
 		DtsSetHwInitSts(BC_DIL_HWINIT_IN_PROGRESS);
 	}
+#endif
+
+	if (mode == DTS_HWINIT_MODE)
+		DtsSetHwInitSts(BC_DIL_HWINIT_IN_PROGRESS);
 
 	drvHandle =open(CRYSTALHD_API_DEV_NAME, O_RDWR);
 	if(drvHandle < 0)
@@ -486,17 +609,22 @@ DtsDeviceOpen(
 	/* Initialize Internal Driver interfaces.. */
 	if( (Sts = DtsInitInterface(drvHandle,hDevice, mode)) != BC_STS_SUCCESS){
 		DebugLog_Trace(LDIL_ERR,"DtsDeviceOpen: Interface Init Failed:%x\n",Sts);
+		close(drvHandle);
 		return Sts;
 	}
 	if( (Sts = DtsGetHwType(*hDevice,&DeviceID,&VendorID,&RevID))!=BC_STS_SUCCESS){
 		DebugLog_Trace(LDIL_DBG,"Get Hardware Type Failed\n");
+		close(drvHandle);
 		return Sts;
 	}
+
+	// set Ctx->DevId early, other depend on it
+	DtsGetContext(*hDevice)->DevId = DeviceID;
 	g_nDeviceID = DeviceID;
 
 	/* NAREN Program clock */
-	if(DeviceID == BC_PCI_DEVID_LINK)
-		DtsSetCoreClock(*hDevice, clkSet);
+//	if(DeviceID == BC_PCI_DEVID_LINK)
+//		DtsSetCoreClock(*hDevice, clkSet);
 
 	/*
 	 * We have to specify the mode to the driver.
@@ -505,6 +633,7 @@ DtsDeviceOpen(
 	 */
 	if ((Sts = DtsGetVersion(*hDevice, &drvVer, &dilVer)) != BC_STS_SUCCESS) {
 		DebugLog_Trace(LDIL_DBG,"Get drv ver failed\n");
+		close(drvHandle);
 		return Sts;
 	}
 	/* If driver minor version is more than 13, enable DTS_SKIP_TX_CHK_CPB feature */
@@ -580,7 +709,6 @@ DtsDeviceOpen(
 			Sts = 	DtsSetupHardware(*hDevice, FALSE);
 			if(Sts == BC_STS_SUCCESS)
 			{
-				DebugLog_Trace(LDIL_DBG,"DtsSetupHardware: Success\n");
 				break;
 			}
 			else
@@ -602,13 +730,10 @@ DtsDeviceOpen(
 
 	// Clear all stats before we start play back
 	if(mode == DTS_PLAYBACK_MODE) {
-		DebugLog_Trace(LDIL_DBG,"trying to clear all stats\n");
 		DtsRstDrvStat(*hDevice);
 	}
 
 	//DtsDevRegisterWr( hDevice,UartSelectA, 3);
-
-	DebugLog_Trace(LDIL_DBG,"Done with Open\n");
 exit:
 	return Sts;
 }
@@ -623,8 +748,10 @@ DtsDeviceClose(
 
 	DTS_GET_CTX(hDevice,Ctx);
 
-	if(Ctx->State != BC_DEC_STATE_INVALID){
-		DebugLog_Trace(LDIL_DBG,"DtsDeviceClose: closing decoder ....\n");
+	if (!DtsChkPID(Ctx->ProcessID))
+		return BC_STS_ERROR;
+
+	if(Ctx->State != BC_DEC_STATE_CLOSE){
 		DtsCloseDecoder(hDevice);
 	}
 
@@ -842,9 +969,13 @@ DtsOpenDecoder(
 
 	DTS_GET_CTX(hDevice,Ctx);
 
-	if (Ctx->State != BC_DEC_STATE_INVALID) {
-		DebugLog_Trace(LDIL_DBG, "DtsOpenDecoder: Channel Already Open\n");
-		return BC_STS_BUSY;
+	if(Ctx->State != BC_DEC_STATE_CLOSE)
+	{
+		if((sts = DtsCloseDecoder(hDevice)) != BC_STS_SUCCESS)
+		{
+			DebugLog_Trace(LDIL_DBG, "DtsOpenDecoder: DtsCloseDecoder Failed (sts:%d)\n", sts);
+			return sts;
+		}
 	}
 
 	Ctx->LastPicNum = -1;
@@ -854,11 +985,6 @@ DtsOpenDecoder(
 	Ctx->bEOSCheck = FALSE;
 	Ctx->bEOS = FALSE;
 	Ctx->CapState = 0;
-	if(Ctx->SingleThreadedAppMode) {
-		Ctx->cpbBase = 0;
-		Ctx->cpbEnd = 0;
-	}
-	Ctx->FPDrain = FALSE;
 
 	sts = DtsSetVideoClock(hDevice,0);
 	if (sts != BC_STS_SUCCESS)
@@ -867,7 +993,7 @@ DtsOpenDecoder(
 		return sts;
 	}
 
-	if(Ctx->DevId == BC_PCI_DEVID_LINK || Ctx->DevId == BC_PCI_DEVID_DOZER)
+	if(Ctx->DevId == BC_PCI_DEVID_LINK)
 	{
 		// FIX_ME to support other stream types.
 		sts = DtsSetTSMode(hDevice,0);
@@ -896,14 +1022,9 @@ DtsOpenDecoder(
 		return sts;
 	}
 
-	//For Single Field Mode
-	if((!Ctx->SingleThreadedAppMode) && (Ctx->DevId == BC_PCI_DEVID_FLEA))
-	{
-		sts = DtsFWSetSingleField(hDevice, TRUE);
-	}
+	Ctx->State = BC_DEC_STATE_STOP;
 
-	Ctx->State = BC_DEC_STATE_OPEN;
-
+	DtsSetDecStat(true, Ctx->ProcessID);
 
 	return BC_STS_SUCCESS;
 }
@@ -918,14 +1039,21 @@ DtsStartDecoder(
 	DTS_LIB_CONTEXT		*Ctx = NULL;
 	DTS_GET_CTX(hDevice,Ctx);
 
-	if (Ctx->State == BC_DEC_STATE_INVALID) {
+	if (!DtsChkPID(Ctx->ProcessID))
+		return BC_STS_ERROR;
+
+	if (Ctx->State == BC_DEC_STATE_CLOSE) {
 		DebugLog_Trace(LDIL_DBG,"DtsStartDecoder: Decoder is not opened\n");
 		return BC_STS_DEC_NOT_OPEN;
 	}
 
-	if( Ctx->State == BC_DEC_STATE_START) {
-		DebugLog_Trace(LDIL_DBG,"DtsStartDecoder: Decoder Not in correct State\n");
-		return BC_STS_ERR_USAGE;
+	if( Ctx->State == BC_DEC_STATE_START)
+	{
+		if ((sts = DtsStopDecoder(hDevice)) != BC_STS_SUCCESS)
+		{
+			DebugLog_Trace(LDIL_DBG, "DtsStartDecoder: DtsStopDecoder FAILED (sts:%d)\n", sts);
+			return sts;
+		}
 	}
 
 	if(Ctx->VidParams.Progressive){
@@ -967,10 +1095,19 @@ DtsCloseDecoder(
 	DTS_LIB_CONTEXT		*Ctx = NULL;
 	DTS_GET_CTX(hDevice,Ctx);
 
-	if( Ctx->State == BC_DEC_STATE_INVALID){
-		DebugLog_Trace(LDIL_DBG,"DtsCloseDecoder: Decoder Not Opened Ignoring..\n");
+	if (!DtsChkPID(Ctx->ProcessID))
+		return BC_STS_ERROR;
+
+	if(Ctx->State == BC_DEC_STATE_CLOSE)
+	{
 		return BC_STS_SUCCESS;
 	}
+
+	if (Ctx->State != BC_DEC_STATE_STOP)
+	{
+		DtsStopDecoder(hDevice);
+	}
+
 
 	sts = DtsFWCloseChannel(hDevice,Ctx->OpenRsp.channelId);
 
@@ -979,25 +1116,19 @@ DtsCloseDecoder(
 		return sts;
 	}*/
 
-	Ctx->State = BC_DEC_STATE_INVALID;
+	DtsSetDecStat(false, Ctx->ProcessID);
+
+	Ctx->State = BC_DEC_STATE_CLOSE;
 
 	Ctx->LastPicNum = -1;
 	Ctx->LastSessNum = -1;
 
 	Ctx->EOSCnt = 0;
 	Ctx->DrvStatusEOSCnt = 0;
-	Ctx->bEOSCheck = FALSE;
-	Ctx->bEOS = FALSE;
+	Ctx->bEOSCheck = false;
+	Ctx->bEOS = false;
 
-	Ctx->InSampleCount = 0;
-#ifdef TX_CIRCULAR_BUFFER
-	Ctx->nTxHoldBufRead = Ctx->nTxHoldBufWrite = 0;
-	Ctx->nTxHoldBufCounter = 0;
-#else
-	Ctx->nPendBufInd = 0;
-#endif
-	Ctx->nPendFPBufInd = 0;
-	Ctx->FPDrain = FALSE;
+//	Ctx->InSampleCount = 0;
 
 	/* Clear all pending lists.. */
 	DtsClrPendMdataList(Ctx);
@@ -1054,6 +1185,7 @@ DtsSetInputFormat(
 {
 	DTS_LIB_CONTEXT *Ctx = NULL;
 	uint32_t videoAlgo = BC_VID_ALGO_H264;
+	uint32_t	ScaledWidth = 0;
 
 	DTS_GET_CTX(hDevice,Ctx);
 
@@ -1106,10 +1238,24 @@ DtsSetInputFormat(
 	DtsSetVideoParams(hDevice, videoAlgo, pInputFormat->FGTEnable, pInputFormat->MetaDataEnable, pInputFormat->Progressive, pInputFormat->OptFlags);
 	DtsSetPESConverter(hDevice);
 
-//	if (Ctx->DevId == BC_PCI_DEVID_FLEA && !Ctx->SingleThreadedAppMode)
-	// Always enable scaling to work around FP performance problem with YUY2
-	if (Ctx->DevId == BC_PCI_DEVID_FLEA)
-		Ctx->bScaling = pInputFormat->bEnableScaling;
+	if(Ctx->DevId == BC_PCI_DEVID_FLEA)
+	{
+		if(pInputFormat->bEnableScaling) {
+			if((pInputFormat->ScalingParams.sWidth > 1920)||
+			   (pInputFormat->ScalingParams.sWidth < 1280))
+				ScaledWidth = 1280;
+			else
+				ScaledWidth = pInputFormat->ScalingParams.sWidth;
+
+			Ctx->EnableScaling = (ScaledWidth << 20) | (ScaledWidth << 8) |
+					     pInputFormat->bEnableScaling;
+		} else {
+			Ctx->EnableScaling = 0;
+		}
+
+		Ctx->bEnable720pDropHalf = 0;
+	}
+
 	return DtsCheckProfile(hDevice);
 }
 
@@ -1130,15 +1276,10 @@ DtsGetVideoParams(
 	if(!videoAlg || !FGTEnable || !MetaDataEnable || !Progressive)
 		return BC_STS_INV_ARG;
 
-	if(Ctx->State != BC_DEC_STATE_OPEN){
-		DebugLog_Trace(LDIL_DBG,"DtsOpenDecoder: Channel Already Open\n");
-		return BC_STS_ERR_USAGE;
-	}
-
-	 *videoAlg = Ctx->VidParams.VideoAlgo;
-	 *FGTEnable = Ctx->VidParams.FGTEnable;
-	 *MetaDataEnable = Ctx->VidParams.MetaDataEnable;
-	 *Progressive = Ctx->VidParams.Progressive;
+	*videoAlg = Ctx->VidParams.VideoAlgo;
+	*FGTEnable = Ctx->VidParams.FGTEnable;
+	*MetaDataEnable = Ctx->VidParams.MetaDataEnable;
+	*Progressive = Ctx->VidParams.Progressive;
 
 	 return BC_STS_SUCCESS;
 
@@ -1167,19 +1308,19 @@ DtsStopDecoder(
 	DTS_LIB_CONTEXT		*Ctx = NULL;
 	DTS_GET_CTX(hDevice,Ctx);
 
+	if (!DtsChkPID(Ctx->ProcessID))
+		return BC_STS_ERROR;
 
-	if( (Ctx->State != BC_DEC_STATE_START) && (Ctx->State != BC_DEC_STATE_PAUSE) ) {
-		DebugLog_Trace(LDIL_DBG,"DtsStopDecoder: Decoder Not Started\n");
-		return BC_STS_ERR_USAGE;
+	if (Ctx->State == BC_DEC_STATE_CLOSE || Ctx->State == BC_DEC_STATE_STOP)
+	{
+		return BC_STS_SUCCESS;
 	}
 
 	DtsCancelFetchOutInt(Ctx);
 
 	sts = DtsFWStopVideo(hDevice,Ctx->OpenRsp.channelId, FALSE);
-	if(sts != BC_STS_SUCCESS )
-	{
-		return sts;
-	}
+
+	sts = DtsFlushRxCapture(hDevice, false);
 
 	Ctx->State = BC_DEC_STATE_STOP;
 
@@ -1195,13 +1336,26 @@ DRVIFLIB_API BC_STATUS
 	DTS_LIB_CONTEXT		*Ctx = NULL;
 	DTS_GET_CTX(hDevice,Ctx);
 
-	if(Ctx->DevId == BC_PCI_DEVID_FLEA)
-		return BC_STS_SUCCESS; // PAUSE and RESUME do nothing for FLEA
+	if (!DtsChkPID(Ctx->ProcessID))
+		return BC_STS_ERROR;
 
-	if( Ctx->State != BC_DEC_STATE_START ) {
-		DebugLog_Trace(LDIL_DBG,"DtsPauseDecoder: Decoder Not Started\n");
-		return BC_STS_ERR_USAGE;
+	if (Ctx->State == BC_DEC_STATE_CLOSE)
+	{
+		DebugLog_Trace(LDIL_DBG, "DtsPauseDecoder: Decoder is not opened\n");
+		return BC_STS_DEC_NOT_OPEN;
 	}
+	if (Ctx->State == BC_DEC_STATE_STOP)
+	{
+		DebugLog_Trace(LDIL_DBG, "DtsPauseDecoder: Decoder is not started\n");
+		return BC_STS_DEC_NOT_STARTED;
+	}
+
+	if( Ctx->State == BC_DEC_STATE_PAUSE || Ctx->DevId == BC_PCI_DEVID_FLEA)
+	{
+		Ctx->State = BC_DEC_STATE_PAUSE;
+		return BC_STS_SUCCESS;
+	}
+
 	sts = DtsFWPauseVideo(hDevice,eC011_PAUSE_MODE_ON);
 	if(sts != BC_STS_SUCCESS )
 	{
@@ -1224,12 +1378,25 @@ DRVIFLIB_API BC_STATUS
 	DTS_LIB_CONTEXT		*Ctx = NULL;
 	DTS_GET_CTX(hDevice,Ctx);
 
-	if( Ctx->State == BC_DEC_STATE_START || Ctx->DevId == BC_PCI_DEVID_FLEA) {
-		return BC_STS_SUCCESS;
+	if (!DtsChkPID(Ctx->ProcessID))
+		return BC_STS_ERROR;
+
+	if (Ctx->State == BC_DEC_STATE_CLOSE)
+	{
+		DebugLog_Trace(LDIL_DBG, "DtsResumeDecoder: Decoder is not opened\n");
+		return BC_STS_DEC_NOT_OPEN;
 	}
 
-	if( Ctx->State != BC_DEC_STATE_PAUSE ) {
-		return BC_STS_ERR_USAGE;
+	if (Ctx->State == BC_DEC_STATE_STOP)
+	{
+		DebugLog_Trace(LDIL_DBG, "DtsResumeDecoder: Decoder is not started\n");
+		return BC_STS_DEC_NOT_STARTED;
+	}
+
+	if(Ctx->State == BC_DEC_STATE_START || Ctx->DevId == BC_PCI_DEVID_FLEA)
+	{
+		Ctx->State = BC_DEC_STATE_START;
+		return BC_STS_SUCCESS;
 	}
 
 	sts = DtsFWPauseVideo(hDevice,eC011_PAUSE_MODE_OFF);
@@ -1239,10 +1406,6 @@ DRVIFLIB_API BC_STATUS
 	}
 
 	Ctx->State = BC_DEC_STATE_START;
-
-	Ctx->totalPicsCounted = 0;
-	Ctx->rptPicsCounted = 0;
-	Ctx->nrptPicsCounted = 0;
 
 	return sts;
 }
@@ -1268,6 +1431,15 @@ DtsStartCaptureImmidiate(HANDLE		hDevice,
 	//unused uint32_t			Sz=0;
 
 	DTS_GET_CTX(hDevice,Ctx);
+
+	if(Ctx->State != BC_DEC_STATE_START)
+	{
+		DebugLog_Trace(LDIL_DBG, "DtsStartCaptureImmidiate: Decoder is not started\n");
+		return BC_STS_DEC_NOT_STARTED;
+	}
+
+	if (!DtsChkPID(Ctx->ProcessID))
+		return BC_STS_ERROR;
 
 	if(!(pIocData = DtsAllocIoctlData(Ctx)))
 		return BC_STS_INSUFF_RES;
@@ -1312,6 +1484,15 @@ DtsStartCapture(HANDLE  hDevice)
 	//unused uint32_t	Sz=0;
 
 	DTS_GET_CTX(hDevice,Ctx);
+
+	if (!DtsChkPID(Ctx->ProcessID))
+		return BC_STS_ERROR;
+
+	if (Ctx->State != BC_DEC_STATE_START)
+	{
+		DebugLog_Trace(LDIL_DBG, "DtsStartCapture: Decoder is not started\n");
+		return BC_STS_DEC_NOT_STARTED;
+	}
 
 	if(!(pIocData = DtsAllocIoctlData(Ctx)))
 		return BC_STS_INSUFF_RES;
@@ -1358,6 +1539,19 @@ DtsFlushRxCapture(
 
 	DTS_GET_CTX(hDevice,Ctx);
 
+	if (!Ctx->bMapOutBufDone)
+	{
+		return BC_STS_SUCCESS;
+	}
+
+	if (!DtsChkPID(Ctx->ProcessID))
+		return BC_STS_ERROR;
+
+	if (Ctx->State == BC_DEC_STATE_CLOSE)
+	{
+		return BC_STS_DEC_NOT_OPEN;
+	}
+
 	if(!(pIocData = DtsAllocIoctlData(Ctx)))
 		return BC_STS_INSUFF_RES;
 
@@ -1369,8 +1563,6 @@ DtsFlushRxCapture(
 		Ctx->bMapOutBufDone = false;
     }
 
-	//ResetEvent(Ctx->CancelProcOut);
-
 	return Sts;
 }
 
@@ -1380,7 +1572,7 @@ DtsCancelTxRequest(
 	HANDLE	hDevice,
 	uint32_t Operation)
 {
-	return BC_STS_NOT_IMPL;
+	return BC_STS_SUCCESS; // Since we always check before TX, there can never be a TX holding   in the Driver. FIXME
 }
 
 
@@ -1397,6 +1589,19 @@ DtsProcOutput(
 	DTS_LIB_CONTEXT		*Ctx = NULL;
 
 	DTS_GET_CTX(hDevice,Ctx);
+
+	if (Ctx->State == BC_DEC_STATE_CLOSE)
+	{
+		return BC_STS_DEC_NOT_OPEN;
+	}
+
+	if (Ctx->State == BC_DEC_STATE_STOP || Ctx->State == BC_DEC_STATE_FLUSH)
+	{
+		return BC_STS_DEC_NOT_STARTED;
+	}
+
+	if (!DtsChkPID(Ctx->ProcessID))
+		return BC_STS_ERROR;
 
 	if(!pOut){
 		DebugLog_Trace(LDIL_DBG,"DtsProcOutput: Invalid Arg!!\n");
@@ -1417,10 +1622,6 @@ DtsProcOutput(
 	do
 	{
 		memset(&OutBuffs,0,sizeof(OutBuffs));
-
-		// If running in adobe mode and we are draining that make sure TX is still going
-		if (Ctx->SingleThreadedAppMode && Ctx->nPendFPBufInd != 0 && Ctx->FPDrain)
-			DtsSendData(hDevice, 0, 0, 0, 0);
 
 		sts = DtsFetchOutInterruptible(Ctx,&OutBuffs,milliSecWait);
 		if(sts != BC_STS_SUCCESS)
@@ -1480,6 +1681,7 @@ DtsProcOutput(
 			{
 				Ctx->bEOS = TRUE;
 				pOut->PicInfo.flags |= (VDEC_FLAG_LAST_PICTURE|VDEC_FLAG_EOS);
+				DebugLog_Trace(LDIL_DBG,"HIT EOS with PIB tag\n");
 			}
 		}
 		else
@@ -1511,6 +1713,9 @@ DtsProcOutput(
 			if(Ctx->SingleThreadedAppMode && (pOut->DropFrames == 0))
 			{
 				pOut->PicInfo.timeStamp = 0;
+				pOut->PicInfo.picture_number = OutBuffs.PicInfo.picture_number;
+				if(OutBuffs.PicInfo.flags & VDEC_FLAG_EOS)
+					pOut->PicInfo.flags |= (VDEC_FLAG_EOS|VDEC_FLAG_LAST_PICTURE);
 				return BC_STS_SUCCESS;
 			}
 		}
@@ -1552,9 +1757,6 @@ DtsProcOutput(
 	/* Update Counters */
 	DtsUpdateOutStats(Ctx,pOut);
 
-	/* Update Counters */
-	DtsUpdateOutStats(Ctx,pOut);
-
 	/* We need to release the buffers even if we fail to copy..*/
 	stRel = DtsRelRxBuff(Ctx,&Ctx->pOutData->u.RxBuffs,FALSE);
 
@@ -1592,6 +1794,19 @@ DtsProcOutputNoCopy(
 
 	DTS_GET_CTX(hDevice,Ctx);
 
+	if (!DtsChkPID(Ctx->ProcessID))
+		return BC_STS_ERROR;
+
+	if (Ctx->State == BC_DEC_STATE_CLOSE)
+	{
+		return BC_STS_DEC_NOT_OPEN;
+	}
+
+	if (Ctx->State == BC_DEC_STATE_STOP || Ctx->State == BC_DEC_STATE_FLUSH)
+	{
+		return BC_STS_DEC_NOT_STARTED;
+	}
+
 	if(!pOut){
 		return BC_STS_INV_ARG;
 	}
@@ -1603,7 +1818,7 @@ DtsProcOutputNoCopy(
 	}
 	pOut->b422Mode = Ctx->b422Mode;
 
-	while(1){
+	while(Ctx->State == BC_DEC_STATE_START || Ctx->State == BC_DEC_STATE_PAUSE){
 
 		if( (sts = DtsFetchOutInterruptible(Ctx,pOut,milliSecWait)) != BC_STS_SUCCESS){
 			DebugLog_Trace(LDIL_DBG,"DtsProcOutput: No Active Channels\n");
@@ -1620,57 +1835,6 @@ DtsProcOutputNoCopy(
 		 * is encrypted or not.
 		 */
 
-#ifdef _ENABLE_CODE_INSTRUMENTATION_
-
-		if( (sts == BC_STS_SUCCESS) &&
-			(!(pOut->PoutFlags & BC_POUT_FLAGS_FMT_CHANGE)) &&
-			(FALSE == pOut->b422Mode))
-		{
-			uint32_t						Width=0,Height=0,PicInfoLineNum=0,CntrlFlags = 0;
-			uint8_t*						pPicInfoLine;
-
-			Height = Ctx->picHeight;
-			Width = Ctx->picWidth;
-
-			PicInfoLineNum = (ULONG)(*(pOut->Ybuff + 3)) & 0xff
-			| ((ULONG)(*(pOut->Ybuff + 2)) << 8) & 0x0000ff00
-			| ((ULONG)(*(pOut->Ybuff + 1)) << 16) & 0x00ff0000
-			| ((ULONG)(*(pOut->Ybuff + 0)) << 24) & 0xff000000;
-
-			//DebugLog_Trace(LDIL_DBG,"PicInfoLineNum:%x, Width: %d, Height: %d\n",PicInfoLineNum, Width, Height);
-			pOut->PoutFlags &= ~BC_POUT_FLAGS_PIB_VALID;
-			if( (PicInfoLineNum == Height) || (PicInfoLineNum == Height/2))
-			{
-				pOut->PoutFlags |= BC_POUT_FLAGS_PIB_VALID;
-				pPicInfoLine = pOut->Ybuff + PicInfoLineNum * Width;
-				CntrlFlags  = (ULONG)(*(pPicInfoLine + 3)) & 0xff
-							| ((ULONG)(*(pPicInfoLine + 2)) << 8) & 0x0000ff00
-							| ((ULONG)(*(pPicInfoLine + 1)) << 16) & 0x00ff0000
-							| ((ULONG)(*(pPicInfoLine + 0)) << 24) & 0xff000000;
-
-
-				pOut->PicInfo.picture_number = 0xc0000000 & CntrlFlags;
-				DebugLog_Trace(LDIL_DBG," =");
-				if(CntrlFlags & BC_BIT(30)){
-					pOut->PoutFlags |= BC_POUT_FLAGS_FLD_BOT;
-					DebugLog_Trace(LDIL_DBG,"B+");
-				}else{
-					pOut->PoutFlags &= ~BC_POUT_FLAGS_FLD_BOT;
-					DebugLog_Trace(LDIL_DBG,"T+");
-				}
-
-				if(CntrlFlags & BC_BIT(31)) {
-					DebugLog_Trace(LDIL_DBG,"E");
-				} else {
-					DebugLog_Trace(LDIL_DBG,"Ne");
-				}
-				DebugLog_Trace(LDIL_DBG,"=");
-
-				dts_swap_buffer((uint32_t*)&pOut->PicInfo,(uint32_t*)(pPicInfoLine + 4), 32);
-			}
-		}
-
-#endif
 		/* Update Counters.. */
 		DtsUpdateOutStats(Ctx,pOut);
 
@@ -1718,375 +1882,6 @@ DtsReleaseOutputBuffs(
 	return DtsRelRxBuff(Ctx, &Ctx->pOutData->u.RxBuffs, FALSE);
 }
 
-// NAREN this function is used to send data buffered to the HW
-// This is initially for FP since it needs buffering to avoid stalling the CPU
-// and excessive polling from the single thread plugin due to the HW returning 0 size
-// buffers when it is absorbing data
-// FP tries to send bursts of data to return from hide or minimized operation to full visible
-// operation and this will allow bigger bursts
-DRVIFLIB_API BC_STATUS
-DtsSendDataFPMode( HANDLE  hDevice ,
-				 uint8_t *pUserData,
-				 uint32_t ulSizeInBytes,
-				 uint64_t timeStamp,
-				 BOOL encrypted
-			    )
-{
-	uint32_t	DramOff;
-	BC_STATUS	sts = BC_STS_SUCCESS;
-	DTS_LIB_CONTEXT		*Ctx = NULL;
-	BC_DTS_STATUS pStat;
-	uint32_t TransferSz = 0;
-	//unused uint32_t i_cnt=0, p_cnt=0;
-
-	//unused BC_DTS_STATS *pDtsStat = DtsGetgStats();
-
-	DTS_GET_CTX(hDevice,Ctx);
-
-	// Not really needed for FP since it only used H.264. But leave it just in case
-	if(Ctx->VidParams.VideoAlgo == BC_VID_ALGO_VC1MP)
-		encrypted|=0x2;
-
-	if(ulSizeInBytes > FP_TX_BUF_SIZE)
-		return BC_STS_INSUFF_RES; //Error
-
-	// This hack only works because FP is single threaded and we are sure that no one else is using this function
-	// For other cases we will have to use synchronization
-	Ctx->SingleThreadedAppMode |= 0x8; // get the HW free size always in this function
-	// First get the available size from the HW
-	sts = DtsGetDriverStatus(hDevice, &pStat);
-	Ctx->SingleThreadedAppMode &= 0x7;
-	if(sts != BC_STS_SUCCESS)
-		return sts;
-
-	/* If we are aborting TX then clear the buffer and return */
-	if(pStat.cpbEmptySize & 0x80000000)
-	{
-		Ctx->nPendFPBufInd = 0;
-		return BC_STS_SUCCESS;
-	}
-
-	// Check for Drain condition. In case of FP Drain will be posted from ProcOutput
-	if((ulSizeInBytes == 0) && (pUserData == NULL))
-	{
-		// first make sure the HW can deal with the data
-		if(pStat.cpbEmptySize == 0)
-			return BC_STS_SUCCESS;
-
-		if(Ctx->nPendFPBufInd <= pStat.cpbEmptySize)
-			TransferSz = Ctx->nPendFPBufInd;
-		else
-			TransferSz = pStat.cpbEmptySize;
-
-		sts = DtsTxDmaText(hDevice, Ctx->FPpendingBuf, TransferSz, &DramOff, encrypted);
-		if(sts == BC_STS_SUCCESS)
-			DtsUpdateInStats(Ctx, TransferSz);
-		else
-			return sts;
-
-		Ctx->nPendFPBufInd -= TransferSz;
-		if (Ctx->nPendFPBufInd == 0)
-			return BC_STS_SUCCESS;
-		// Then clean up the buffer for the next time
-		if(memmove_s(Ctx->FPpendingBuf, FP_TX_BUF_SIZE, Ctx->FPpendingBuf + TransferSz, Ctx->nPendFPBufInd))
-			return BC_STS_INSUFF_RES;
-		else
-			return BC_STS_SUCCESS;
-	}
-
-	// We can safely buffer if we can't send because FP has checked for enough space before the TX
-	// if the cpb returns empty - we are either in PD or don't have space
-	// just buffer and return
-	if(pStat.cpbEmptySize == 0)
-	{
-		if(memcpy_s(Ctx->FPpendingBuf + Ctx->nPendFPBufInd, FP_TX_BUF_SIZE - Ctx->nPendFPBufInd, pUserData, ulSizeInBytes))
-			return BC_STS_INSUFF_RES;
-		Ctx->nPendFPBufInd += ulSizeInBytes;
-		return BC_STS_SUCCESS;
-	}
-
-	// We can send some data. If we can send without buffering data send directly
-	if((Ctx->nPendFPBufInd == 0) && (ulSizeInBytes <= pStat.cpbEmptySize))
-	{
-		sts = DtsTxDmaText(hDevice, pUserData, ulSizeInBytes, &DramOff, encrypted);
-		if(sts == BC_STS_SUCCESS)
-			DtsUpdateInStats(Ctx,ulSizeInBytes);
-		return sts;
-	}
-
-	// We were unable to send all the data. So buffer the rest.
-	// Do a poor man's queue here. Ugly, so fix this if it is a performance problem
-	// First add to the buffer
-	if(memcpy_s(Ctx->FPpendingBuf + Ctx->nPendFPBufInd, FP_TX_BUF_SIZE - Ctx->nPendFPBufInd, pUserData, ulSizeInBytes))
-		return BC_STS_INSUFF_RES;
-	Ctx->nPendFPBufInd += ulSizeInBytes;
-	if(Ctx->nPendFPBufInd <= pStat.cpbEmptySize)
-		TransferSz = Ctx->nPendFPBufInd;
-	else
-		TransferSz = pStat.cpbEmptySize;
-
-	sts = DtsTxDmaText(hDevice, Ctx->FPpendingBuf, TransferSz, &DramOff, encrypted);
-	if(sts == BC_STS_SUCCESS)
-		DtsUpdateInStats(Ctx, TransferSz);
-	else
-		return sts;
-	Ctx->nPendFPBufInd -= TransferSz;
-	if (Ctx->nPendFPBufInd == 0)
-		return BC_STS_SUCCESS;
-	// Then clean up the buffer for the next time
-	if(memmove_s(Ctx->FPpendingBuf, FP_TX_BUF_SIZE, Ctx->FPpendingBuf + TransferSz, Ctx->nPendFPBufInd))
-		return BC_STS_INSUFF_RES;
-	else
-		return BC_STS_SUCCESS;
-
-}
-
-DRVIFLIB_API BC_STATUS
-DtsSendDataBuffer( HANDLE  hDevice ,
-				 uint8_t *pUserData,
-				 uint32_t ulSizeInBytes,
-				 uint64_t timeStamp,
-				 BOOL encrypted
-			    )
-{
-	uint32_t	DramOff;
-	BC_STATUS	sts = BC_STS_SUCCESS;
-	DTS_LIB_CONTEXT		*Ctx = NULL;
-	BC_IOCTL_DATA		*pIocData = NULL;
-	uint8_t bForceDeliver = false;
-	uint8_t bFlushing = false;
-
-	//unused uint8_t* pData;
-	uint32_t	ulSize;
-
-	uint32_t ulTxBufAvailSize;
-	//unused BC_DTS_STATS *pDtsStat = DtsGetgStats( );
-
-	DTS_GET_CTX(hDevice,Ctx);
-
-	if(Ctx->VidParams.VideoAlgo == BC_VID_ALGO_VC1MP)
-		encrypted|=0x2;
-
-	// ulSizeInBytes = 0 && pUserData = NULL ==> Drain input buffer
-
-	if (pUserData == NULL && ulSizeInBytes == 0)
-		bFlushing = true;
-
-#ifdef TX_CIRCULAR_BUFFER
-	if (Ctx->nTxHoldBufWrite >= Ctx->nTxHoldBufRead)
-	{
-		ulTxBufAvailSize = TX_HOLD_BUF_SIZE - (Ctx->nTxHoldBufWrite - Ctx->nTxHoldBufRead);
-	}
-	else
-	{
-		ulTxBufAvailSize = Ctx->nTxHoldBufRead - Ctx->nTxHoldBufWrite;
-	}
-	if (ulSizeInBytes && ulTxBufAvailSize > ulSizeInBytes)
-	{
-		if ((TX_HOLD_BUF_SIZE - Ctx->nTxHoldBufWrite) >= ulSizeInBytes)
-		{
-			memcpy(Ctx->pendingBuf+Ctx->nTxHoldBufWrite, pUserData, ulSizeInBytes);
-			Ctx->nTxHoldBufWrite = (Ctx->nTxHoldBufWrite + ulSizeInBytes) % TX_HOLD_BUF_SIZE;
-			ulSizeInBytes = 0;
-		}
-		else
-		{
-			ulSize = TX_HOLD_BUF_SIZE - Ctx->nTxHoldBufWrite;
-			memcpy(Ctx->pendingBuf+Ctx->nTxHoldBufWrite, pUserData, ulSize);
-			pUserData += ulSize;
-			memcpy(Ctx->pendingBuf, pUserData, ulSizeInBytes - ulSize);
-			Ctx->nTxHoldBufWrite = ulSizeInBytes - ulSize;
-			ulSizeInBytes = 0;
-		}
-	}
-
-	if(!(pIocData = DtsAllocIoctlData(Ctx)))
-		return BC_STS_INSUFF_RES;
-
-	while (Ctx->nTxHoldBufWrite != Ctx->nTxHoldBufRead)
-	{
-		bForceDeliver = bFlushing;
-		if (Ctx->nTxHoldBufWrite >= Ctx->nTxHoldBufRead)
-		{
-			ulSize = Ctx->nTxHoldBufWrite - Ctx->nTxHoldBufRead;
-		}
-		else
-		{
-			bForceDeliver = true;
-			ulSize = TX_HOLD_BUF_SIZE - Ctx->nTxHoldBufRead;
-		}
-
-		if ((!bForceDeliver) && (ulSize < TX_BUF_THRESHOLD) && (Ctx->nTxHoldBufCounter < TX_BUF_DELIVER_THRESHOLD))
-		{
-			Ctx->nTxHoldBufCounter ++;
-			break;
-		}
-		Ctx->nTxHoldBufCounter = 0;
-		if (DtsDrvCmd(Ctx, BCM_IOC_GET_DRV_STAT, 0, pIocData, FALSE) == BC_STS_SUCCESS)
-		{
-			if (pIocData->u.drvStat.DrvcpbEmptySize & 0x80000000)
-			{
-				//Aborting Tx
-				Ctx->nTxHoldBufWrite = Ctx->nTxHoldBufRead = 0;
-				DtsRelIoctlData(Ctx,pIocData);
-				return BC_STS_IO_USER_ABORT;
-			}
-			if (pIocData->u.drvStat.DrvcpbEmptySize == 0)
-			{
-				bc_sleep_ms(5);
-				break;
-			}
-			if (pIocData->u.drvStat.DrvcpbEmptySize < ulSize)
-				ulSize = pIocData->u.drvStat.DrvcpbEmptySize;
-
-			if(!bForceDeliver)
-				ulSize = (ulSize >> 2) << 2;
-
-			if (ulSize)
-			{
-
-				sts = DtsTxDmaText(hDevice, Ctx->pendingBuf+Ctx->nTxHoldBufRead,ulSize, &DramOff, encrypted);
-				if(sts == BC_STS_SUCCESS)
-				{
-					Ctx->nTxHoldBufRead = ( Ctx->nTxHoldBufRead + ulSize ) % TX_HOLD_BUF_SIZE;
-					if(Ctx->nTxHoldBufRead == Ctx->nTxHoldBufWrite)
-						Ctx->nTxHoldBufWrite = Ctx->nTxHoldBufRead = 0;
-					DtsUpdateInStats(Ctx,ulSize);
-				}
-			}
-		}
-	}
-	DtsRelIoctlData(Ctx,pIocData);
-
-	if (ulSizeInBytes > 0)
-		return BC_STS_BUSY;
-	if (bFlushing && (Ctx->nTxHoldBufWrite != Ctx->nTxHoldBufRead))
-		return BC_STS_BUSY;
-	return BC_STS_SUCCESS;
-#else
-	if (ulSizeInBytes > 0 && pUserData)
-	{
-		if (ulSizeInBytes > TX_HOLD_BUF_SIZE)
-		{
-			if (Ctx->nPendBufInd)
-			{
-				sts = DtsTxDmaText(hDevice,Ctx->pendingBuf,Ctx->nPendBufInd,&DramOff, encrypted);
-				if (sts != BC_STS_SUCCESS)
-					return sts;
-				DtsUpdateInStats(Ctx,Ctx->nPendBufInd);
-				Ctx->nPendBufInd = 0;
-			}
-			sts = DtsTxDmaText(hDevice,pUserData,ulSizeInBytes,&DramOff, encrypted);
-			if(sts == BC_STS_SUCCESS)
-				DtsUpdateInStats(Ctx,ulSizeInBytes);
-			return sts;
-		}
-		else if ((Ctx->nPendBufInd + ulSizeInBytes) < TX_HOLD_BUF_SIZE)
-		{
-			memcpy(Ctx->pendingBuf+Ctx->nPendBufInd, pUserData, ulSizeInBytes);
-			Ctx->nPendBufInd += ulSizeInBytes;
-			return BC_STS_SUCCESS;
-		}
-	}
-	pData = Ctx->pendingBuf;
-	ulSize = Ctx->nPendBufInd;
-
-	if (ulSize == 0)
-		return BC_STS_SUCCESS;
-
-	sts = DtsTxDmaText(hDevice,pData,ulSize,&DramOff, encrypted);
-	if(sts == BC_STS_SUCCESS)
-		DtsUpdateInStats(Ctx,ulSize);
-
-	if (ulSizeInBytes && pUserData)
-		memcpy(Ctx->pendingBuf, pUserData, ulSizeInBytes);
-
-	Ctx->nPendBufInd = ulSizeInBytes;
-	return sts;
-
-#endif
-}
-
-DRVIFLIB_API BC_STATUS
-DtsSendDataDirect( HANDLE  hDevice ,
-				 uint8_t *pUserData,
-				 uint32_t ulSizeInBytes,
-				 uint64_t timeStamp,
-				 BOOL encrypted
-			    )
-{
-	uint32_t	DramOff;
-	BC_STATUS	sts = BC_STS_SUCCESS;
-	uint32_t     CpbSize=0;
-	uint32_t		CpbFullness=0;
-	DTS_LIB_CONTEXT		*Ctx = NULL;
-	uint32_t base, end, readp, writep;
-	int		FifoSize;
-
-	BC_DTS_STATS *pDtsStat = DtsGetgStats( );
-
-	DTS_GET_CTX(hDevice,Ctx);
-
-	if (pUserData == NULL || ulSizeInBytes == 0)
-		return BC_STS_INV_ARG;
-
-	if(Ctx->VidParams.VideoAlgo == BC_VID_ALGO_VC1MP)
-		encrypted|=0x2;
-
-	if (!(Ctx->FixFlags & DTS_SKIP_TX_CHK_CPB) && (Ctx->DevId == BC_PCI_DEVID_LINK))
-	{
-
-		if(encrypted&0x2){
-			DtsDevRegisterRead(hDevice, REG_Dec_TsAudCDB2Base, &base);
-			DtsDevRegisterRead(hDevice, REG_Dec_TsAudCDB2End,	&end);
-			DtsDevRegisterRead(hDevice, REG_Dec_TsAudCDB2Wrptr, &writep);
-			DtsDevRegisterRead(hDevice, REG_Dec_TsAudCDB2Rdptr, &readp);
-		}
-		else if(encrypted&0x1){
-			DtsDevRegisterRead(hDevice, REG_Dec_TsUser0Base, &base);
-			DtsDevRegisterRead(hDevice, REG_Dec_TsUser0End, &end);
-			DtsDevRegisterRead(hDevice, REG_Dec_TsUser0Wrptr, &writep);
-			DtsDevRegisterRead(hDevice, REG_Dec_TsUser0Rdptr, &readp);
-		}else{
-			DtsDevRegisterRead(hDevice, REG_DecCA_RegCinBase, &base);
-			DtsDevRegisterRead(hDevice, REG_DecCA_RegCinEnd, &end);
-			DtsDevRegisterRead(hDevice, REG_DecCA_RegCinWrPtr, &writep);
-			DtsDevRegisterRead(hDevice, REG_DecCA_RegCinRdPtr, &readp);
-		}
-
-		CpbSize = end - base;
-
-		if(writep >= readp) {
-			CpbFullness = writep - readp;
-		} else {
-			CpbFullness = (end - base) - (readp - writep);
-		}
-
-		FifoSize = CpbSize - CpbFullness;
-
-		if(FifoSize < BC_INFIFO_THRESHOLD) {
-			//DebugLog_Trace(LDIL_DBG, "Bsy0:Base:0x%08x End:0x%08x Wr:0x%08x Rd:0x%08x FifoSz:0x%08x\n",
-			//						base,end, writep, readp, FifoSize);
-			pDtsStat->TxFifoBsyCnt++;
-			return BC_STS_BUSY;
-		}
-
-		if((signed int)ulSizeInBytes > (FifoSize - BC_INFIFO_THRESHOLD)) {
-			//DebugLog_Trace(LDIL_DBG, "Bsy1:Base:0x%08x End:0x%08x Wr:0x%08x Rd:0x%08x FifoSz:0x%08x XfrReq:0x%08x\n",
-			//					base,end, writep, readp, FifoSize, ulSizeInBytes);
-			pDtsStat->TxFifoBsyCnt++;
-			return BC_STS_BUSY;
-		}
-	}
-	sts = DtsTxDmaText(hDevice, pUserData, ulSizeInBytes, &DramOff, encrypted);
-
-	if(sts == BC_STS_SUCCESS)
-	{
-		DtsUpdateInStats(Ctx,ulSizeInBytes);
-	}
-	return sts;
-}
-
 DRVIFLIB_INT_API BC_STATUS
 DtsSendData( HANDLE  hDevice ,
 				 uint8_t *pUserData,
@@ -2095,23 +1890,17 @@ DtsSendData( HANDLE  hDevice ,
 				 BOOL encrypted
 			    )
 {
-	//unused BC_STATUS	sts = BC_STS_SUCCESS;
 	DTS_LIB_CONTEXT		*Ctx = NULL;
 
 	DTS_GET_CTX(hDevice,Ctx);
 
-	if ((Ctx->DevId == BC_PCI_DEVID_LINK) || (Ctx->FixFlags&DTS_DIAG_TEST_MODE))
-	{
-		return DtsSendDataDirect(hDevice, pUserData, ulSizeInBytes, timeStamp, encrypted);
+	// for now check the sizes here and wait if there is not enough space
+	while(ulSizeInBytes > Ctx->circBuf.freeSize) {
+		usleep(20 * 1000);
+		if (Ctx->State !=  BC_DEC_STATE_START && Ctx->State != BC_DEC_STATE_PAUSE)
+			return BC_STS_IO_USER_ABORT;
 	}
-	else if (Ctx->SingleThreadedAppMode)
-	{
-		return DtsSendDataFPMode(hDevice, pUserData, ulSizeInBytes, timeStamp, encrypted);
-	}
-	else
-	{
-		return DtsSendDataBuffer(hDevice, pUserData, ulSizeInBytes, timeStamp, encrypted);
-	}
+	return txBufPush(&Ctx->circBuf, pUserData, ulSizeInBytes);
 }
 
 DRVIFLIB_API BC_STATUS
@@ -2130,6 +1919,17 @@ DtsSendSPESPkt(HANDLE  hDevice ,
 	uint8_t	i = 0;
 
 	DTS_GET_CTX(hDevice,Ctx);
+
+	if (Ctx->State == BC_DEC_STATE_CLOSE)
+	{
+		return BC_STS_DEC_NOT_OPEN;
+	}
+
+	if (Ctx->State == BC_DEC_STATE_STOP || Ctx->State == BC_DEC_STATE_FLUSH)
+	{
+		return BC_STS_DEC_NOT_STARTED;
+	}
+
 	while (i <20)
 	{
 		sts = DtsPrepareMdata(Ctx, timeStamp, &im, &pSPESPkt, &ulSize);
@@ -2142,7 +1942,7 @@ DtsSendSPESPkt(HANDLE  hDevice ,
 	{
 		if(Ctx->VidParams.VideoAlgo == BC_VID_ALGO_VC1MP)
 		{
-			if(posix_memalign((void**)&pSPESPkt, 4, 32+sizeof(BC_PES_HDR_FORMAT))){
+			if(posix_memalign((void**)&pSPESPkt, 8, 32+sizeof(BC_PES_HDR_FORMAT))){
 				DebugLog_Trace(LDIL_DBG, "DtsProcInput: Failed to alloc mem for  ASFHdr for SPES:%x\n", sts);
 				return BC_STS_INSUFF_RES;
 			}
@@ -2237,7 +2037,7 @@ DtsAlignSendData( HANDLE  hDevice ,
 		}
 
 		/* Copy the non-DWORD aligned buffer first */
-		oddBytes = (uint8_t)((uint32_t)pDeliverBuf % 4);
+		oddBytes = (uint8_t)((uintptr_t)pDeliverBuf % 4);
 
 		if (Ctx->VidParams.StreamType == BC_STREAM_TYPE_ES)
 		{
@@ -2395,6 +2195,30 @@ DtsProcInput( HANDLE  hDevice ,
 
 	DTS_GET_CTX(hDevice,Ctx);
 
+	if (!DtsChkPID(Ctx->ProcessID))
+		return BC_STS_ERROR;
+
+	if (Ctx->State == BC_DEC_STATE_FLUSH)
+		Ctx->State = BC_DEC_STATE_START;
+
+	if (Ctx->State != BC_DEC_STATE_START)
+	{
+		if (!DtsIsDecOpened(0))
+		{
+			DtsLock(Ctx);
+			sts = DtsOpenDecoder(hDevice, Ctx->VidParams.StreamType);
+			if (sts == BC_STS_SUCCESS)
+			{
+				sts = DtsStartDecoder(hDevice);
+				if (sts == BC_STS_SUCCESS)
+					sts = DtsStartCapture(hDevice);
+			}
+			DtsUnLock(Ctx);
+			if (sts != BC_STS_SUCCESS)
+				return sts;
+		}
+	}
+
 	Ctx->bEOSCheck = FALSE;
 	Ctx->bEOS = FALSE;
 
@@ -2404,8 +2228,6 @@ DtsProcInput( HANDLE  hDevice ,
 	{
 		timeStamp /= 10000;
 	}
-	Ctx->bEOSCheck = FALSE;
-	Ctx->bEOS = FALSE;
 
 	if((Ctx->VidParams.MediaSubType == BC_MSUBTYPE_WVC1) || (Ctx->VidParams.MediaSubType == BC_MSUBTYPE_WMV3) || (Ctx->VidParams.MediaSubType == BC_MSUBTYPE_WMVA))
 		DtsCheckKeyFrame(hDevice, pUserData);
@@ -2417,7 +2239,7 @@ DtsProcInput( HANDLE  hDevice ,
 		{
 			//Check if SequenceHeader is already delivered within input data.
 			//Unnecessary SpsPps input will cause no timestamp output.
-			if (!DtsCheckSpsPps(hDevice, pUserData, ulSizeInBytes))
+			if (!Ctx->SingleThreadedAppMode && !DtsCheckSpsPps(hDevice, pUserData, ulSizeInBytes))
 			{
 				// Used to flag softRAVE special handling of Sequence level information as well as preroll samples
 				if (Ctx->PESConvParams.m_bSoftRave)
@@ -2453,7 +2275,7 @@ DtsProcInput( HANDLE  hDevice ,
 	}
 	else
 	{
-		if(DtsFindStartCode(hDevice, pUserData, ulSizeInBytes, &Offset) != BC_STS_SUCCESS)
+		if(!Ctx->SingleThreadedAppMode && (DtsFindStartCode(hDevice, pUserData, ulSizeInBytes, &Offset) != BC_STS_SUCCESS))
 		{
 			timeStamp = 0;
 			Offset = 0;
@@ -2494,6 +2316,16 @@ DtsSendEOS( HANDLE  hDevice, uint32_t Op
 	uint8_t	*pEOS;
 	uint32_t nEOSLen;
 	uint32_t	nTag;
+
+	if (Ctx->State == BC_DEC_STATE_CLOSE)
+	{
+		return BC_STS_DEC_NOT_OPEN;
+	}
+
+	if (Ctx->State == BC_DEC_STATE_STOP || Ctx->State == BC_DEC_STATE_FLUSH)
+	{
+		return BC_STS_DEC_NOT_STARTED;
+	}
 
 	Ctx->PESConvParams.m_bPESExtField = false;
 	Ctx->PESConvParams.m_bPESPrivData = false;
@@ -2597,49 +2429,24 @@ DtsFlushInput( HANDLE  hDevice ,
 
 	DTS_GET_CTX(hDevice,Ctx);
 	DebugLog_Trace(LDIL_DBG, "Flush called with opcode %u\n", Op);
+
+	if (Ctx->State == BC_DEC_STATE_CLOSE)
+	{
+		return BC_STS_DEC_NOT_OPEN;
+	}
+
+	if (!DtsChkPID(Ctx->ProcessID))
+		return BC_STS_ERROR;
+
 	if(Op == 0 || Op == 5) // DRAIN
 	{
-		Ctx->PESConvParams.m_bAddSpsPps = true;
-#ifdef TX_CIRCULAR_BUFFER
-		if ((Ctx->InSampleCount == 0) && (Ctx->nTxHoldBufRead == Ctx->nTxHoldBufWrite))
-			return BC_STS_SUCCESS;
-#else
-		if ((Ctx->InSampleCount == 0) && (Ctx->nPendBufInd == 0))
-			return BC_STS_SUCCESS;
-#endif
 		DtsSendEOS(hDevice, Op);
-#ifdef TX_CIRCULAR_BUFFER
-		while (Ctx->State == BC_DEC_STATE_START && Ctx->nTxHoldBufRead != Ctx->nTxHoldBufWrite)
-		{
-			if ((sts = DtsSendData(hDevice, 0, 0, 0, 0))== BC_STS_SUCCESS)
-				break;
-		}
-		Ctx->nTxHoldBufRead = Ctx->nTxHoldBufWrite = 0;
-#else
-		if (Ctx->nPendBufInd)
-			DtsSendData(hDevice, 0, 0, 0, 0);
-		Ctx->nPendBufInd = 0;
-#endif
-		if (Ctx->SingleThreadedAppMode && Ctx->nPendFPBufInd)
-		{
-			DtsSendData(hDevice, 0, 0, 0, 0);
-			Ctx->FPDrain = TRUE;
-		}
-		if (!Ctx->SingleThreadedAppMode)
-			bc_sleep_ms(50);
 	}
 	else
 	{
-#ifdef TX_CIRCULAR_BUFFER
-		Ctx->nTxHoldBufRead = Ctx->nTxHoldBufWrite = 0;
-		Ctx->nTxHoldBufCounter = 0;
-#else
-		Ctx->nPendBufInd = 0;
-#endif
-		if (Ctx->InSampleCount == 0)
-			return BC_STS_SUCCESS;
-		Ctx->nPendFPBufInd = 0;
-		Ctx->FPDrain = FALSE;
+		Ctx->PESConvParams.m_bAddSpsPps = true;
+		Ctx->State = BC_DEC_STATE_FLUSH;
+		txBufFlush(&Ctx->circBuf);
 		Ctx->bEOSCheck = FALSE;
 		bc_sleep_ms(30); // For the cancel to take place in case we are looping
 		sts = DtsCancelTxRequest(hDevice, Op);
@@ -2655,14 +2462,15 @@ DtsFlushInput( HANDLE  hDevice ,
 	else if (Op != 0 && Op != 5)
 		sts = DtsFWDecFlushChannel(hDevice,Op);
 
-	if(sts != BC_STS_SUCCESS)
-		return sts;
-
-	/* Issue a flush to the driver RX every time we flush the decoder */
-	if(Op != 0 && Op != 5) {
-		sts = DtsFlushRxCapture(hDevice,true);
-		if(sts != BC_STS_SUCCESS)
-			return sts;
+	if(Op != 0 && Op != 5)
+	{
+		if (Ctx->State != BC_DEC_STATE_CLOSE)
+		{
+			DtsLock(Ctx);
+			sts = DtsStopDecoder(hDevice);
+			sts	= DtsCloseDecoder(hDevice);
+			DtsUnLock(Ctx);
+		}
 	}
 
 	Ctx->LastPicNum = -1;
@@ -2670,13 +2478,8 @@ DtsFlushInput( HANDLE  hDevice ,
 	Ctx->EOSCnt = 0;
 	Ctx->DrvStatusEOSCnt = 0;
 	Ctx->bEOS = FALSE;
-	Ctx->InSampleCount = 0;
+//	Ctx->InSampleCount = 0;
 
-	// Clear the saved cpb base and end for SingleThreadedAppMode
-	if(Ctx->SingleThreadedAppMode) {
-		Ctx->cpbBase = 0;
-		Ctx->cpbEnd = 0;
-	}
 	Ctx->PESConvParams.m_lStartCodeDataSize = 0;
 
 	return BC_STS_SUCCESS;
@@ -2695,6 +2498,19 @@ DtsSetRateChange(HANDLE  hDevice ,
 	//For Rate Change
 	uint32_t mode = 0;
 	uint32_t HostTrickModeEnable = 0;
+
+	if (Ctx->State == BC_DEC_STATE_CLOSE)
+	{
+		return BC_STS_DEC_NOT_OPEN;
+	}
+
+	if (Ctx->State == BC_DEC_STATE_STOP || Ctx->State == BC_DEC_STATE_FLUSH)
+	{
+		return BC_STS_DEC_NOT_STARTED;
+	}
+
+	if (!DtsChkPID(Ctx->ProcessID))
+		return BC_STS_ERROR;
 
 	//Change Rate Value for Version 1.1
 	//Rate: Specifies the new rate x 10000
@@ -2831,6 +2647,18 @@ DtsSetFFRate(HANDLE  hDevice ,
 	uint32_t mode = 0;
 	uint32_t HostTrickModeEnable = 0;
 
+	if (Ctx->State == BC_DEC_STATE_CLOSE)
+	{
+		return BC_STS_DEC_NOT_OPEN;
+	}
+
+	if (Ctx->State == BC_DEC_STATE_STOP || Ctx->State == BC_DEC_STATE_FLUSH)
+	{
+		return BC_STS_DEC_NOT_STARTED;
+	}
+
+	if (!DtsChkPID(Ctx->ProcessID))
+		return BC_STS_ERROR;
 
 	//Change Rate Value for Version 1.1
 	//Rate: Specifies the new rate x 10000
@@ -3098,6 +2926,15 @@ DtsDropPictures( HANDLE  hDevice ,
 	DTS_LIB_CONTEXT		*Ctx = NULL;
 
 	DTS_GET_CTX(hDevice,Ctx);
+	if (Ctx->State == BC_DEC_STATE_CLOSE)
+	{
+		return BC_STS_DEC_NOT_OPEN;
+	}
+
+	if (Ctx->State == BC_DEC_STATE_STOP || Ctx->State == BC_DEC_STATE_FLUSH)
+	{
+		return BC_STS_DEC_NOT_STARTED;
+	}
 
 	sts = DtsFWDrop(hDevice,Pictures);
 
@@ -3114,34 +2951,54 @@ DRVIFLIB_API BC_STATUS
 DtsGetDriverStatus( HANDLE  hDevice,
 	                BC_DTS_STATUS *pStatus)
 {
-    BC_DTS_STATS temp;
-    BC_STATUS ret;
+	BC_DTS_STATS temp;
+	BC_STATUS ret;
+	BOOL realHWCPBSize = false; // Always report DIL buffer size unless explicitly asked to report HW size
+	BOOL readTXinfoOnly = false; // Report only TX information
 
-    DTS_LIB_CONTEXT *Ctx = NULL;
-    DTS_GET_CTX(hDevice,Ctx);
+	uint64_t NextTimeStamp = 0;
 
-    uint64_t NextTimeStamp = 0;
+	DTS_LIB_CONTEXT			*Ctx = NULL;
+	DTS_GET_CTX(hDevice,Ctx);
 
-    if (Ctx->SingleThreadedAppMode)
-        temp.DrvNextMDataPLD = Ctx->picWidth | (0x1 << 31);
+	temp.DrvNextMDataPLD = Ctx->picWidth | (0x1 << 31);
 
-    ret = DtsGetDrvStat(hDevice, &temp);
+	// If bit 31 of the input cpbEmptySize is set, then report the real HW size
+	// Else report the buffered size
+	// If Bit 30 of the input cpbEmptySize is set, then only report TX information
+	// and not probe for anything else
+	// Use Bit 29 to indicate to the driver to read the VC1 fifo status
+	if(pStatus->cpbEmptySize >> 31)
+		realHWCPBSize = true;
+	if((pStatus->cpbEmptySize >> 30) & 0x1) {
+		readTXinfoOnly = true;
+		temp.DrvcpbEmptySize |= (1 << 30);
+	}
 
-    pStatus->FreeListCount      = temp.drvFLL;
-    pStatus->ReadyListCount     = temp.drvRLL;
-    pStatus->FramesCaptured     = temp.opFrameCaptured;
-    pStatus->FramesDropped      = temp.opFrameDropped;
-    pStatus->FramesRepeated     = temp.reptdFrames;
-    pStatus->PIBMissCount       = temp.pibMisses;
-    pStatus->InputCount         = temp.ipSampleCnt;
-    pStatus->InputBusyCount     = temp.TxFifoBsyCnt;
-    pStatus->InputTotalSize     = temp.ipTotalSize;
-    pStatus->cpbEmptySize       = temp.DrvcpbEmptySize;
-    pStatus->PowerStateChange   = temp.pwr_state_change;
+	if(Ctx->VidParams.VideoAlgo == BC_VID_ALGO_VC1MP)
+		temp.DrvcpbEmptySize |= (1 << 29);
+
+	ret = DtsGetDrvStat(hDevice, &temp);
+
+	if (ret != BC_STS_SUCCESS)
+	{
+		return ret;
+	}
+
+	pStatus->FreeListCount      = temp.drvFLL;
+	pStatus->ReadyListCount     = temp.drvRLL;
+	pStatus->FramesCaptured     = temp.opFrameCaptured;
+	pStatus->FramesDropped      = temp.opFrameDropped;
+	pStatus->FramesRepeated     = temp.reptdFrames;
+	pStatus->PIBMissCount       = temp.pibMisses;
+	pStatus->InputCount         = temp.ipSampleCnt;
+	pStatus->InputBusyCount     = temp.TxFifoBsyCnt;
+	pStatus->InputTotalSize     = temp.ipTotalSize;
+	pStatus->cpbEmptySize		= temp.DrvcpbEmptySize;
 
 	if(temp.eosDetected)
 	{
-		Ctx->bEOS = true;
+		Ctx->bEOS = TRUE;
 	}
 
 	if (Ctx->bEOSCheck == TRUE && Ctx->bEOS == FALSE)
@@ -3160,49 +3017,28 @@ DtsGetDriverStatus( HANDLE  hDevice,
 			Ctx->DrvStatusEOSCnt = 0;
 	}
 
-    // return the timestamp of the next picture to be returned by ProcOutput
-    if((pStatus->ReadyListCount > 0) && Ctx->SingleThreadedAppMode) {
-		if(Ctx->DevId == BC_PCI_DEVID_FLEA)
-		{
-			if(temp.DrvNextMDataPLD == 0xFFFFFFFF){
-				//For Pre-Load
-				pStatus->NextTimeStamp = 0xFFFFFFFFFFFFFFFFLL;
-			}else{
-				//Normal PTS
-				//Change PTS becuase of Shift PTS Issue in FW and 32-bit (ms) and 64-bit (100 ns) Scaling
-				pStatus->NextTimeStamp = (temp.DrvNextMDataPLD * 2 * 10000);
-			}
-		}else{
-			DtsFetchTimeStampMdata(Ctx, ((temp.DrvNextMDataPLD & 0xFF) << 8) | ((temp.DrvNextMDataPLD & 0xFF00) >> 8), &NextTimeStamp);
-			pStatus->NextTimeStamp = NextTimeStamp;
-		}
-	}
+	if(!realHWCPBSize)
+		pStatus->cpbEmptySize = Ctx->circBuf.freeSize;
 
-#ifdef TX_CIRCULAR_BUFFER
-	if(Ctx->nTxHoldBufRead == Ctx->nTxHoldBufWrite)
-		pStatus->TxBufData = FALSE;
-	else
-		pStatus->TxBufData = TRUE;
-#else
-	if(Ctx->nPendBufInd)
-		pStatus->TxBufData = TRUE;
-	else
-		pStatus->TxBufData = FALSE;
-#endif
-
-	if(Ctx->SingleThreadedAppMode && (Ctx->DevId == BC_PCI_DEVID_FLEA))
+	if(!readTXinfoOnly)
 	{
-		if((Ctx->SingleThreadedAppMode & 0x8) != 0x8)
-		{
-			// First
-			// Try to send data to HW if possible
-			if (Ctx->nPendFPBufInd != 0)
-				DtsSendData(hDevice, 0, 0, 0, 0);
-			// Leave some room for PES headers
-			// Then check and return the size in the buffer
-			pStatus->cpbEmptySize = FP_TX_BUF_SIZE - Ctx->nPendFPBufInd - 128; // Return the buffer size if FP is checking
+		/* return the timestamp of the next picture to be returned by ProcOutput */
+		if((pStatus->ReadyListCount > 0) && Ctx->SingleThreadedAppMode) {
+			if(Ctx->DevId == BC_PCI_DEVID_FLEA)
+			{
+				if(temp.DrvNextMDataPLD == 0xFFFFFFFF){
+					//For Pre-Load
+					pStatus->NextTimeStamp = 0xFFFFFFFFFFFFFFFFLL;
+				}else{
+					//Normal PTS
+					//Change PTS becuase of Shift PTS Issue in FW and 32-bit (ms) and 64-bit (100 ns) Scaling
+					pStatus->NextTimeStamp = (temp.DrvNextMDataPLD * 2 * 10000);
+				}
+			}else{
+				DtsFetchTimeStampMdata(Ctx, ((temp.DrvNextMDataPLD & 0xFF) << 8) | ((temp.DrvNextMDataPLD & 0xFF00) >> 8), &NextTimeStamp);
+				pStatus->NextTimeStamp = NextTimeStamp;
+			}
 		}
-		// Return HW true size if we are checking from the send funtion
 	}
 
 	return ret;
@@ -3210,18 +3046,15 @@ DtsGetDriverStatus( HANDLE  hDevice,
 
 DRVIFLIB_API BC_STATUS DtsGetCapabilities (HANDLE  hDevice, PBC_HW_CAPS	pCapsBuffer)
 {
+	uint32_t deviceID = DtsGetDevID();
 
-	//unused DTS_LIB_CONTEXT			*Ctx = NULL;
-	//unused HANDLE drvHandle = NULL;
-	//unused HANDLE hNewDevice = NULL;
-	//unused BC_STATUS Sts = BC_STS_SUCCESS;
-	//unused bool bNewOpen = false;
-
-	if (g_nDeviceID == BC_PCI_DEVID_INVALID)
-		return BC_STS_INV_ARG;
+	if (deviceID == BC_PCI_DEVID_INVALID)
+	{
+		return BC_STS_ERROR;
+	}
 
 	// Should check with driver/FW if current video is supported or not, and output supported format
-	if(g_nDeviceID == BC_PCI_DEVID_LINK)
+	if(deviceID == BC_PCI_DEVID_LINK)
 	{
 		pCapsBuffer->flags = PES_CONV_SUPPORT;
 		pCapsBuffer->ColorCaps.Count = 3;
@@ -3234,7 +3067,7 @@ DRVIFLIB_API BC_STATUS DtsGetCapabilities (HANDLE  hDevice, PBC_HW_CAPS	pCapsBuf
 		//Decoder Capability
 		pCapsBuffer->DecCaps = BC_DEC_FLAGS_H264 | BC_DEC_FLAGS_MPEG2 | BC_DEC_FLAGS_VC1;
 	}
-	if(g_nDeviceID == BC_PCI_DEVID_DOZER)
+	if(deviceID == BC_PCI_DEVID_DOZER)
 	{
 		pCapsBuffer->flags = PES_CONV_SUPPORT;
 		pCapsBuffer->ColorCaps.Count = 1;
@@ -3246,7 +3079,7 @@ DRVIFLIB_API BC_STATUS DtsGetCapabilities (HANDLE  hDevice, PBC_HW_CAPS	pCapsBuf
 		//Decoder Capability
 		pCapsBuffer->DecCaps = BC_DEC_FLAGS_H264 | BC_DEC_FLAGS_MPEG2 | BC_DEC_FLAGS_VC1;
 	}
-	if(g_nDeviceID == BC_PCI_DEVID_FLEA)
+	if(deviceID == BC_PCI_DEVID_FLEA)
 	{
 		pCapsBuffer->flags = PES_CONV_SUPPORT;
 		pCapsBuffer->ColorCaps.Count = 1;
@@ -3262,9 +3095,26 @@ DRVIFLIB_API BC_STATUS DtsGetCapabilities (HANDLE  hDevice, PBC_HW_CAPS	pCapsBuf
 	return BC_STS_SUCCESS;
 }
 
-DRVIFLIB_API BC_STATUS DtsSetScaleParams (HANDLE  hDevice,PBC_SCALING_PARAMS pScaleParams)
+DRVIFLIB_API BC_STATUS DtsSetScaleParams(HANDLE hDevice, PBC_SCALING_PARAMS pScaleParams)
 {
-	return BC_STS_NOT_IMPL;
+	DTS_LIB_CONTEXT *Ctx = NULL;
+	DTS_GET_CTX(hDevice, Ctx);
+	uint32_t ScaledWidth = 0;
+
+	if (Ctx->DevId == BC_PCI_DEVID_FLEA) {
+		if ((pScaleParams->sWidth > 1920) || (pScaleParams->sWidth < 1280))
+			ScaledWidth = 1280;
+		else
+			ScaledWidth = pScaleParams->sWidth;
+
+		Ctx->EnableScaling = (ScaledWidth << 20) | (ScaledWidth << 8) | 1;
+
+	} else {
+		DebugLog_Trace(LDIL_ERR,"DtsSetScaleParams: not supported\n");
+		return BC_STS_INV_ARG;
+	}
+
+	return DtsCheckProfile(hDevice);
 }
 
 DRVIFLIB_API BC_STATUS DtsCrystalHDVersion(HANDLE  hDevice, PBC_INFO_CRYSTAL bCrystalInfo)

@@ -32,7 +32,7 @@
 #define CLOCK_BASE 9LL
 #define CLOC_FREQ_CLOC_BASE * 10000
 
-#define GST_BUF_LIST_POOL_SZ  150;
+#define GST_BUF_LIST_POOL_SZ  100;
 
 #define GST_RENDERER_BUF_POOL_SZ 20
 
@@ -406,13 +406,13 @@ bcmdec_start_get_rbuf_thread(GstBcmDec * bcmdec);
 
 // static gboolean
 // bcmdec_alloc_mem_padbuf_que_pool(GstBcmDec *filter);
-// 
+//
 // static gboolean
 // bcmdec_release_mem_padbuf_que_pool(GstBcmDec *filter);
 
 // static void
 // bcmdec_put_que_mem_padbuf(GstBcmDec *filter,GSTBUF_LIST *gst_queue_element);
-// 
+//
 // static GSTBUF_LIST*
 // bcmdec_get_que_mem_padbuf(GstBcmDec *filter);
 

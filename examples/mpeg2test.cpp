@@ -3,11 +3,14 @@
 #include <stdint.h>
 #include <string.h>
 #include <semaphore.h>
-#include "bc_dts_types.h"
-#include "libcrystalhd_if.h"
 #include <iostream>
 #include <fstream>
 #include <sys/shm.h>
+
+#define __LINUX_USER__
+#include <libcrystalhd/bc_dts_defs.h>
+#include <libcrystalhd/bc_dts_types.h>
+#include <libcrystalhd/libcrystalhd_if.h>
 
 #define TRY_CALL_1(func, p1, errmsg) \
   if (BC_STS_SUCCESS != func(p1)) \
@@ -36,7 +39,11 @@ int main()
   {
     printf("starting up\n");
     // Initialize the Link and Decoder devices
-    uint32_t mode = DTS_PLAYBACK_MODE | DTS_LOAD_FILE_PLAY_FW | DTS_SKIP_TX_CHK_CPB | DTS_DFLT_RESOLUTION(vdecRESOLUTION_1080i29_97);
+    uint32_t mode = DTS_PLAYBACK_MODE          |
+                    DTS_LOAD_FILE_PLAY_FW      |
+                    DTS_SKIP_TX_CHK_CPB        |
+                    DTS_DFLT_RESOLUTION(vdecRESOLUTION_1080i29_97);
+
     ret = DtsDeviceOpen(&device, mode);
     if (ret != BC_STS_SUCCESS) {
       printf("crap, DtsDeviceOpen failed\n");

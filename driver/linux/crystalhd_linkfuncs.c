@@ -28,6 +28,7 @@
 #include <asm/tsc.h>
 #include "crystalhd_hw.h"
 #include "crystalhd_lnx.h"
+#include "crystalhd_linkfuncs.h"
 #include "bc_defines.h"
 
 #define OFFSETOF(_s_, _m_) ((size_t)(unsigned long)&(((_s_ *)0)->_m_))
@@ -47,23 +48,23 @@
 uint32_t link_dec_reg_rd(struct crystalhd_adp *adp, uint32_t reg_off)
 {
 	uint32_t val;
-	
+
 	if (!adp) {
 		printk(KERN_ERR "%s: Invalid args\n", __func__);
 		return 0;
 	}
-	
+
 	if (reg_off > adp->pci_mem_len) {
 		dev_err(&adp->pdev->dev, "%s: reg_off out of range: 0x%08x\n",
-				__func__, reg_off);
-				return 0;
+			__func__, reg_off);
+		return 0;
 	}
-	
-	val = readl(adp->addr + reg_off);
+
+	val = readl(adp->mem_addr + reg_off);
 	dev_dbg(&adp->pdev->dev, "%s: read(0x%p) = 0x%08x\n",
-			__func__, adp->addr + reg_off, val);
-			
-			return val;
+		__func__, adp->mem_addr + reg_off, val);
+
+	return val;
 }
 
 /**
@@ -85,19 +86,20 @@ void link_dec_reg_wr(struct crystalhd_adp *adp, uint32_t reg_off, uint32_t val)
 		printk(KERN_ERR "%s: Invalid args\n", __func__);
 		return;
 	}
-	
+
 	if (reg_off > adp->pci_mem_len) {
 		dev_err(&adp->pdev->dev, "%s: reg_off out of range: 0x%08x\n",
-				__func__, reg_off);
-				return;
+			__func__, reg_off);
+		return;
 	}
-	
+
 	dev_dbg(&adp->pdev->dev, "%s: writel(0x%08x @ 0x%p).\n",
-			__func__, val, adp->addr + reg_off);
-			writel(val, adp->addr + reg_off);
-			
-			/* the udelay require for latest 70012, not for others... :( */
-			udelay(8);
+			__func__, val, adp->mem_addr + reg_off);
+
+	writel(val, adp->mem_addr + reg_off);
+
+	/* the udelay require for latest 70012, not for others... :( */
+	udelay(8);
 }
 
 /**
@@ -116,23 +118,23 @@ void link_dec_reg_wr(struct crystalhd_adp *adp, uint32_t reg_off, uint32_t val)
 uint32_t crystalhd_link_reg_rd(struct crystalhd_adp *adp, uint32_t reg_off)
 {
 	uint32_t val;
-	
+
 	if (!adp) {
 		printk(KERN_ERR "%s: Invalid args\n", __func__);
 		return 0;
 	}
-	
+
 	if (reg_off > adp->pci_i2o_len) {
 		dev_err(&adp->pdev->dev, "%s: reg_off out of range: 0x%08x\n",
-				__func__, reg_off);
-				return 0;
+			__func__, reg_off);
+		return 0;
 	}
-	
+
 	val = readl(adp->i2o_addr + reg_off);
 	dev_dbg(&adp->pdev->dev, "%s: read(0x%p) = 0x%08x\n",
-			__func__, adp->i2o_addr + reg_off, val);
-			
-			return val;
+		__func__, adp->i2o_addr + reg_off, val);
+
+	return val;
 }
 
 /**
@@ -155,17 +157,17 @@ void crystalhd_link_reg_wr(struct crystalhd_adp *adp, uint32_t reg_off, uint32_t
 		printk(KERN_ERR "%s: Invalid args\n", __func__);
 		return;
 	}
-	
+
 	if (reg_off > adp->pci_i2o_len) {
 		dev_err(&adp->pdev->dev, "%s: reg_off out of range: 0x%08x\n",
 				__func__, reg_off);
 				return;
 	}
-	
+
 	dev_dbg(&adp->pdev->dev, "%s: writel(0x%08x @ 0x%p).\n",
-			__func__, val, adp->i2o_addr + reg_off);
-			
-			writel(val, adp->i2o_addr + reg_off);
+		__func__, val, adp->i2o_addr + reg_off);
+
+	writel(val, adp->i2o_addr + reg_off);
 }
 
 inline uint32_t crystalhd_link_dram_rd(struct crystalhd_hw *hw, uint32_t mem_off)
@@ -206,7 +208,7 @@ BC_STATUS crystalhd_link_mem_rd(struct crystalhd_hw *hw, uint32_t start_off,
 
 	return BC_STS_SUCCESS;
 }
-						   
+
 /**
 * crystalhd_link_mem_wr - Write data to DRAM area.
 * @adp: Adapter instance
@@ -234,13 +236,12 @@ BC_STATUS crystalhd_link_mem_wr(struct crystalhd_hw *hw, uint32_t start_off,
 
 	return BC_STS_SUCCESS;
 }
-													  
+
 void crystalhd_link_enable_uarts(struct crystalhd_hw *hw)
 {
 	hw->pfnWriteDevRegister(hw->adp, UartSelectA, BSVS_UART_STREAM);
 	hw->pfnWriteDevRegister(hw->adp, UartSelectB, BSVS_UART_DEC_OUTER);
 }
-
 
 void crystalhd_link_start_dram(struct crystalhd_hw *hw)
 {
@@ -303,7 +304,7 @@ bool crystalhd_link_bring_out_of_rst(struct crystalhd_hw *hw)
 	rst_deco_cntrl.stop_bcm_7412_clk = 0;
 	rst_deco_cntrl.bcm7412_rst = 1;
 	hw->pfnWriteFPGARegister(hw->adp, MISC_PERST_DECODER_CTRL, rst_deco_cntrl.whole_reg);
-	msleep_interruptible(10);
+	msleep_interruptible(50);
 
 	rst_deco_cntrl.whole_reg = hw->pfnReadFPGARegister(hw->adp, MISC_PERST_DECODER_CTRL);
 	rst_deco_cntrl.bcm7412_rst = 0;
@@ -537,14 +538,14 @@ bool crystalhd_link_stop_device(struct crystalhd_hw *hw)
 {
 	uint32_t reg;
 	BC_STATUS sts;
-	
+
 	dev_dbg(&hw->adp->pdev->dev, "Stopping Crystal HD Device\n");
 	sts = crystalhd_link_put_ddr2sleep(hw);
 	if (sts != BC_STS_SUCCESS) {
 		dev_err(&hw->adp->pdev->dev, "Failed to Put DDR To Sleep!!\n");
 		return BC_STS_ERROR;
 	}
-	
+
 	/* Clear and disable interrupts */
 	crystalhd_link_disable_interrupts(hw);
 	crystalhd_link_clear_errors(hw);
@@ -645,9 +646,9 @@ uint32_t link_GetHeightFromPib(crystalhd_dio_req *dio,
 
 /* This function cannot be called from ISR context since it uses APIs that can sleep */
 bool link_GetPictureInfo(uint32_t picHeight, uint32_t picWidth, crystalhd_dio_req *dio,
-			   uint32_t *PicNumber, uint32_t *PicMetaData)
+			   uint32_t *PicNumber, uint64_t *PicMetaData)
 {
-	unsigned long PicInfoLineNum = 0, HeightInPib = 0, offset = 0, size = 0;
+	uint32_t PicInfoLineNum = 0, HeightInPib = 0, offset = 0, size = 0;
 	PBC_PIC_INFO_BLOCK pPicInfoLine = NULL;
 	uint32_t pic_number = 0;
 	uint8_t *tmp = (uint8_t *)&pic_number;
@@ -702,7 +703,7 @@ bool link_GetPictureInfo(uint32_t picHeight, uint32_t picWidth, crystalhd_dio_re
 			goto getpictureinfo_err;
 		}
 	}
-	
+
 	/* calc pic info line offset */
 	if (dio->uinfo.b422mode) {
 		size = 2 * sizeof(BC_PIC_INFO_BLOCK);
@@ -751,7 +752,7 @@ bool link_GetPictureInfo(uint32_t picHeight, uint32_t picWidth, crystalhd_dio_re
 	res = copy_from_user(dio->pib_va, (void *)(dio->uinfo.xfr_buff+offset), 12);
 	if (res != 0)
 		goto getpictureinfo_err;
-	
+
 	if (dio->uinfo.b422mode == MODE422_YUY2) {
 		for (i = 0; i < 4; i++)
 			((uint8_t *)tmp)[i] = ((uint8_t *)dio->pib_va)[i * 2];
@@ -762,7 +763,7 @@ bool link_GetPictureInfo(uint32_t picHeight, uint32_t picWidth, crystalhd_dio_re
 		pic_number = *(uint32_t *)(dio->pib_va);
 
 	*PicNumber =  BC_SWAP32(pic_number);
-	
+
 	if(dio->pib_va)
 		kfree(dio->pib_va);
 
@@ -779,8 +780,9 @@ getpictureinfo_err:
 
 uint32_t link_GetRptDropParam(uint32_t picHeight, uint32_t picWidth, void* pRxDMAReq)
 {
-	uint32_t PicNumber = 0, PicMetaData = 0, result = 0;
-			
+	uint32_t PicNumber = 0, result = 0;
+	uint64_t PicMetaData = 0;
+
 	if(link_GetPictureInfo(picHeight, picWidth, ((crystalhd_rx_dma_pkt *)pRxDMAReq)->dio_req,
 				&PicNumber, &PicMetaData))
 		result = PicNumber;
@@ -794,7 +796,7 @@ uint32_t link_GetRptDropParam(uint32_t picHeight, uint32_t picWidth, void* pRxDM
 * and returns it. THIS IS ONLY USED FOR LINK.
 */
 bool crystalhd_link_peek_next_decoded_frame(struct crystalhd_hw *hw,
-					  uint32_t *meta_payload,
+					  uint64_t *meta_payload,
 					  uint32_t PicWidth)
 {
 	uint32_t PicNumber = 0;
@@ -814,9 +816,6 @@ bool crystalhd_link_peek_next_decoded_frame(struct crystalhd_hw *hw,
 		if (rpkt) {
 			link_GetPictureInfo(hw->PICHeight, hw->PICWidth, rpkt->dio_req,
 				       &PicNumber, meta_payload);
-			dev_dbg(&hw->adp->pdev->dev, "%s: PicWidth(%d), "
-				"PicNumber(%d), meta_payload(0x%x)\n",
-				__func__, PicWidth, PicNumber, *meta_payload);
 		}
 	}
 
@@ -827,12 +826,12 @@ bool crystalhd_link_peek_next_decoded_frame(struct crystalhd_hw *hw,
 
 bool crystalhd_link_check_input_full(struct crystalhd_hw *hw,
 				   uint32_t needed_sz, uint32_t *empty_sz,
-				   bool b_188_byte_pkts, uint8_t flags)
+				   bool b_188_byte_pkts, uint8_t *flags)
 {
 	uint32_t base, end, writep, readp;
 	uint32_t cpbSize, cpbFullness, fifoSize;
 
-	if (flags & 0x02) { /* ASF Bit is set */
+	if (*flags & 0x02) { /* ASF Bit is set */
 		base   = hw->pfnReadDevRegister(hw->adp, REG_Dec_TsAudCDB2Base);
 		end    = hw->pfnReadDevRegister(hw->adp, REG_Dec_TsAudCDB2End);
 		writep = hw->pfnReadDevRegister(hw->adp, REG_Dec_TsAudCDB2Wrptr);
@@ -863,14 +862,14 @@ bool crystalhd_link_check_input_full(struct crystalhd_hw *hw,
 		*empty_sz = 0;
 		return true;
 	}
-	
+
 	if (needed_sz > (fifoSize - BC_INFIFO_THRESHOLD))
 	{
 		*empty_sz = 0;
 		return true;
 	}
 	*empty_sz = fifoSize - BC_INFIFO_THRESHOLD;
-	
+
 	return false;
 }
 
@@ -973,7 +972,7 @@ void crystalhd_link_start_tx_dma_engine(struct crystalhd_hw *hw, uint8_t list_id
 {
 	uint32_t dma_cntrl;
 	uint32_t first_desc_u_addr, first_desc_l_addr;
-	
+
 	if (list_id == 0) {
 		first_desc_u_addr = MISC1_TX_FIRST_DESC_U_ADDR_LIST0;
 		first_desc_l_addr = MISC1_TX_FIRST_DESC_L_ADDR_LIST0;
@@ -981,7 +980,7 @@ void crystalhd_link_start_tx_dma_engine(struct crystalhd_hw *hw, uint8_t list_id
 		first_desc_u_addr = MISC1_TX_FIRST_DESC_U_ADDR_LIST1;
 		first_desc_l_addr = MISC1_TX_FIRST_DESC_L_ADDR_LIST1;
 	}
-	
+
 	dma_cntrl = hw->pfnReadFPGARegister(hw->adp,MISC1_TX_SW_DESC_LIST_CTRL_STS);
 	if (!(dma_cntrl & DMA_START_BIT)) {
 		dma_cntrl |= DMA_START_BIT;
@@ -992,7 +991,7 @@ void crystalhd_link_start_tx_dma_engine(struct crystalhd_hw *hw, uint8_t list_id
 	hw->pfnWriteFPGARegister(hw->adp, first_desc_u_addr, desc_addr.high_part);
 
 	hw->pfnWriteFPGARegister(hw->adp, first_desc_l_addr, desc_addr.low_part | 0x01);
-									/* Be sure we set the valid bit ^^^^ */
+						/* Be sure we set the valid bit ^^^^ */
 	return;
 }
 
@@ -1228,7 +1227,7 @@ void crystalhd_link_proc_pib(struct crystalhd_hw *hw)
 				hw->PICWidth = 720;
 
 			dev_info(&hw->adp->pdev->dev,
-				"App PIB:%x %x %x %x %x %x %x %x %x %x\n",
+				"[FMT CH] PIB:%x %x %x %x %x %x %x %x %x %x\n",
 				rx_pkt->pib.picture_number,
 				rx_pkt->pib.aspect_ratio,
 				rx_pkt->pib.chroma_format,
@@ -1678,13 +1677,13 @@ BC_STATUS crystalhd_link_hw_pause(struct crystalhd_hw *hw, bool state)
 {
 	uint32_t pause = 0;
 	BC_STATUS sts = BC_STS_SUCCESS;
-	
+
 	if(state) {
 		pause = 1;
 		hw->stats.pause_cnt++;
 		hw->stop_pending = 1;
 		hw->pfnWriteDevRegister(hw->adp, HW_PauseMbx, pause);
-	
+
 		if ((hw->rx_list_sts[0] == sts_free) &&
 			(hw->rx_list_sts[1] == sts_free))
 			crystalhd_link_hw_finalize_pause(hw);
@@ -1877,6 +1876,12 @@ BC_STATUS crystalhd_link_download_fw(struct crystalhd_hw *hw,
 	}
 
 	dev_info(dev, "Firmware Downloaded Successfully\n");
+
+	// Load command response addresses
+	hw->fwcmdPostAddr = TS_Host2CpuSnd;
+	hw->fwcmdPostMbox = Hst2CpuMbx1;
+	hw->fwcmdRespMbox = Cpu2HstMbx1;
+
 	return BC_STS_SUCCESS;;
 }
 
@@ -1912,13 +1917,13 @@ BC_STATUS crystalhd_link_do_fw_cmd(struct crystalhd_hw *hw, BC_FW_CMD *fw_cmd)
 	hw->pfw_cmd_event = &fw_cmd_event;
 
 	/*Write the command to the memory*/
-	crystalhd_link_mem_wr(hw, TS_Host2CpuSnd, FW_CMD_BUFF_SZ, cmd_buff);
+	hw->pfnDevDRAMWrite(hw, hw->fwcmdPostAddr, FW_CMD_BUFF_SZ, cmd_buff);
 
 	/*Memory Read for memory arbitrator flush*/
-	crystalhd_link_mem_rd(hw, TS_Host2CpuSnd, 1, &cnt);
+	hw->pfnDevDRAMRead(hw, hw->fwcmdPostAddr, 1, &cnt);
 
 	/* Write the command address to mailbox */
-	hw->pfnWriteDevRegister(hw->adp, Hst2CpuMbx1, TS_Host2CpuSnd);
+	hw->pfnWriteDevRegister(hw->adp, hw->fwcmdPostMbox, hw->fwcmdPostAddr);
 	msleep_interruptible(50);
 
 	crystalhd_wait_on_event(&fw_cmd_event, hw->fwcmd_evt_sts,
@@ -1943,10 +1948,10 @@ BC_STATUS crystalhd_link_do_fw_cmd(struct crystalhd_hw *hw, BC_FW_CMD *fw_cmd)
 	}
 
 	/*Get the Responce Address*/
-	cmd_res_addr = hw->pfnReadDevRegister(hw->adp, Cpu2HstMbx1);
+	cmd_res_addr = hw->pfnReadDevRegister(hw->adp, hw->fwcmdRespMbox);
 
 	/*Read the Response*/
-	crystalhd_link_mem_rd(hw, cmd_res_addr, FW_CMD_BUFF_SZ, res_buff);
+	hw->pfnDevDRAMRead(hw, cmd_res_addr, FW_CMD_BUFF_SZ, res_buff);
 
 	if (res_buff[2] != C011_RET_SUCCESS) {
 		dev_err(dev, "res_buff[2] != C011_RET_SUCCESS\n");
@@ -1960,11 +1965,11 @@ BC_STATUS crystalhd_link_do_fw_cmd(struct crystalhd_hw *hw, BC_FW_CMD *fw_cmd)
 	return sts;
 }
 
-bool crystalhd_link_hw_interrupt(struct crystalhd_adp *adp, struct crystalhd_hw *hw)
+bool crystalhd_link_hw_interrupt_handle(struct crystalhd_adp *adp, struct crystalhd_hw *hw)
 {
 	uint32_t intr_sts = 0;
 	uint32_t deco_intr = 0;
-	bool rc = 0;
+	bool rc = false;
 
 	if (!adp || !hw->dev_started)
 		return rc;
@@ -1976,7 +1981,7 @@ bool crystalhd_link_hw_interrupt(struct crystalhd_adp *adp, struct crystalhd_hw 
 
 	if (intr_sts) {
 		/* let system know we processed interrupt..*/
-		rc = 1;
+		rc = true;
 		hw->stats.dev_interrupts++;
 	}
 
@@ -2013,4 +2018,15 @@ bool crystalhd_link_hw_interrupt(struct crystalhd_adp *adp, struct crystalhd_hw 
 	}
 
 	return rc;
+}
+
+// Dummy private function
+void crystalhd_link_notify_fll_change(struct crystalhd_hw *hw, bool bCleanupContext)
+{
+	return;
+}
+
+bool crystalhd_link_notify_event(struct crystalhd_hw *hw, BRCM_EVENT EventCode)
+{
+	return true;
 }

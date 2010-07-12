@@ -29,9 +29,9 @@
 #ifndef _BCM_DRV_IF_PRIV_
 #define _BCM_DRV_IF_PRIV_
 
+#include <semaphore.h>
 #include "bc_dts_glob_lnx.h"
 #include "libcrystalhd_parser.h"
-#include <semaphore.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -58,7 +58,7 @@ enum _bc_ldil_log_level{
  */
 enum _crystalhd_ldil_globals {
 	BC_EOS_PIC_COUNT	= 16,			/* EOS check counter..*/
-	BC_INPUT_MDATA_POOL_SZ  = 512,			/* Input Meta Data Pool size */
+	BC_INPUT_MDATA_POOL_SZ  = 4560,			/* Input Meta Data Pool size */
 	BC_MAX_SW_VOUT_BUFFS    = BC_RX_LIST_CNT,	/* MAX - pre allocated buffers..*/
 	RX_START_DELIVERY_THRESHOLD = 0,
 	PAUSE_DECODER_THRESHOLD = 12,
@@ -70,11 +70,11 @@ enum _crystalhd_ldil_globals {
 };
 
 enum _DtsRunState {
-	BC_DEC_STATE_INVALID	= 0x00,
-	BC_DEC_STATE_OPEN	= 0x01,
-	BC_DEC_STATE_START	= 0x02,
-	BC_DEC_STATE_PAUSE	= 0x03,
-	BC_DEC_STATE_STOP	= 0x04
+	BC_DEC_STATE_CLOSE		= 0x00,
+	BC_DEC_STATE_STOP		= 0x01,
+	BC_DEC_STATE_START		= 0x02,
+	BC_DEC_STATE_PAUSE		= 0x03,
+	BC_DEC_STATE_FLUSH		= 0x04
 };
 
 /* Bit fields */
@@ -122,16 +122,7 @@ enum _DtsAppSpecificCfgFlags {
 #define MAX_DISORDER_GAP	5
 
 #define ALIGN_BUF_SIZE	(512*1024)
-#define TX_CIRCULAR_BUFFER
-#ifdef TX_CIRCULAR_BUFFER
-	#define	TX_HOLD_BUF_SIZE (4 * 1024 * 1024)
-	#define TX_BUF_THRESHOLD 64*1024
-	#define TX_BUF_DELIVER_THRESHOLD 5
-#else
-	#define	TX_HOLD_BUF_SIZE (64 * 1024)
-#endif
-#define FP_TX_BUF_SIZE (1024 * 1024 + 512 * 1024)
-
+#define CIRC_TX_BUF_SIZE (4096*1024)
 typedef struct _DTS_MPOOL_TYPE {
 	uint32_t	type;
 	uint32_t	sz;
@@ -191,6 +182,28 @@ typedef struct _DTS_INPUT_MDATA{
 #define DTS_MDATA_TAG_MASK		(0x00010000)
 #define DTS_MDATA_MAX_TAG		(0x0000FFFF)
 
+typedef struct _TXBUFFER{
+	uint32_t	readPointer; // Index into the buffer for next read
+	uint32_t	writePointer; // Index into the buffer for next write
+	uint32_t 	freeSize;
+	uint32_t 	totalSize;
+	uint32_t 	busySize;
+	uint8_t* 	basePointer; // First byte that can be written
+	uint8_t* 	endPointer; // Last byte that can be written
+	uint8_t* 	buffer;
+	pthread_mutex_t flushLock; // LOCK used only for flushing
+	pthread_mutex_t pushpopLock; // LOCK for push and pop operations
+}TXBUFFER, *pTXBUFFER;
+
+BC_STATUS txBufPush(pTXBUFFER txBuf, uint8_t* bufToPush, uint32_t sizeToPush);
+BC_STATUS txBufPop(pTXBUFFER txBuf, uint8_t* bufToPop, uint32_t sizeToPop);
+BC_STATUS txBufFlush(pTXBUFFER txBuf);
+BC_STATUS txBufInit(pTXBUFFER txBuf, uint32_t sizeInit);
+BC_STATUS txBufFree(pTXBUFFER txBuf);
+
+// TX Thread function
+void * txThreadProc(void *ctx);
+
 typedef struct _DTS_LIB_CONTEXT{
 	uint32_t				Sig;			/* Mazic number */
 	uint32_t				State;			/* DIL's Run State */
@@ -215,7 +228,6 @@ typedef struct _DTS_LIB_CONTEXT{
 	/* Proc Output Related */
 	BOOL			ProcOutPending;	/* To avoid muliple ProcOuts */
 	BOOL			CancelWaiting;	/* Notify FetchOut to signal */
-	sem_t			CancelProcOut;	/* Cancel outstanding ProcOut Request */
 
 	/* pOutData is dedicated for ProcOut() use only. Every other
 	 * Interface should use the memory from IocData pool. This
@@ -271,37 +283,23 @@ typedef struct _DTS_LIB_CONTEXT{
 	char			DilPath[MAX_PATH+1];	/* DIL runtime Location.. */
 
 	uint8_t			SingleThreadedAppMode;	/* flag to indicate that we are running in single threaded mode */
-	uint32_t		cpbBase;				/* Only used in single threaded mode to save base and end to reduce number of HW reads */
-	uint32_t		cpbEnd;
 	PES_CONVERT_PARAMS PESConvParams;
 	BC_HW_CAPS		capInfo;
-	uint16_t		InSampleCount;
+//	uint16_t		InSampleCount;
 	uint8_t			bMapOutBufDone;
-#ifdef TX_CIRCULAR_BUFFER
-	uint32_t		nTxHoldBufRead;
-	uint32_t		nTxHoldBufWrite;
-	uint16_t		nTxHoldBufCounter;
-#else
-	uint32_t		nPendBufInd;
-#endif
-	uint32_t		nPendFPBufInd;
-	uint8_t			FPDrain; // FP has initiated drain operation
 
 	BC_PIC_INFO_BLOCK	FormatInfo;
 
-	__attribute__((aligned(4))) uint8_t		alignBuf[ALIGN_BUF_SIZE];
-	__attribute__((aligned(4))) uint8_t		pendingBuf[TX_HOLD_BUF_SIZE];
-	__attribute__((aligned(4))) uint8_t		FPpendingBuf[FP_TX_BUF_SIZE];
-	uint8_t			bScaling;
+	TXBUFFER		circBuf;
+	bool			txThreadExit; // Handle to event to indicate to the tx thread to exit
+	pthread_t		htxThread; // Handle to TX thread
+    uint8_t* 		alignBuf;
 
-	/* Power management and dynamic clock frequency changes related */
-	uint8_t			totalPicsCounted;
-	uint8_t			rptPicsCounted;
-	uint8_t			nrptPicsCounted;
-	uint8_t			numTimesClockChanged;
-	uint8_t			minClk;
-	uint8_t			maxClk;
-	uint8_t			curClk;
+	uint32_t		EnableScaling;
+	uint8_t			bEnable720pDropHalf;
+	pid_t			ProcessID;
+	uint32_t		nRefNum;
+	uint32_t		DrvMode;
 
 }DTS_LIB_CONTEXT;
 
@@ -395,7 +393,10 @@ BC_STATUS DtsUpdateVidParams(DTS_LIB_CONTEXT *Ctx, BC_DTS_PROC_OUT *pOut);
 
 /*============== Global shared area usage ======================*/
 
-#define BC_DIL_HWINIT_IN_PROGRESS 1
+#define BC_DIL_HWINIT_NOT_YET		0
+#define BC_DIL_HWINIT_IN_PROGRESS	1
+#define BC_DIL_HWINIT_DONE			2
+
 #ifdef _USE_SHMEM_
 #define BC_DIL_SHMEM_KEY 0xBABEFACE
 
@@ -417,6 +418,17 @@ uint32_t DtsGetHwInitSts( void );
 void DtsSetHwInitSts( uint32_t value );
 void DtsRstStats( void ) ;
 BC_DTS_STATS * DtsGetgStats ( void );
+
+uint32_t DtsGetRefNum();
+BC_STATUS DtsGetDevType(uint32_t *pDevID, uint32_t *pVendID, uint32_t *pRevID);
+uint32_t DtsGetDevID();
+
+uint8_t DtsIsDecOpened(pid_t nNewPID);
+void DtsSetDecStat(bool bDecOpen, pid_t PID);
+bool DtsChkPID(pid_t nCurPID);
+
+void DtsLock(DTS_LIB_CONTEXT	*Ctx);
+void DtsUnLock(DTS_LIB_CONTEXT	*Ctx);
 
 #ifdef __cplusplus
 }

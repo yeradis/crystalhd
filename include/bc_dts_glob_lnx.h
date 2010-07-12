@@ -77,7 +77,7 @@ enum _BC_DTS_GLOBALS {
 	BC_LINK_MAX_SGLS	= 1024,		/* Maximum SG elements 4M/4K */
 	BC_TX_LIST_CNT		= 2,		/* Max Tx DMA Rings */
 	BC_RX_LIST_CNT		= 16,		/* Max Rx DMA Rings*/
-	BC_PROC_OUTPUT_TIMEOUT	= 3000,		/* Milliseconds */
+	BC_PROC_OUTPUT_TIMEOUT	= 2000,		/* Milliseconds */
 	BC_INFIFO_THRESHOLD	= 0x10000,
 };
 
@@ -91,7 +91,7 @@ typedef union _addr_64_ {
 		uint32_t	low_part;
 		uint32_t	high_part;
 	};
-	uint64_t	full_addr;	
+	uint64_t	full_addr;
 } addr_64;
 
 typedef struct _BC_CMD_REG_ACC {
@@ -180,11 +180,12 @@ typedef struct _BC_DTS_STATS {
 	 * BIT-31 MEANS READ Next PIB Info.
 	 * Width will be in bit 0-16.
 	 */
-	uint32_t		DrvNextMDataPLD;
+	uint64_t		DrvNextMDataPLD;
 	uint32_t		DrvcpbEmptySize;
 
 	float			Temperature;
-	uint32_t		res1[10];
+	uint32_t		TempFromDriver;
+	uint32_t		res1[8];
 
 } BC_DTS_STATS;
 

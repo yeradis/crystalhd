@@ -29,6 +29,10 @@
 #include "crystalhd_lnx.h"
 #include "crystalhd_misc.h"
 
+// Some HW specific code defines
+extern uint32_t link_GetRptDropParam(uint32_t picHeight, uint32_t picWidth, void *);
+extern uint32_t flea_GetRptDropParam(void *, void *);
+
 static crystalhd_dio_req *crystalhd_alloc_dio(struct crystalhd_adp *adp)
 {
 	unsigned long flags = 0;
@@ -472,18 +476,18 @@ void *crystalhd_dioq_find_and_fetch(crystalhd_dioq_t *ioq, uint32_t tag)
  * Return element from head if Q is not empty. Wait for new element
  * if Q is empty for Timeout seconds.
  */
-void *crystalhd_dioq_fetch_wait(void *hw, uint32_t to_secs, uint32_t *sig_pend)
+void *crystalhd_dioq_fetch_wait(struct crystalhd_hw *hw, uint32_t to_secs, uint32_t *sig_pend)
 {
 	struct device *dev = chddev();
 	unsigned long flags = 0;
 	int rc = 0;
 
 	crystalhd_rx_dma_pkt *r_pkt = NULL;
-	crystalhd_dioq_t *ioq = ((struct crystalhd_hw *)hw)->rx_rdyq;
-	unsigned long picYcomp = 0;
+	crystalhd_dioq_t *ioq = hw->rx_rdyq;
+	uint32_t picYcomp = 0;
 
 	unsigned long fetchTimeout = jiffies + msecs_to_jiffies(to_secs * 1000);
-	
+
 	if (!ioq || (ioq->sig != BC_LINK_DIOQ_SIG) || !to_secs || !sig_pend) {
 		dev_err(dev, "%s: Invalid arg\n", __func__);
 		return r_pkt;
@@ -503,26 +507,35 @@ void *crystalhd_dioq_fetch_wait(void *hw, uint32_t to_secs, uint32_t *sig_pend)
 			// Drop the picture if it is a repeated picture
 			r_pkt = crystalhd_dioq_fetch(ioq);
 			// If format change packet, then return with out checking anything
-			if(r_pkt->flags & (COMP_FLAG_PIB_VALID | COMP_FLAG_FMT_CHANGE))
+			if (r_pkt->flags & (COMP_FLAG_PIB_VALID | COMP_FLAG_FMT_CHANGE))
 				return r_pkt;
-			if(((struct crystalhd_hw *)hw)->adp->pdev->device == BC_PCI_DEVID_LINK)
-				picYcomp = link_GetRptDropParam(((struct crystalhd_hw *)hw)->PICHeight, ((struct crystalhd_hw *)hw)->PICWidth, (void *)r_pkt);
-			else
-				dev_info(chd, "FLEA NOT IMPLEMENTED YET\n");
-			if(!picYcomp || (picYcomp == ((struct crystalhd_hw *)hw)->LastPicNo) ||
-				(picYcomp == ((struct crystalhd_hw *)hw)->LastTwoPicNo)) {
+			if (hw->adp->pdev->device == BC_PCI_DEVID_LINK)
+				picYcomp = link_GetRptDropParam(hw->PICHeight, hw->PICWidth, (void *)r_pkt);
+			else {
+				// For Flea, we don't have the width and height handy since they
+				// come in the PIB in the picture, so this function will also
+				// populate the width and height
+				picYcomp = flea_GetRptDropParam(hw, (void *)r_pkt);
+				// For flea it is the above function that indicated format change
+				if(r_pkt->flags & (COMP_FLAG_PIB_VALID | COMP_FLAG_FMT_CHANGE))
+					return r_pkt;
+			}
+			if(!picYcomp || (picYcomp == hw->LastPicNo) ||
+				(picYcomp == hw->LastTwoPicNo)) {
 				//Discard picture
 				if(picYcomp != 0) {
-					((struct crystalhd_hw *)hw)->LastTwoPicNo = ((struct crystalhd_hw *)hw)->LastPicNo;
-					((struct crystalhd_hw *)hw)->LastPicNo = picYcomp;
+					hw->LastTwoPicNo = hw->LastPicNo;
+					hw->LastPicNo = picYcomp;
 				}
-				crystalhd_dioq_add(((struct crystalhd_hw *)hw)->rx_freeq, r_pkt, false, r_pkt->pkt_tag);
+				crystalhd_dioq_add(hw->rx_freeq, r_pkt, false, r_pkt->pkt_tag);
 				r_pkt = NULL;
 			} else {
-				if((picYcomp - ((struct crystalhd_hw *)hw)->LastPicNo) > 1)
-					dev_info(dev, "MISSING %lu PICTURES\n", (picYcomp - ((struct crystalhd_hw *)hw)->LastPicNo));
-				((struct crystalhd_hw *)hw)->LastTwoPicNo = ((struct crystalhd_hw *)hw)->LastPicNo;
-				((struct crystalhd_hw *)hw)->LastPicNo = picYcomp;
+				if(hw->adp->pdev->device == BC_PCI_DEVID_LINK) {
+					if((picYcomp - hw->LastPicNo) > 1)
+						dev_info(dev, "MISSING %u PICTURES\n", (picYcomp - hw->LastPicNo));
+				}
+				hw->LastTwoPicNo = hw->LastPicNo;
+				hw->LastPicNo = picYcomp;
 				return r_pkt;
 			}
 		} else if (rc == -EINTR) {
@@ -531,6 +544,7 @@ void *crystalhd_dioq_fetch_wait(void *hw, uint32_t to_secs, uint32_t *sig_pend)
 		}
 		spin_lock_irqsave(&ioq->lock, flags);
 	}
+	dev_info(dev, "FETCH TIMEOUT\n");
 	spin_unlock_irqrestore(&ioq->lock, flags);
 	return r_pkt;
 }
@@ -558,9 +572,9 @@ BC_STATUS crystalhd_map_dio(struct crystalhd_adp *adp, void *ubuff,
 {
 	struct device *dev;
 	crystalhd_dio_req	*dio;
-	/* FIXME: jarod: should some of these unsigned longs be uint32_t or uintptr_t? */
-	unsigned long start = 0, end = 0, uaddr = 0, count = 0;
-	unsigned long spsz = 0, uv_start = 0;
+	uint32_t start = 0, end = 0, count = 0;
+	unsigned long uaddr = 0;
+	uint32_t spsz = 0, uv_start = 0;
 	int i = 0, rw = 0, res = 0, nr_pages = 0, skip_fb_sg = 0;
 
 	if (!adp || !ubuff || !ubuff_sz || !dio_hnd) {
@@ -572,7 +586,7 @@ BC_STATUS crystalhd_map_dio(struct crystalhd_adp *adp, void *ubuff,
 
 	/* Compute pages */
 	uaddr = (unsigned long)ubuff;
-	count = (unsigned long)ubuff_sz;
+	count = ubuff_sz;
 	end = (uaddr + count + PAGE_SIZE - 1) >> PAGE_SHIFT;
 	start = uaddr >> PAGE_SHIFT;
 	nr_pages = end - start;
@@ -604,9 +618,9 @@ BC_STATUS crystalhd_map_dio(struct crystalhd_adp *adp, void *ubuff,
 	}
 
 	if (uv_offset) {
-		uv_start = (uaddr + (unsigned long)uv_offset)  >> PAGE_SHIFT;
+		uv_start = (uaddr + uv_offset)  >> PAGE_SHIFT;
 		dio->uinfo.uv_sg_ix = uv_start - start;
-		dio->uinfo.uv_sg_off = ((uaddr + (unsigned long)uv_offset) & ~PAGE_MASK);
+		dio->uinfo.uv_sg_off = ((uaddr + uv_offset) & ~PAGE_MASK);
 	}
 
 	dio->fb_size = ubuff_sz & 0x03;
@@ -850,7 +864,7 @@ void crystalhd_destroy_dio_pool(struct crystalhd_adp *adp)
  * Create general purpose list element pool to hold pending,
  * and active requests.
  */
-int __devinit crystalhd_create_elem_pool(struct crystalhd_adp *adp,
+int crystalhd_create_elem_pool(struct crystalhd_adp *adp,
 		uint32_t pool_size)
 {
 	uint32_t i;

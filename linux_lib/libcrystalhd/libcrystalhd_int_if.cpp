@@ -386,7 +386,6 @@ DtsSetProgressive(
 	DTS_GET_CTX(hDevice,Ctx);
 	if(Ctx->DevId != BC_PCI_DEVID_LINK && Ctx->DevId != BC_PCI_DEVID_DOZER)
 	{
-		DebugLog_Trace(LDIL_DBG,"DtsSetProgressive Not Supported for Flea. Returning Success\n");
 		return BC_STS_SUCCESS;
 	}
 
@@ -928,13 +927,13 @@ DtsDevMemWr(
 
 	if(!hDevice)
 	{
-		DebugLog_Trace(LDIL_DBG,"DtsDevMemRd: Invalid Handle\n");
+		DebugLog_Trace(LDIL_DBG,"DtsDevMemWr: Invalid Handle\n");
 		return BC_STS_INV_ARG;
 	}
 
 	if(!Buffer)
 	{
-		DebugLog_Trace(LDIL_DBG,"DtsDevMemRd: Null Buffer\n");
+		DebugLog_Trace(LDIL_DBG,"DtsDevMemWr: Null Buffer\n");
 		return BC_STS_INV_ARG;
 	}
 
@@ -951,7 +950,7 @@ DtsDevMemWr(
 
 	if(!pIoctlData)
 	{
-		DebugLog_Trace(LDIL_DBG,"DtsDevMemRd: Memory Allocation Failed\n");
+		DebugLog_Trace(LDIL_DBG,"DtsDevMemWr: Memory Allocation Failed\n");
 		return BC_STS_ERROR;
 	}
 
@@ -975,13 +974,13 @@ DtsDevMemWr(
 					(LPDWORD)&BytesReturned,
 					NULL))
 	{
-		DebugLog_Trace(LDIL_DBG,"DtsDevMemRd: DeviceIoControl Failed\n");
+		DebugLog_Trace(LDIL_DBG,"DtsDevMemWr: DeviceIoControl Failed\n");
 		return BC_STS_ERROR;
 	}
 
 	if(BC_STS_ERROR == pIoctlData->RetSts)
 	{
-		DebugLog_Trace(LDIL_DBG,"DtsDevMemRd: IOCTL Cmd Failed By Driver\n");
+		DebugLog_Trace(LDIL_DBG,"DtsDevMemWr: IOCTL Cmd Failed By Driver\n");
 		return pIoctlData->RetSts;
 	}
 
@@ -1036,7 +1035,7 @@ DtsTxDmaText( HANDLE  hDevice ,
 
 	if( BC_STS_SUCCESS != status)
 	{
-		DebugLog_Trace(LDIL_DBG,"DtsDevMemRd: DeviceIoControl Failed\n");
+		DebugLog_Trace(LDIL_DBG,"DtsTxDmaText: DeviceIoControl Failed with Sts %d\n", status);
 	}
 
 	DtsRelIoctlData(Ctx,pIocData);
@@ -1255,8 +1254,6 @@ DtsRstDrvStat(
 	/* DIL related counters */
 	DtsRstStats( );
 
-	DebugLog_Trace(LDIL_DBG,"Cleared all stats\n");
-
 	DtsRelIoctlData(Ctx,pIocData);
 
 	return BC_STS_SUCCESS;
@@ -1330,10 +1327,13 @@ DtsCopyRawDataToOutBuff(DTS_LIB_CONTEXT	*Ctx,
 		else
 			dstHeightInPixels = Vout->PicInfo.height;
 		/* Check for Valid data based on the filter information */
+/* interlaced frames currently don't get delivered from the library if this check is in place */
+#if 0
 		if(Vout->YBuffDoneSz < (dstWidthInPixels * dstHeightInPixels / 2)) {
 			DebugLog_Trace(LDIL_DBG,"DtsCopy422: XFER ERROR dnsz %u, w %u, h %u\n", Vout->YBuffDoneSz, dstWidthInPixels, dstHeightInPixels);
 			return BC_STS_IO_XFR_ERROR;
 		}
+#endif
 		srcWidthInPixels = Ctx->picWidth;
 		srcHeightInPixels = dstHeightInPixels;
 	} else {

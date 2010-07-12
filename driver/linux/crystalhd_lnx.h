@@ -50,7 +50,7 @@
 
 #include "crystalhd_cmds.h"
 
-#define CRYSTAL_HD_NAME		"Broadcom Crystal HD Decoder Driver"
+#define CRYSTAL_HD_NAME "Broadcom Crystal HD Decoder Driver"
 
 /* OS specific PCI information structure and adapter information. */
 struct crystalhd_adp {
@@ -59,12 +59,12 @@ struct crystalhd_adp {
 	struct pci_dev		*pdev;
 
 	unsigned long		pci_mem_start;
-	uint32_t		pci_mem_len;
-	void			*addr;
+	uint32_t			pci_mem_len;
+	void				*mem_addr;
 
 	unsigned long		pci_i2o_start;
-	uint32_t		pci_i2o_len;
-	void			*i2o_addr;
+	uint32_t			pci_i2o_len;
+	void				*i2o_addr;
 
 	unsigned int		drv_data;
 	unsigned int		dmabits;	/* 32 | 64 */
@@ -89,7 +89,7 @@ struct crystalhd_adp {
 
 
 struct crystalhd_adp *chd_get_adp(void);
-inline struct device * chddev(void);
+struct device *chddev(void);
 void chd_set_log_level(struct crystalhd_adp *adp, char *arg);
 
 #endif

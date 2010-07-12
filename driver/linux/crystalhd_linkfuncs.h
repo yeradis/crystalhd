@@ -1,7 +1,7 @@
 /***************************************************************************
  * Copyright (c) 2005-2009, Broadcom Corporation.
  *
- *  Name: crystalhd_hw . h
+ *  Name: crystalhd_linkfuncs . h
  *
  *  Description:
  *		BCM70012 Linux driver hardware layer.
@@ -167,26 +167,6 @@ typedef union _link_misc_perst_decoder_ctrl_ {
 			  INTR_INTR_STATUS_L0_Y_RX_DMA_ERR_INTR_MASK |		\
 			  INTR_INTR_STATUS_L0_Y_RX_DMA_DONE_INTR_MASK)
 
-#define GET_Y0_ERR_MSK (MISC1_Y_RX_ERROR_STATUS_RX_L0_OVERRUN_ERROR_MASK |		\
-			MISC1_Y_RX_ERROR_STATUS_RX_L0_UNDERRUN_ERROR_MASK |		\
-			MISC1_Y_RX_ERROR_STATUS_RX_L0_DESC_TX_ABORT_ERRORS_MASK |	\
-			MISC1_Y_RX_ERROR_STATUS_RX_L0_FIFO_FULL_ERRORS_MASK)
-
-#define GET_UV0_ERR_MSK (MISC1_UV_RX_ERROR_STATUS_RX_L0_OVERRUN_ERROR_MASK |		\
-			 MISC1_UV_RX_ERROR_STATUS_RX_L0_UNDERRUN_ERROR_MASK |		\
-			 MISC1_UV_RX_ERROR_STATUS_RX_L0_DESC_TX_ABORT_ERRORS_MASK |	\
-			 MISC1_UV_RX_ERROR_STATUS_RX_L0_FIFO_FULL_ERRORS_MASK)
-
-#define GET_Y1_ERR_MSK (MISC1_Y_RX_ERROR_STATUS_RX_L1_OVERRUN_ERROR_MASK |		\
-			MISC1_Y_RX_ERROR_STATUS_RX_L1_UNDERRUN_ERROR_MASK |		\
-			MISC1_Y_RX_ERROR_STATUS_RX_L1_DESC_TX_ABORT_ERRORS_MASK |	\
-			MISC1_Y_RX_ERROR_STATUS_RX_L1_FIFO_FULL_ERRORS_MASK)
-
-#define GET_UV1_ERR_MSK	(MISC1_UV_RX_ERROR_STATUS_RX_L1_OVERRUN_ERROR_MASK |		\
-			 MISC1_UV_RX_ERROR_STATUS_RX_L1_UNDERRUN_ERROR_MASK |		\
-			 MISC1_UV_RX_ERROR_STATUS_RX_L1_DESC_TX_ABORT_ERRORS_MASK |	\
-			 MISC1_UV_RX_ERROR_STATUS_RX_L1_FIFO_FULL_ERRORS_MASK)
-
 uint32_t link_dec_reg_rd(struct crystalhd_adp *adp, uint32_t reg_off);
 void link_dec_reg_wr(struct crystalhd_adp *adp, uint32_t reg_off, uint32_t val);
 uint32_t crystalhd_link_reg_rd(struct crystalhd_adp *adp, uint32_t reg_off);
@@ -212,11 +192,11 @@ uint32_t link_GetMode422Data(crystalhd_dio_req *dio, PBC_PIC_INFO_BLOCK pPicInfo
 uint32_t link_GetMetaDataFromPib(crystalhd_dio_req *dio,	PBC_PIC_INFO_BLOCK pPicInfoLine);
 uint32_t link_GetHeightFromPib(crystalhd_dio_req *dio, PBC_PIC_INFO_BLOCK pPicInfoLine);
 bool link_GetPictureInfo(uint32_t picHeight, uint32_t picWidth, crystalhd_dio_req *dio,
-								uint32_t *PicNumber, uint32_t *PicMetaData);
+								uint32_t *PicNumber, uint64_t *PicMetaData);
 uint32_t link_GetRptDropParam(uint32_t picHeight, uint32_t picWidth, void *pRxDMAReq);
-bool crystalhd_link_peek_next_decoded_frame(struct crystalhd_hw *hw, uint32_t *meta_payload, uint32_t PicWidth);
+bool crystalhd_link_peek_next_decoded_frame(struct crystalhd_hw *hw, uint64_t *meta_payload, uint32_t PicWidth);
 bool crystalhd_link_check_input_full(struct crystalhd_hw *hw, uint32_t needed_sz, uint32_t *empty_sz,
-									 bool b_188_byte_pkts, uint8_t flags);
+									 bool b_188_byte_pkts, uint8_t *flags);
 bool crystalhd_link_tx_list0_handler(struct crystalhd_hw *hw, uint32_t err_sts);
 bool crystalhd_link_tx_list1_handler(struct crystalhd_hw *hw, uint32_t err_sts);
 void crystalhd_link_tx_isr(struct crystalhd_hw *hw, uint32_t int_sts);
@@ -242,5 +222,7 @@ BC_STATUS crystalhd_link_fw_cmd_post_proc(struct crystalhd_hw *hw, BC_FW_CMD *fw
 BC_STATUS crystalhd_link_put_ddr2sleep(struct crystalhd_hw *hw);
 BC_STATUS crystalhd_link_download_fw(struct crystalhd_hw* hw, uint8_t* buffer, uint32_t sz);
 BC_STATUS crystalhd_link_do_fw_cmd(struct crystalhd_hw *hw, BC_FW_CMD *fw_cmd);
-bool crystalhd_link_hw_interrupt(struct crystalhd_adp *adp, struct crystalhd_hw *hw);
+bool crystalhd_link_hw_interrupt_handle(struct crystalhd_adp *adp, struct crystalhd_hw *hw);
+void crystalhd_link_notify_fll_change(struct crystalhd_hw *hw, bool bCleanupContext);
+bool crystalhd_link_notify_event(struct crystalhd_hw *hw, BRCM_EVENT EventCode);
 #endif

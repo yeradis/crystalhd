@@ -40,7 +40,7 @@ DtsPushAuthFwToLink(HANDLE hDevice, char *FwBinFile)
 	uint32_t		byesDnld=0;
 	char			*fwfile=NULL;
 	DTS_LIB_CONTEXT *Ctx=NULL;
-	
+
 	DTS_GET_CTX(hDevice,Ctx);
 
 	if(Ctx->OpMode == DTS_DIAG_MODE){
@@ -58,7 +58,7 @@ DtsPushAuthFwToLink(HANDLE hDevice, char *FwBinFile)
 	}
 
 	/* Get the firmware file to download */
-	if (!FwBinFile) 
+	if (!FwBinFile)
 	{
 		status = DtsGetFirmwareFiles(Ctx);
 		if (status == BC_STS_SUCCESS) fwfile = Ctx->FwBinFile;
@@ -70,21 +70,66 @@ DtsPushAuthFwToLink(HANDLE hDevice, char *FwBinFile)
 
 	//DebugLog_Trace(LDIL_DBG,"Firmware File is :%s\n",fwfile);
 
-	/* Push the F/W bin file to the driver */	
+	/* Push the F/W bin file to the driver */
 	status = fwbinPushToLINK(hDevice, fwfile, &byesDnld);
-	
+
 	if (status != BC_STS_SUCCESS) {
 		DebugLog_Trace(LDIL_DBG,"DtsPushAuthFwToLink: Failed to download firmware\n");
 		return status;
 	}
-	
 
-
-	
 	return BC_STS_SUCCESS;
 }
 
-DRVIFLIB_INT_API BC_STATUS 
+DRVIFLIB_INT_API BC_STATUS
+DtsPushFwToFlea(HANDLE hDevice, char *FwBinFile)
+{
+	BC_STATUS		status=BC_STS_ERROR;
+	uint32_t		byesDnld=0;
+	char			*fwfile=NULL;
+	DTS_LIB_CONTEXT *Ctx=NULL;
+
+	DTS_GET_CTX(hDevice,Ctx);
+
+	if(Ctx->OpMode == DTS_DIAG_MODE){
+		/* In command line case, we don't get a close
+		* between successive devinit commands.
+		*/
+		Ctx->FixFlags &= ~DTS_LOAD_FILE_PLAY_FW;
+
+		if(FwBinFile){
+			if(!strncmp(FwBinFile,"FILE_PLAY_BACK",14)){
+				Ctx->FixFlags |=DTS_LOAD_FILE_PLAY_FW;
+				FwBinFile=NULL;
+			}
+		}
+	}
+
+	/* Get the firmware file to download */
+	if (!FwBinFile)
+	{
+		status = DtsGetFirmwareFiles(Ctx);
+		if (status == BC_STS_SUCCESS) fwfile = Ctx->FwBinFile;
+		else return status;
+
+	} else {
+		fwfile = FwBinFile;
+	}
+
+	//DebugLog_Trace(LDIL_DBG,"Firmware File is :%s\n",fwfile);
+
+	/* Push the F/W bin file to the driver */
+	status = fwbinPushToFLEA(hDevice, fwfile, &byesDnld);
+
+	if (status != BC_STS_SUCCESS) {
+		DebugLog_Trace(LDIL_DBG,"DtsPushFwToFlea: Failed to download firmware\n");
+		return status;
+	}
+
+	return BC_STS_SUCCESS;
+}
+
+DRVIFLIB_INT_API BC_STATUS
 fwbinPushToLINK(HANDLE hDevice, char *FwBinFile, uint32_t *bytesDnld)
 {
 	BC_STATUS	status=BC_STS_ERROR;
@@ -97,11 +142,11 @@ fwbinPushToLINK(HANDLE hDevice, char *FwBinFile, uint32_t *bytesDnld)
 		DebugLog_Trace(LDIL_DBG,"Invalid Arguments\n");
 		return BC_STS_INV_ARG;
 	}
-	
+
 	fp = fopen(FwBinFile,"rb");
 	if(!fp)
 	{
-		DebugLog_Trace(LDIL_DBG,"Failed to Open FW file\n");
+		DebugLog_Trace(LDIL_DBG,"Failed to Open FW file.  %s\n", FwBinFile);
 		perror("LINK FW");
 		return BC_STS_ERROR;
 	}
@@ -129,6 +174,50 @@ fwbinPushToLINK(HANDLE hDevice, char *FwBinFile, uint32_t *bytesDnld)
 	return status;
 }
 
+DRVIFLIB_INT_API BC_STATUS
+fwbinPushToFLEA(HANDLE hDevice, char *FwBinFile, uint32_t *bytesDnld)
+{
+	BC_STATUS	status=BC_STS_ERROR;
+	uint32_t	FileSz=0;
+	char		*buff=NULL;
+	FILE 		*fp=NULL;
+
+	if( (!FwBinFile) || (!hDevice) || (!bytesDnld))
+	{
+		DebugLog_Trace(LDIL_DBG,"Invalid Arguments\n");
+		return BC_STS_INV_ARG;
+	}
+
+	fp = fopen(FwBinFile,"rb");
+	if(!fp)
+	{
+		DebugLog_Trace(LDIL_DBG,"Failed to Open FW file.  %s\n", FwBinFile);
+		perror("FLEA FW");
+		return BC_STS_ERROR;
+	}
+
+	fseek(fp,0,SEEK_END);
+	FileSz = ftell(fp);
+	fseek(fp,0,SEEK_SET);
+
+	buff = (char*)malloc(FileSz);
+	if (!buff) {
+		DebugLog_Trace(LDIL_DBG,"Failed to allocate memory\n");
+		return BC_STS_INSUFF_RES;
+	}
+
+	*bytesDnld = fread(buff,1,FileSz,fp);
+	if(0 == *bytesDnld)
+	{
+		DebugLog_Trace(LDIL_DBG,"Failed to Read The File\n");
+		return BC_STS_IO_ERROR;
+	}
+
+	status = DtsPushFwBinToLink(hDevice, (uint32_t*)buff, *bytesDnld);
+	if(buff) free(buff);
+	if(fp) fclose(fp);
+	return status;
+}
 
 BC_STATUS dec_write_fw_Sig(HANDLE hndl, uint32_t* Sig)
 {
@@ -139,9 +228,9 @@ BC_STATUS dec_write_fw_Sig(HANDLE hndl, uint32_t* Sig)
     for (int reg_cnt=0;reg_cnt<8;reg_cnt++)
     {
         sts = DtsFPGARegisterWr(hndl, DciSigDataReg, bswap_32_1(*ptr));
-        
+
         if(sts != BC_STS_SUCCESS)
-        {	
+        {
             DebugLog_Trace(LDIL_DBG,"Error Wrinting Fw Sig data register\n");
             return sts;
         }

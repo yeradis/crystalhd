@@ -23,6 +23,11 @@ static struct class *crystalhd_class;
 
 static struct crystalhd_adp *g_adp_info;
 
+struct device *chddev(void)
+{
+	return &g_adp_info->pdev->dev;
+}
+
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 18)
 static irqreturn_t chd_dec_isr(int irq, void *arg)
 #else
@@ -156,8 +161,10 @@ static int chd_dec_fetch_cdata(struct crystalhd_adp *adp, crystalhd_ioctl_data *
 		dev_err(chddev(), "failed to pull add_cdata sz:%x "
 			"ua_off:%x\n", io->add_cdata_sz,
 			(unsigned int)ua_off);
-		kfree(io->add_cdata);
-		io->add_cdata = NULL;
+		if (io->add_cdata) {
+			kfree(io->add_cdata);
+			io->add_cdata = NULL;
+		}
 		return -ENODATA;
 	}
 
@@ -171,7 +178,7 @@ static int chd_dec_release_cdata(struct crystalhd_adp *adp,
 	int rc;
 
 	if (!adp || !io || !ua) {
-		dev_err(dev, "Invalid Arg!!\n");
+		dev_err(chddev(), "Invalid Arg!!\n");
 		return -EINVAL;
 	}
 
@@ -277,7 +284,7 @@ static int chd_dec_ioctl(struct inode *in, struct file *fd,
 		return -EINVAL;
 	}
 
-	uc = (struct crystalhd_user *)fd->private_data;
+	uc = fd->private_data;
 	if (!uc) {
 		dev_err(chddev(), "Failed to get uc\n");
 		return -ENODATA;
@@ -336,7 +343,7 @@ static int chd_dec_close(struct inode *in, struct file *fd)
 		return -EINVAL;
 	}
 
-	uc = (struct crystalhd_user *)fd->private_data;
+	uc = fd->private_data;
 	if (!uc) {
 		dev_err(dev, "Failed to get uc\n");
 		return -ENODATA;
@@ -401,8 +408,7 @@ static int __devinit chd_dec_init_chdev(struct crystalhd_adp *adp)
 
 	/* Allocate general purpose ioctl pool. */
 	for (i = 0; i < CHD_IODATA_POOL_SZ; i++) {
-		/* FIXME: jarod: why atomic? */
-		temp = kzalloc(sizeof(crystalhd_ioctl_data), GFP_ATOMIC);
+		temp = kzalloc(sizeof(crystalhd_ioctl_data), GFP_KERNEL);
 		if (!temp) {
 			dev_err(xdev, "ioctl data pool kzalloc failed\n");
 			rc = -ENOMEM;
@@ -443,7 +449,8 @@ static void __devexit chd_dec_release_chdev(struct crystalhd_adp *adp)
 	/* Clear iodata pool.. */
 	do {
 		temp = chd_dec_alloc_iodata(adp, 0);
-		kfree(temp);
+		if (temp)
+			kfree(temp);
 	} while (temp);
 
 	//crystalhd_delete_elem_pool(adp);
@@ -452,29 +459,17 @@ static void __devexit chd_dec_release_chdev(struct crystalhd_adp *adp)
 static int __devinit chd_pci_reserve_mem(struct crystalhd_adp *pinfo)
 {
 	int rc;
-	unsigned long bar2 = pci_resource_start(pinfo->pdev, 2);
-	uint32_t mem_len   = pci_resource_len(pinfo->pdev, 2);
-	unsigned long bar0 = pci_resource_start(pinfo->pdev, 0);
-	uint32_t i2o_len   = pci_resource_len(pinfo->pdev, 0);
 
-	/* printk(KERN_DEBUG "bar2:0x%lx-0x%08x  bar0:0x%lx-0x%08x\n", */
-	/*       bar2, mem_len, bar0, i2o_len); */
+	uint32_t bar0		= pci_resource_start(pinfo->pdev, 0);
+	uint32_t i2o_len	= pci_resource_len(pinfo->pdev, 0);
 
-	rc = check_mem_region(bar2, mem_len);
-	if (rc) {
-		printk(KERN_ERR "No valid mem region...\n");
-		return -ENOMEM;
-	}
+	uint32_t bar2		= pci_resource_start(pinfo->pdev, 2);
+	uint32_t mem_len	= pci_resource_len(pinfo->pdev, 2);
 
-	pinfo->addr = ioremap_nocache(bar2, mem_len);
-	if (!pinfo->addr) {
-		printk(KERN_ERR "Failed to remap mem region...\n");
-		return -ENOMEM;
-	}
+	printk(KERN_DEBUG "bar0:0x%x-0x%08x  bar2:0x%x-0x%08x\n",
+	        bar0, i2o_len, bar2, mem_len);
 
-	pinfo->pci_mem_start = bar2;
-	pinfo->pci_mem_len   = mem_len;
-
+	/* bar-0 */
 	rc = check_mem_region(bar0, i2o_len);
 	if (rc) {
 		printk(KERN_ERR "No valid mem region...\n");
@@ -483,21 +478,38 @@ static int __devinit chd_pci_reserve_mem(struct crystalhd_adp *pinfo)
 
 	pinfo->i2o_addr = ioremap_nocache(bar0, i2o_len);
 	if (!pinfo->i2o_addr) {
-		printk(KERN_ERR "Failed to remap mem region...\n");
+		printk(KERN_ERR "Failed to remap i2o region...\n");
 		return -ENOMEM;
 	}
 
 	pinfo->pci_i2o_start = bar0;
 	pinfo->pci_i2o_len   = i2o_len;
 
+	/* bar-2 */
+	rc = check_mem_region(bar2, mem_len);
+	if (rc) {
+		printk(KERN_ERR "No valid mem region...\n");
+		return -ENOMEM;
+	}
+
+	pinfo->mem_addr = ioremap_nocache(bar2, mem_len);
+	if (!pinfo->mem_addr) {
+		printk(KERN_ERR "Failed to remap mem region...\n");
+		return -ENOMEM;
+	}
+
+	pinfo->pci_mem_start = bar2;
+	pinfo->pci_mem_len   = mem_len;
+
+	/* pdev */
 	rc = pci_request_regions(pinfo->pdev, pinfo->name);
 	if (rc < 0) {
 		printk(KERN_ERR "Region request failed: %d\n", rc);
 		return rc;
 	}
 
-	/* printk(KERN_DEBUG "Mapped addr:0x%08lx  i2o_addr:0x%08lx\n", */
-	/*        (unsigned long)pinfo->addr, (unsigned long)pinfo->i2o_addr); */
+	printk(KERN_DEBUG "i2o_addr:0x%08lx   Mapped addr:0x%08lx  \n",
+	        (unsigned long)pinfo->i2o_addr, (unsigned long)pinfo->mem_addr);
 
 	return 0;
 }
@@ -507,8 +519,8 @@ static void __devexit chd_pci_release_mem(struct crystalhd_adp *pinfo)
 	if (!pinfo)
 		return;
 
-	if (pinfo->addr)
-		iounmap(pinfo->addr);
+	if (pinfo->mem_addr)
+		iounmap(pinfo->mem_addr);
 
 	if (pinfo->i2o_addr)
 		iounmap(pinfo->i2o_addr);
@@ -711,6 +723,7 @@ static DEFINE_PCI_DEVICE_TABLE(chd_dec_pci_id_table) = {
 static struct pci_device_id chd_dec_pci_id_table[] = {
 /*	vendor, device, subvendor, subdevice, class, classmask, driver_data */
 	{ 0x14e4, 0x1612, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 8 },
+	{ 0x14e4, 0x1615, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 8 },
 	{ 0, },
 };
 #endif
@@ -730,11 +743,6 @@ static struct pci_driver bc_chd_driver = {
 struct crystalhd_adp *chd_get_adp(void)
 {
 	return g_adp_info;
-}
-
-inline struct device *chddev(void)
-{
-	return &chd_get_adp()->pdev->dev;
 }
 
 static int __init chd_dec_module_init(void)

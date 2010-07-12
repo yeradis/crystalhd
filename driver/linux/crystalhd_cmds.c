@@ -4,7 +4,7 @@
  *  Name: crystalhd_cmds . c
  *
  *  Description:
- *		BCM70010 Linux driver user command interfaces.
+ *		BCM70012/BCM70015 Linux driver user command interfaces.
  *
  *  HISTORY:
  *
@@ -23,6 +23,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this driver.  If not, see <http://www.gnu.org/licenses/>.
  **********************************************************************/
+
 #include "crystalhd_lnx.h"
 
 static struct crystalhd_user *bc_cproc_get_uid(struct crystalhd_cmd *ctx)
@@ -315,6 +316,7 @@ static BC_STATUS bc_cproc_download_fw(struct crystalhd_cmd *ctx,
 	} else
 		ctx->state |= BC_LINK_INIT;
 
+	ctx->hw_ctx->FwCmdCnt = 0;
 	return sts;
 }
 
@@ -564,6 +566,7 @@ static BC_STATUS bc_cproc_add_cap_buff(struct crystalhd_cmd *ctx,
 	en_422 = idata->udata.u.RxBuffs.b422Mode;
 
 	sts = bc_cproc_check_inbuffs(0, ubuff, ub_sz, uv_off, en_422);
+
 	if (sts != BC_STS_SUCCESS)
 		return sts;
 
@@ -648,6 +651,25 @@ static BC_STATUS bc_cproc_start_capture(struct crystalhd_cmd *ctx,
 					crystalhd_ioctl_data *idata)
 {
 	ctx->state |= BC_LINK_CAP_EN;
+
+	if( idata->udata.u.RxCap.PauseThsh )
+		ctx->hw_ctx->PauseThreshold = idata->udata.u.RxCap.PauseThsh;
+	else
+		ctx->hw_ctx->PauseThreshold = HW_PAUSE_THRESHOLD;
+
+	if( idata->udata.u.RxCap.ResumeThsh )
+		ctx->hw_ctx->ResumeThreshold = idata->udata.u.RxCap.ResumeThsh;
+	else
+		ctx->hw_ctx->ResumeThreshold = HW_RESUME_THRESHOLD;
+
+	printk("start_capture: pause_th:%d, resume_th:%d\n", ctx->hw_ctx->PauseThreshold, ctx->hw_ctx->ResumeThreshold);
+
+	ctx->hw_ctx->DrvTotalFrmCaptured = 0;
+
+	ctx->hw_ctx->DefaultPauseThreshold = ctx->hw_ctx->PauseThreshold; // used to restore on FMTCH
+
+	ctx->hw_ctx->pfnNotifyHardware(ctx->hw_ctx, BC_EVENT_START_CAPTURE);
+
 	if (ctx->state == BC_LINK_READY)
 		return crystalhd_hw_start_capture(ctx->hw_ctx);
 
@@ -678,7 +700,7 @@ static BC_STATUS bc_cproc_flush_cap_buffs(struct crystalhd_cmd *ctx,
 		crystalhd_hw_stop_capture(ctx->hw_ctx, false);
 		while((rpkt = crystalhd_dioq_fetch(ctx->hw_ctx->rx_actq)) != NULL)
 			crystalhd_dioq_add(ctx->hw_ctx->rx_freeq, rpkt, false, rpkt->pkt_tag);
-		
+
 		while((rpkt = crystalhd_dioq_fetch(ctx->hw_ctx->rx_rdyq)) != NULL)
 			crystalhd_dioq_add(ctx->hw_ctx->rx_freeq, rpkt, false, rpkt->pkt_tag);
 		crystalhd_hw_start_capture(ctx->hw_ctx);
@@ -696,7 +718,8 @@ static BC_STATUS bc_cproc_get_stats(struct crystalhd_cmd *ctx,
 	BC_DTS_STATS *stats;
 	struct crystalhd_hw_stats	hw_stats;
 	uint32_t pic_width;
-	unsigned long flags = 0;
+	uint8_t flags = 0;
+	bool readTxOnly = false;
 
 	if (!ctx || !idata) {
 		dev_err(chddev(), "%s: Invalid Arg\n", __func__);
@@ -716,16 +739,43 @@ static BC_STATUS bc_cproc_get_stats(struct crystalhd_cmd *ctx,
 	stats->TxFifoBsyCnt = hw_stats.cin_busy;
 	stats->pauseCount = hw_stats.pause_cnt;
 
+	/* Indicate that we are checking stats on the input buffer for a single threaded application */
+	/* this will prevent the HW from going to low power because we assume that once we have told the application */
+	/* that we have space in the HW, the app is going to try to DMA. And if we block that DMA, a single threaded application */
+	/* will deadlock */
+	//if(pDrvStat->DrvNextMDataPLD & BC_BIT(31))
+	//{
+	//	Flags |= 0x08;
+	//	// Also for single threaded applications, check to see if we have reduced the power down
+	//	// pause threshold to too low and increase it if the RLL is close to the threshold
+	//	if(pDrvStat->drvRLL >= pDevExt->pHwExten->PauseThreshold)
+	//		pDevExt->pHwExten->PauseThreshold++;
+	//	PeekNextTS = TRUE;
+	//}
+
+	/* also indicate that we are just checking stats and not posting */
+	/* This allows multi-threaded applications to be placed into low power state */
+	/* because eveentually the RX thread will wake up the HW when needed */
+	flags |= 0x04;
+
 	if (ctx->pwr_state_change)
 		stats->pwr_state_change = 1;
 	if (ctx->state & BC_LINK_PAUSED)
 		stats->DrvPauseTime = 1;
 
+	// use bit 29 of the input status to indicate that we are trying to read VC1 status
+	// This is important for the BCM70012 which uses a different input queue for VC1
+	if(stats->DrvcpbEmptySize & BC_BIT(29))
+		flags = 0x2;
+	// Bit 30 is used to indicate that we are reading only the TX stats and to not touch the Ready list
+	if(stats->DrvcpbEmptySize & BC_BIT(30))
+		readTxOnly = true;
+
 	ctx->hw_ctx->pfnCheckInputFIFO(ctx->hw_ctx, 0, &stats->DrvcpbEmptySize,
-				      false, flags);
+				      false, &flags);
 
 	/* status peek ahead to retreive the next decoded frame timestamp */
-	if (stats->drvRLL && (stats->DrvNextMDataPLD & BC_BIT(31))) {
+	if (!readTxOnly && stats->drvRLL && (stats->DrvNextMDataPLD & BC_BIT(31))) {
 		pic_width = stats->DrvNextMDataPLD & 0xffff;
 		stats->DrvNextMDataPLD = 0;
 		if (pic_width <= 1920)
@@ -814,6 +864,7 @@ BC_STATUS crystalhd_suspend(struct crystalhd_cmd *ctx, crystalhd_ioctl_data *ida
 	bc_cproc_mark_pwr_state(ctx);
 
 	if (ctx->state & BC_LINK_CAP_EN) {
+		idata->udata.u.FlushRxCap.bDiscardOnly = true;
 		sts = bc_cproc_flush_cap_buffs(ctx, idata);
 		if (sts != BC_STS_SUCCESS)
 			return sts;
@@ -892,7 +943,7 @@ BC_STATUS crystalhd_user_open(struct crystalhd_cmd *ctx,
 
 	ctx->hw_ctx = (struct crystalhd_hw*)kmalloc(sizeof(struct crystalhd_hw), GFP_KERNEL);
 	memset(ctx->hw_ctx, 0, sizeof(struct crystalhd_hw));
-	
+
 	crystalhd_hw_open(ctx->hw_ctx, ctx->adp);
 
 	uc->in_use = 1;
@@ -983,7 +1034,7 @@ BC_STATUS __devinit crystalhd_setup_cmd_context(struct crystalhd_cmd *ctx,
 	crystalhd_hw_close(ctx->hw_ctx);
 	kfree(ctx->hw_ctx);
 	ctx->hw_ctx = NULL;
-	
+
 	return BC_STS_SUCCESS;
 }
 
@@ -1056,7 +1107,7 @@ crystalhd_cmd_proc crystalhd_get_cmd_proc(struct crystalhd_cmd *ctx, uint32_t cm
  * @ctx: Command layer contextx.
  *
  * Return:
- *	TRUE: If interrupt from bcm70012 device.
+ *	TRUE: If interrupt from CrystalHD device.
  *
  *
  * ISR entry point from OS layer.
@@ -1065,11 +1116,12 @@ bool crystalhd_cmd_interrupt(struct crystalhd_cmd *ctx)
 {
 	if (!ctx) {
 		printk(KERN_ERR "%s: Invalid arg..\n", __func__);
-		return 0;
+		return false;
 	}
 
-	if(ctx->hw_ctx->adp->pdev->device == BC_PCI_DEVID_LINK)
-		return crystalhd_link_hw_interrupt(ctx->adp, ctx->hw_ctx);
-	else
-		return 0;
+	// If HW has not been initialized then all interrupts are spurious
+	if ((ctx->hw_ctx == NULL) || (ctx->hw_ctx->pfnFindAndClearIntr == NULL))
+		return false;
+
+	return ctx->hw_ctx->pfnFindAndClearIntr(ctx->adp, ctx->hw_ctx);
 }

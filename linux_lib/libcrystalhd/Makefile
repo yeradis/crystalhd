@@ -58,6 +58,7 @@ install:
 	cp libcrystalhd_if.h $(DESTDIR)/usr/include/libcrystalhd/
 	cp $(ROOTDIR)/include/bc_dts_defs.h $(DESTDIR)/usr/include/libcrystalhd/
 	cp $(ROOTDIR)/include/bc_dts_types.h $(DESTDIR)/usr/include/libcrystalhd/
+	cp $(ROOTDIR)/include/libcrystalhd_version.h $(DESTDIR)/usr/include/libcrystalhd/
 	cp $(ROOTDIR)/firmware/fwbin/70012/bcm70012fw.bin $(DESTDIR)/lib/firmware/
 	cp $(ROOTDIR)/firmware/fwbin/70015/bcm70015fw.bin $(DESTDIR)/lib/firmware/
 	install -m 755 $(BCLIB) $(DESTDIR)$(LIBDIR)
