@@ -27,6 +27,7 @@
 #ifndef _CRYSTALHD_HW_H_
 #define _CRYSTALHD_HW_H_
 #include <linux/device.h>
+#include <linux/semaphore.h>
 #include "crystalhd_fw_if.h"
 #include "crystalhd_misc.h"
 #include "DriverFwShare.h"
