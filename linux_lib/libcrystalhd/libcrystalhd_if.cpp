@@ -273,23 +273,8 @@ static __attribute__((aligned(4))) uint8_t btp_video_plunge_es[] =
 static __attribute__((aligned(4))) uint8_t ExtData[] =
 { 0x00, 0x00};
 
-static uint32_t g_nDeviceID = BC_PCI_DEVID_INVALID;
 pid_t		g_nProcID = 0;
 uint8_t		g_bDecOpened = 0;
-
-uint32_t	g_nDevID = BC_PCI_DEVID_INVALID;
-uint32_t	g_nRevID = 0;
-uint32_t	g_nVendID = 0;
-
-uint32_t DtsGetDevID()
-{
-	uint32_t nDevID, nRevID, nVendID;
-
-	if (g_nDevID == BC_PCI_DEVID_INVALID)
-		DtsGetDevType(&nDevID, &nRevID, &nVendID);
-
-	return g_nDevID;
-}
 
 uint8_t DtsIsDecOpened(pid_t nNewPID)
 {
@@ -320,51 +305,6 @@ void DtsSetDecStat(bool bDecOpen, pid_t PID)
 	g_bDecOpened = bDecOpen;
 }
 
-BC_STATUS DtsGetDevType(uint32_t *pDevID, uint32_t *pVendID, uint32_t *pRevID)
-{
-	int drvHandle = 1;
-	BC_IOCTL_DATA IO;
-	int rc;
-
-	if (g_nDevID == BC_PCI_DEVID_INVALID)
-	{
-		drvHandle =open(CRYSTALHD_API_DEV_NAME, O_RDWR);
-
-		if(drvHandle >= 0)
-		{
-			memset(&IO, 0, sizeof(BC_IOCTL_DATA));
-			IO.Timeout = 0;
-			IO.RetSts = BC_STS_SUCCESS;
-			IO.u.hwType.PciDevId = 0xffff;
-			IO.u.hwType.PciVenId =  0xffff;
-			IO.u.hwType.HwRev = 0xff;
-
-			IO.RetSts = BC_STS_SUCCESS;
-
-			rc = ioctl(drvHandle, BCM_IOC_GET_HWTYPE, &IO);
-
-			if (rc >= 0 && IO.RetSts == BC_STS_SUCCESS)
-			{
-				g_nDevID = IO.u.hwType.PciDevId;
-				g_nRevID = IO.u.hwType.HwRev;
-				g_nVendID = IO.u.hwType.PciVenId;
-			}
-			close(drvHandle);
-		}
-	}
-
-	if (g_nDevID != BC_PCI_DEVID_INVALID)
-	{
-		*pDevID = g_nDevID;
-		*pRevID = g_nRevID;
-		*pVendID = g_nVendID;
-		return BC_STS_SUCCESS;
-	}
-
-	return BC_STS_ERROR;
-
-}
-
 static BC_STATUS DtsSetupHardware(HANDLE hDevice, BOOL IgnClkChk)
 {
 	BC_STATUS sts = BC_STS_SUCCESS;
@@ -375,6 +315,7 @@ static BC_STATUS DtsSetupHardware(HANDLE hDevice, BOOL IgnClkChk)
 	if( !IgnClkChk){
 		if(Ctx->DevId == BC_PCI_DEVID_LINK || Ctx->DevId == BC_PCI_DEVID_FLEA){
 			if(DtsGetHwInitSts() != BC_DIL_HWINIT_NOT_YET){
+				DebugLog_Trace(LDIL_DBG," HW init already?\n");
 				return BC_STS_SUCCESS;
 			}
 		}
@@ -502,15 +443,9 @@ DtsDeviceOpen(
 	DebugLog_Trace(LDIL_DBG,"Running DIL (%d.%d.%d) Version\n",
 		DIL_MAJOR_VERSION,DIL_MINOR_VERSION,DIL_REVISION );
 
-	uint32_t clkSet = (mode >> 19) & 0x7;
+// 	uint32_t clkSet = (mode >> 19) & 0x7;
 
 	processID = getpid();
-
-	if (DtsGetDevID() == BC_PCI_DEVID_INVALID)
-	{
-		DebugLog_Trace(LDIL_DBG, "DtsDeviceOpen: DtsGetDevID Failed\n");
-		return BC_STS_ERROR;
-	}
 
 	FixFlags = mode;
 	mode &= 0xFF;
@@ -521,22 +456,22 @@ DtsDeviceOpen(
 		return BC_STS_ERROR;
 	}
 
-	switch (clkSet) {
-		case 6: clkSet = 200;
-				break;
-		case 5: clkSet = 180;
-				break;
-		case 4: clkSet = 165;
-				break;
-		case 3: clkSet = 150;
-				break;
-		case 2: clkSet = 125;
-				break;
-		case 1: clkSet = 105;
-				break;
-		default: clkSet = 165;
-				break;
-	}
+// 	switch (clkSet) {
+// 		case 6: clkSet = 200;
+// 				break;
+// 		case 5: clkSet = 180;
+// 				break;
+// 		case 4: clkSet = 165;
+// 				break;
+// 		case 3: clkSet = 150;
+// 				break;
+// 		case 2: clkSet = 125;
+// 				break;
+// 		case 1: clkSet = 105;
+// 				break;
+// 		default: clkSet = 165;
+// 				break;
+// 	}
 
 	DebugLog_Trace(LDIL_DBG,"DtsDeviceOpen: Opening HW in mode %x\n", mode);
 
@@ -620,11 +555,8 @@ DtsDeviceOpen(
 
 	// set Ctx->DevId early, other depend on it
 	DtsGetContext(*hDevice)->DevId = DeviceID;
-	g_nDeviceID = DeviceID;
 
-	/* NAREN Program clock */
-//	if(DeviceID == BC_PCI_DEVID_LINK)
-//		DtsSetCoreClock(*hDevice, clkSet);
+	DtsSetCoreClock(*hDevice, 200);
 
 	/*
 	 * We have to specify the mode to the driver.
@@ -985,6 +917,8 @@ DtsOpenDecoder(
 	Ctx->bEOSCheck = FALSE;
 	Ctx->bEOS = FALSE;
 	Ctx->CapState = 0;
+	Ctx->hw_paused = false;
+	Ctx->fw_cmd_issued = false;
 
 	sts = DtsSetVideoClock(hDevice,0);
 	if (sts != BC_STS_SUCCESS)
@@ -1316,6 +1250,11 @@ DtsStopDecoder(
 		return BC_STS_SUCCESS;
 	}
 
+	// On LINK if the decoder is paused due to the RLL being full, un pause it before flush
+	if(Ctx->DevId == BC_PCI_DEVID_LINK && Ctx->hw_paused) {
+		DtsFWPauseVideo(hDevice,eC011_PAUSE_MODE_OFF);
+		Ctx->hw_paused = false;
+	}
 	DtsCancelFetchOutInt(Ctx);
 
 	sts = DtsFWStopVideo(hDevice,Ctx->OpenRsp.channelId, FALSE);
@@ -1624,6 +1563,7 @@ DtsProcOutput(
 		memset(&OutBuffs,0,sizeof(OutBuffs));
 
 		sts = DtsFetchOutInterruptible(Ctx,&OutBuffs,milliSecWait);
+
 		if(sts != BC_STS_SUCCESS)
 		{
 			if(sts == BC_STS_TIMEOUT)
@@ -1671,7 +1611,6 @@ DtsProcOutput(
 
 			DtsRelRxBuff(Ctx,&Ctx->pOutData->u.RxBuffs,TRUE);
 
-
 			return BC_STS_FMT_CHANGE;
 		}
 
@@ -1689,10 +1628,10 @@ DtsProcOutput(
 			if (DtsCheckRptPic(Ctx, &OutBuffs) == TRUE)
 			{
 				DtsRelRxBuff(Ctx,&Ctx->pOutData->u.RxBuffs,FALSE);
-				DebugLog_Trace(LDIL_DBG,"repeated picture\n");
 				return BC_STS_NO_DATA;
 			}
 		}
+
 		if(pOut->DropFrames)
 		{
 			/* We need to release the buffers even if we fail to copy..*/
@@ -1704,7 +1643,6 @@ DtsProcOutput(
 				return sts;
 			}
 			pOut->DropFrames--;
-			DebugLog_Trace(LDIL_DBG,"DtsProcOutput: Drop count.. %d\n", pOut->DropFrames);
 
 			/* Get back the original flags */
 			pOut->PoutFlags = savFlags;
@@ -1854,8 +1792,6 @@ DtsProcOutputNoCopy(
 				return sts;
 			}
 			pOut->DropFrames--;
-			DebugLog_Trace(LDIL_DBG,"DtsProcOutput: Drop count.. %d\n", pOut->DropFrames);
-
 		}
 		else
 			break;
@@ -2177,6 +2113,7 @@ DtsAlignSendData( HANDLE  hDevice ,
 				break; // On any other error condition
 		}
 	}
+
 	return sts;
 }
 
@@ -2191,7 +2128,7 @@ DtsProcInput( HANDLE  hDevice ,
 	BC_STATUS	sts = BC_STS_SUCCESS;
 	DTS_LIB_CONTEXT		*Ctx = NULL;
 
-	uint32_t Offset;
+	uint32_t Offset = 0;
 
 	DTS_GET_CTX(hDevice,Ctx);
 
@@ -2455,6 +2392,12 @@ DtsFlushInput( HANDLE  hDevice ,
 			return sts;
 		}
 		DtsClrPendMdataList(Ctx);
+	}
+
+	// On LINK if the decoder is paused due to the RLL being full, un pause it before flush
+	if(Ctx->DevId == BC_PCI_DEVID_LINK && Ctx->hw_paused) {
+		DtsFWPauseVideo(hDevice,eC011_PAUSE_MODE_OFF);
+		Ctx->hw_paused = false;
 	}
 
 	if(Op == 4)
@@ -3041,20 +2984,34 @@ DtsGetDriverStatus( HANDLE  hDevice,
 		}
 	}
 
+	// For LINK Pause HW if the RLL is too full. Prevent overflows
+	// Hard coded values for now
+	if(Ctx->DevId == BC_PCI_DEVID_LINK && Ctx->SingleThreadedAppMode) {
+		if(pStatus->ReadyListCount > 10 && !Ctx->hw_paused && !Ctx->fw_cmd_issued) {
+			DtsFWPauseVideo(hDevice,eC011_PAUSE_MODE_ON);
+			Ctx->hw_paused = true;
+		}
+		else if (pStatus->ReadyListCount  < 6 && Ctx->hw_paused && !Ctx->fw_cmd_issued) {
+			DtsFWPauseVideo(hDevice,eC011_PAUSE_MODE_OFF);
+			Ctx->hw_paused = false;
+		}
+	}
+
 	return ret;
 }
 
 DRVIFLIB_API BC_STATUS DtsGetCapabilities (HANDLE  hDevice, PBC_HW_CAPS	pCapsBuffer)
 {
-	uint32_t deviceID = DtsGetDevID();
+	DTS_LIB_CONTEXT *Ctx;
+	DTS_GET_CTX(hDevice,Ctx);
 
-	if (deviceID == BC_PCI_DEVID_INVALID)
+	if (Ctx->DevId == BC_PCI_DEVID_INVALID)
 	{
 		return BC_STS_ERROR;
 	}
 
 	// Should check with driver/FW if current video is supported or not, and output supported format
-	if(deviceID == BC_PCI_DEVID_LINK)
+	if(Ctx->DevId == BC_PCI_DEVID_LINK)
 	{
 		pCapsBuffer->flags = PES_CONV_SUPPORT;
 		pCapsBuffer->ColorCaps.Count = 3;
@@ -3067,7 +3024,7 @@ DRVIFLIB_API BC_STATUS DtsGetCapabilities (HANDLE  hDevice, PBC_HW_CAPS	pCapsBuf
 		//Decoder Capability
 		pCapsBuffer->DecCaps = BC_DEC_FLAGS_H264 | BC_DEC_FLAGS_MPEG2 | BC_DEC_FLAGS_VC1;
 	}
-	if(deviceID == BC_PCI_DEVID_DOZER)
+	if(Ctx->DevId == BC_PCI_DEVID_DOZER)
 	{
 		pCapsBuffer->flags = PES_CONV_SUPPORT;
 		pCapsBuffer->ColorCaps.Count = 1;
@@ -3079,7 +3036,7 @@ DRVIFLIB_API BC_STATUS DtsGetCapabilities (HANDLE  hDevice, PBC_HW_CAPS	pCapsBuf
 		//Decoder Capability
 		pCapsBuffer->DecCaps = BC_DEC_FLAGS_H264 | BC_DEC_FLAGS_MPEG2 | BC_DEC_FLAGS_VC1;
 	}
-	if(deviceID == BC_PCI_DEVID_FLEA)
+	if(Ctx->DevId == BC_PCI_DEVID_FLEA)
 	{
 		pCapsBuffer->flags = PES_CONV_SUPPORT;
 		pCapsBuffer->ColorCaps.Count = 1;

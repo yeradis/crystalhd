@@ -429,7 +429,7 @@ static void DtsGetPibFrom422(uint8_t *pibBuff, uint8_t mode422)
 
 	//First stripe has PIB data and second one has Extension PB. so total 256 bytes
 	if (mode422 == OUTPUT_MODE422_YUY2) {
-		for(i=0; i<128; i++) {
+		for(i=0; i<256; i++) {
 			pibBuff[i] = pibBuff[i*2];
 		}
 	} else if (mode422 == OUTPUT_MODE422_UYVY) {
@@ -542,7 +542,6 @@ static BC_STATUS DtsGetPictureInfo(DTS_LIB_CONTEXT *Ctx, BC_DTS_PROC_OUT *pOut)
 	{
 		memcpy((uint32_t*)&pOut->PicInfo,(uint32_t*)(pPicInfoLine + 4), sizeof(BC_PIC_INFO_BLOCK));
 	}
-
 	/* Replace Y Component data*/
 	if(Ctx->DevId == BC_PCI_DEVID_FLEA)
 	{
@@ -983,6 +982,7 @@ BC_STATUS DtsDrvCmd(DTS_LIB_CONTEXT	*Ctx,
 	//DWORD	dwTimeout = 0;
 	BC_IOCTL_DATA *pIo = NULL;
 	BC_STATUS	Sts = BC_STS_SUCCESS ;
+	int i = 30;
 
 	if(!Ctx || !Ctx->DevHandle){
 		DebugLog_Trace(LDIL_DBG,"Invalid arg..%p \n",Ctx);
@@ -1002,8 +1002,24 @@ BC_STATUS DtsDrvCmd(DTS_LIB_CONTEXT	*Ctx,
 
 	//  We need to take care of async completion.
 	// == FIX ME ==
+	// We allow only one FW command at a time for LINK
+	// prevent additional fw commands from other threads
+	if(Ctx->DevId == BC_PCI_DEVID_LINK && Code == BCM_IOC_FW_CMD) {
+		while(Ctx->fw_cmd_issued && (i > 0)) {
+			usleep(100);
+			i--;
+		}
+		if (i == 0)
+			return BC_STS_ERROR; // cannot issue second FW command while one is pending
+		Ctx->fw_cmd_issued = true;
+	}
 	rc = ioctl(Ctx->DevHandle, Code, pIo);
 	Sts = pIo->RetSts;
+
+	if(Ctx->DevId == BC_PCI_DEVID_LINK && Code == BCM_IOC_FW_CMD) {
+		Ctx->fw_cmd_issued = false; // FW commands complete synchronously
+	}
+
 	if (locRel || Rel)
 		DtsRelIoctlData(Ctx, pIo);
 
@@ -1569,15 +1585,18 @@ BC_STATUS DtsReleaseInterface(DTS_LIB_CONTEXT *Ctx)
 		return BC_STS_INV_ARG;
 
 	DtsReleaseMemPools(Ctx);
-#ifdef _USE_SHMEM_
-	DtsDelDilShMem();
-#endif
 
 	if(close(Ctx->DevHandle)!=0) //Zero if success
 	{
 		DebugLog_Trace(LDIL_DBG,"DtsDeviceClose: Close Handle Failed with error %d\n",errno);
 
 	}
+
+	DtsSetHwInitSts(BC_DIL_HWINIT_NOT_YET);
+
+#ifdef _USE_SHMEM_
+	DtsDelDilShMem();
+#endif
 
 	// Exit TX thread
 	Ctx->txThreadExit = true;
@@ -1740,13 +1759,14 @@ BC_STATUS DtsClrPendMdataList(DTS_LIB_CONTEXT *Ctx)
 	temp = Ctx->MDPendHead;
 
 	while(temp && temp != DTS_MDATA_PEND_LINK(Ctx)){
+		//DebugLog_Trace(LDIL_DBG,"Clearing PendMdata %p %x \n", temp->Spes.SeqNum, temp->IntTag);
 		DtsRemoveMdata(Ctx,temp,FALSE);
 		temp = Ctx->MDPendHead;
 		mdata_count++;
 	}
 
 	if (mdata_count)
-		DebugLog_Trace(LDIL_DBG,"Clearing PendMdata %p %x \n", temp->Spes.SeqNum, temp->IntTag);
+		DebugLog_Trace(LDIL_DBG,"Clearing %d PendMdata entries \n", mdata_count);
 
 	DtsUnLock(Ctx);
 
@@ -1879,7 +1899,6 @@ BC_STATUS DtsFetchTimeStampMdata(DTS_LIB_CONTEXT *Ctx, uint16_t snum, uint64_t *
 	if(!snum) {
 		/* Zero is not a valid SeqNum. */
 		*TimeStamp = 0;
-		DebugLog_Trace(LDIL_DBG, "SeqNum is zero \n");
 		return BC_STS_NO_DATA;
 	}
 

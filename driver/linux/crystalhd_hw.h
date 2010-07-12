@@ -167,7 +167,7 @@ typedef enum _list_sts_ {
 
 typedef enum _INTERRUPT_STATUS_
 {
-	NO_INTERRUPT					= 0x0000,	
+	NO_INTERRUPT					= 0x0000,
 	FPGA_RX_L0_DMA_DONE				= 0x0001, /*DONT CHANGE VALUES...SOME BITWIZE OPERATIONS WILL FAIL*/
 	FPGA_RX_L1_DMA_DONE				= 0x0002, /*DONT CHANGE VALUES...SOME BITWIZE OPERATIONS WILL FAIL*/
 	FPGA_TX_L0_DMA_DONE				= 0x0004, /*DONT CHANGE VALUES...SOME BITWIZE OPERATIONS WILL FAIL*/
@@ -175,7 +175,7 @@ typedef enum _INTERRUPT_STATUS_
 	DECO_PIB_INTR					= 0x0010, /*DONT CHANGE VALUES...SOME BITWIZE OPERATIONS WILL FAIL*/
 	DECO_FMT_CHANGE					= 0x0020,
 	DECO_MBOX_RESP					= 0x0040,
-	DECO_RESUME_FRM_INTER_PAUSE		= 0x0080, /*Not Handled in DPC Need to Fire Rx cmds on resume from Pause*/	
+	DECO_RESUME_FRM_INTER_PAUSE		= 0x0080, /*Not Handled in DPC Need to Fire Rx cmds on resume from Pause*/
 }INTERRUPT_STATUS;
 
 typedef enum _ERR_STATUS_
@@ -189,22 +189,22 @@ typedef enum _ERR_STATUS_
 	TX_DMA_ERR_L1		=0x0020,/*DONT CHANGE VALUES...SOME BITWIZE OPERATIONS WILL FAIL*/
 	FW_CMD_ERROR		=0x0040,
 	DROP_REPEATED		=0x0080,
-	DROP_FLEA_FMTCH		=0x0100,/*We do not want to deliver the flea dummy frame*/	
+	DROP_FLEA_FMTCH		=0x0100,/*We do not want to deliver the flea dummy frame*/
 	DROP_DATA_ERROR		=0x0200,//We were not able to get the PIB correctly so drop the frame.
 	DROP_SIZE_ERROR		=0x0400,//We were not able to get the size properly from hardware.
 	FORCE_CANCEL		=0x8000
 }ERROR_STATUS;
 
-typedef enum _LIST_STATUS_ 
+typedef enum _LIST_STATUS_
 {
-	ListStsFree=0,				// Initial state and state the buffer is moved to Ready Buffer list.	
-	RxListWaitingForYIntr=1,	// When the Y Descriptor is posted.		
+	ListStsFree=0,				// Initial state and state the buffer is moved to Ready Buffer list.
+	RxListWaitingForYIntr=1,	// When the Y Descriptor is posted.
 	RxListWaitingForUVIntr=2,	// When the UV descriptor is posted.
-	TxListWaitingForIntr =4, 
+	TxListWaitingForIntr =4,
 }LIST_STATUS;
 
 typedef struct _RX_LIST_{
-	LIST_STATUS		ListSts;	
+	LIST_STATUS		ListSts;
 	//LIST_ENTRY		ActiveList;
 	uint32_t			ActiveListLen;
 	uint32_t			ListLockInd;					/* To Be Filled up During Init */
@@ -218,8 +218,8 @@ typedef struct _RX_LIST_{
 	uint32_t			RxUVFirstDescLADDRReg;			/* First Desc Low Addr UV		*/
 	uint32_t			RxUVFirstDescUADDRReg;			/* First Desc UPPER Addr UV		*/
 	uint32_t			RxUVCurDescLADDRReg;			/* Current Desc Low Addr UV		*/
-	uint32_t			RxUVCurDescUADDRReg;			/* Current Desc UPPER Addr UV	*/		
-	uint32_t			RxUVCurByteCntRemReg;			/* Cur Byte Cnt Rem UV			*/		
+	uint32_t			RxUVCurDescUADDRReg;			/* Current Desc UPPER Addr UV	*/
+	uint32_t			RxUVCurByteCntRemReg;			/* Cur Byte Cnt Rem UV			*/
 }RX_DMA_LIST,*PRX_DMA_LIST;
 
 typedef struct _tx_dma_pkt_ {
@@ -264,17 +264,17 @@ typedef enum _DECODER_STATE_
 }DECO_STATE;
 
 //
-// These events can be used to notify the hardware layer 
-// to set up it adapter in proper state...or for anyother 
+// These events can be used to notify the hardware layer
+// to set up it adapter in proper state...or for anyother
 // purpose for that matter.
 // We will use this for intermediae events as defined below
 
 typedef enum _BRCM_EVENT_{
 	BC_EVENT_ADAPTER_INIT_FAILED	=0,
 	BC_EVENT_ADAPTER_INIT_SUCCESS	=1,
-	BC_EVENT_FW_DNLD_STARTED		=2,		
+	BC_EVENT_FW_DNLD_STARTED		=2,
 	BC_EVENT_FW_DNLD_ERR			=3,
-	BC_EVENT_FW_DNLD_DONE			=4,	
+	BC_EVENT_FW_DNLD_DONE			=4,
 	BC_EVENT_SYS_SHUT_DOWN			=5,
 	BC_EVENT_START_CAPTURE			=6,
 	BC_EVENT_START_CAPTURE_IMMI		=7,
@@ -378,6 +378,8 @@ struct crystalhd_hw {
 	uint32_t	LastTwoPicNo;	/* For Repeated Frame Detection on Interlace clip*/
 	uint32_t	LastSessNum;	/* For Session Change Detection */
 
+	struct	semaphore	fetch_sem; // semaphore between fetch and probe of the next picture information, since both will be in process context
+
 	bool RxCaptureState;
 
 	// BCM70015 mods
@@ -392,7 +394,7 @@ struct crystalhd_hw {
 
 	uint32_t	SkipDropBadFrames;
 	uint32_t	TemperatureRegVal;
-	TX_INPUT_BUFFER_INFO	TxFwInputBuffInfo;	
+	TX_INPUT_BUFFER_INFO	TxFwInputBuffInfo;
 
 	DECO_STATE			DecoderSt;				/* Weather the decoder is paused or not*/
 	uint32_t			PauseThreshold;
@@ -420,21 +422,19 @@ struct crystalhd_hw {
 	uint32_t			PDRatio; /* % of time spent in power down. Goal is to keep this close to 50 */
 	uint32_t			DefaultPauseThreshold; /* default threshold to set when we start power management */
 
-	uint32_t			EnWorkArounds;		/*Firmware Tells us to enable the workaround for backward compatibility*/
-
 //	uint32_t			FreeListLen;
 //	uint32_t			ReadyListLen;
 
 //
 //	Counters needed for monitoring purposes.
-//	These counters are per session and will be reset to zero in 
+//	These counters are per session and will be reset to zero in
 //  start capture.
 //
 	uint32_t					DrvPauseCnt;					 /* Number of Times the driver has issued pause.*/
-	//uint32_t					DrvServiceIntrCnt;				 /* Number of interrutps the driver serviced. */	
+	//uint32_t					DrvServiceIntrCnt;				 /* Number of interrutps the driver serviced. */
 	//uint32_t					DrvIgnIntrCnt;					 /* Number of Interrupts Driver Ignored.NOT OUR INTR. */
 	//uint32_t					DrvTotalFrmDropped;				 /* Number of frames dropped by the driver.*/
-	uint32_t					DrvTotalFrmCaptured;			 /* Numner of Good Frames Captured*/	
+	uint32_t					DrvTotalFrmCaptured;			 /* Numner of Good Frames Captured*/
 	//uint32_t					DrvTotalHWErrs;					 /* Total HW Errors.*/
 	//uint32_t					DrvTotalPIBFlushCnt;			 /* Number of Times the driver flushed PIB Queues.*/
 	//uint32_t					DrvMissedPIBCnt;				 /* Number of Frames for which the PIB was not found.*/

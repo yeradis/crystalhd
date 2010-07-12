@@ -645,7 +645,7 @@ uint32_t link_GetHeightFromPib(crystalhd_dio_req *dio,
 }
 
 /* This function cannot be called from ISR context since it uses APIs that can sleep */
-bool link_GetPictureInfo(uint32_t picHeight, uint32_t picWidth, crystalhd_dio_req *dio,
+bool link_GetPictureInfo(struct crystalhd_hw *hw, uint32_t picHeight, uint32_t picWidth, crystalhd_dio_req *dio,
 			   uint32_t *PicNumber, uint64_t *PicMetaData)
 {
 	uint32_t PicInfoLineNum = 0, HeightInPib = 0, offset = 0, size = 0;
@@ -659,11 +659,15 @@ bool link_GetPictureInfo(uint32_t picHeight, uint32_t picWidth, crystalhd_dio_re
 	*PicMetaData = 0;
 
 	if (!dio || !picWidth)
-		goto getpictureinfo_err;
+		goto getpictureinfo_err_nosem;
+
+	if(down_interruptible(&hw->fetch_sem))
+		goto getpictureinfo_err_nosem;
 
 	dio->pib_va = kmalloc(2 * sizeof(BC_PIC_INFO_BLOCK) + 16, GFP_KERNEL); // since copy_from_user can sleep anyway
 	if(dio->pib_va == NULL)
 		goto getpictureinfo_err;
+
 	res = copy_from_user(dio->pib_va, (void *)dio->uinfo.xfr_buff, 8);
 	if (res != 0)
 		goto getpictureinfo_err;
@@ -682,7 +686,7 @@ bool link_GetPictureInfo(uint32_t picHeight, uint32_t picWidth, crystalhd_dio_re
 
 	PicInfoLineNum = link_GetPicInfoLineNum(dio, dio->pib_va);
 	if (PicInfoLineNum > 1092) {
-		printk("Invalid Line Number[%d]\n",	(int)PicInfoLineNum);
+		printk("Invalid Line Number[%x]\n",	(int)PicInfoLineNum);
 		goto getpictureinfo_err;
 	}
 
@@ -767,9 +771,14 @@ bool link_GetPictureInfo(uint32_t picHeight, uint32_t picWidth, crystalhd_dio_re
 	if(dio->pib_va)
 		kfree(dio->pib_va);
 
+	up(&hw->fetch_sem);
+
 	return true;
 
 getpictureinfo_err:
+	up(&hw->fetch_sem);
+
+getpictureinfo_err_nosem:
 	if(dio->pib_va)
 		kfree(dio->pib_va);
 	*PicNumber = 0;
@@ -778,12 +787,12 @@ getpictureinfo_err:
 	return false;
 }
 
-uint32_t link_GetRptDropParam(uint32_t picHeight, uint32_t picWidth, void* pRxDMAReq)
+uint32_t link_GetRptDropParam(struct crystalhd_hw *hw, uint32_t picHeight, uint32_t picWidth, void* pRxDMAReq)
 {
 	uint32_t PicNumber = 0, result = 0;
 	uint64_t PicMetaData = 0;
 
-	if(link_GetPictureInfo(picHeight, picWidth, ((crystalhd_rx_dma_pkt *)pRxDMAReq)->dio_req,
+	if(link_GetPictureInfo(hw, picHeight, picWidth, ((crystalhd_rx_dma_pkt *)pRxDMAReq)->dio_req,
 				&PicNumber, &PicMetaData))
 		result = PicNumber;
 
@@ -812,15 +821,36 @@ bool crystalhd_link_peek_next_decoded_frame(struct crystalhd_hw *hw,
 
 	if ((ioq->count > 0) && (ioq->head != (crystalhd_elem_t *)&ioq->head)) {
 		tmp = ioq->head;
+		spin_unlock_irqrestore(&ioq->lock, flags);
 		rpkt = (crystalhd_rx_dma_pkt *)tmp->data;
 		if (rpkt) {
-			link_GetPictureInfo(hw->PICHeight, hw->PICWidth, rpkt->dio_req,
-				       &PicNumber, meta_payload);
+			// We are in process context here and have to check if we have repeated pictures
+			// Drop repeated pictures or garbabge pictures here
+			// This is because if we advertize a valid picture here, but later drop it
+			// It will cause single threaded applications to hang, or errors in applications that expect
+			// pictures not to be dropped once we have advertized their availability
+
+			// If format change packet, then return with out checking anything
+			if (!(rpkt->flags & (COMP_FLAG_PIB_VALID | COMP_FLAG_FMT_CHANGE))) {
+				link_GetPictureInfo(hw, hw->PICHeight, hw->PICWidth, rpkt->dio_req,
+									&PicNumber, meta_payload);
+				if(!PicNumber || (PicNumber == hw->LastPicNo) || (PicNumber == hw->LastTwoPicNo)) {
+					// discard picture
+					rpkt = crystalhd_dioq_fetch(hw->rx_rdyq);
+					if(PicNumber != 0) {
+						hw->LastTwoPicNo = hw->LastPicNo;
+						hw->LastPicNo = PicNumber;
+					}
+					crystalhd_dioq_add(hw->rx_freeq, rpkt, false, rpkt->pkt_tag);
+					rpkt = NULL;
+					*meta_payload = 0;
+				}
+				// Do not update the picture numbers here since they will be updated on the actual fetch of a valid picture
+			}
+			else
+				return false; // don't use the meta_payload information
 		}
 	}
-
-	spin_unlock_irqrestore(&ioq->lock, flags);
-
 	return true;
 }
 
@@ -876,7 +906,6 @@ bool crystalhd_link_check_input_full(struct crystalhd_hw *hw,
 bool crystalhd_link_tx_list0_handler(struct crystalhd_hw *hw, uint32_t err_sts)
 {
 	uint32_t err_mask, tmp;
-	unsigned long flags = 0;
 
 	err_mask = MISC1_TX_DMA_ERROR_STATUS_TX_L0_DESC_TX_ABORT_ERRORS_MASK |
 		MISC1_TX_DMA_ERROR_STATUS_TX_L0_DMA_DATA_TX_ABORT_ERRORS_MASK |
@@ -893,10 +922,8 @@ bool crystalhd_link_tx_list0_handler(struct crystalhd_hw *hw, uint32_t err_sts)
 		tmp &= ~MISC1_TX_DMA_ERROR_STATUS_TX_L0_FIFO_FULL_ERRORS_MASK;
 
 	if (tmp) {
-		spin_lock_irqsave(&hw->lock, flags);
 		/* reset list index.*/
 		hw->tx_list_post_index = 0;
-		spin_unlock_irqrestore(&hw->lock, flags);
 	}
 
 	tmp = err_sts & err_mask;
@@ -908,7 +935,6 @@ bool crystalhd_link_tx_list0_handler(struct crystalhd_hw *hw, uint32_t err_sts)
 bool crystalhd_link_tx_list1_handler(struct crystalhd_hw *hw, uint32_t err_sts)
 {
 	uint32_t err_mask, tmp;
-	unsigned long flags = 0;
 
 	err_mask = MISC1_TX_DMA_ERROR_STATUS_TX_L1_DESC_TX_ABORT_ERRORS_MASK |
 		MISC1_TX_DMA_ERROR_STATUS_TX_L1_DMA_DATA_TX_ABORT_ERRORS_MASK |
@@ -925,10 +951,8 @@ bool crystalhd_link_tx_list1_handler(struct crystalhd_hw *hw, uint32_t err_sts)
 		tmp &= ~MISC1_TX_DMA_ERROR_STATUS_TX_L1_FIFO_FULL_ERRORS_MASK;
 
 	if (tmp) {
-		spin_lock_irqsave(&hw->lock, flags);
 		/* reset list index.*/
 		hw->tx_list_post_index = 0;
-		spin_unlock_irqrestore(&hw->lock, flags);
 	}
 
 	tmp = err_sts & err_mask;
@@ -1005,7 +1029,6 @@ BC_STATUS crystalhd_link_stop_tx_dma_engine(struct crystalhd_hw *hw)
 	struct device *dev;
 	uint32_t dma_cntrl, cnt = 30;
 	uint32_t l1 = 1, l2 = 1;
-	unsigned long flags = 0;
 
 	dma_cntrl = hw->pfnReadFPGARegister(hw->adp, MISC1_TX_SW_DESC_LIST_CTRL_STS);
 
@@ -1052,9 +1075,7 @@ BC_STATUS crystalhd_link_stop_tx_dma_engine(struct crystalhd_hw *hw)
 		return BC_STS_ERROR;
 	}
 
-	spin_lock_irqsave(&hw->lock, flags);
 	hw->tx_list_post_index = 0;
-	spin_unlock_irqrestore(&hw->lock, flags);
 	dev_dbg(dev, "stopped TX DMA..\n");
 	crystalhd_link_enable_interrupts(hw);
 
@@ -1376,7 +1397,6 @@ BC_STATUS crystalhd_link_hw_prog_rxdma(struct crystalhd_hw *hw,
 	if (rx_pkt->uv_phy_addr)
 		hw->rx_list_sts[hw->rx_list_post_index] |= rx_waiting_uv_intr;
 	hw->rx_list_post_index = (hw->rx_list_post_index + 1) % DMA_ENGINE_CNT;
-	spin_unlock_irqrestore(&hw->rx_lock, flags);
 
 	crystalhd_dioq_add(hw->rx_actq, (void *)rx_pkt, false, rx_pkt->pkt_tag);
 
@@ -1392,6 +1412,8 @@ BC_STATUS crystalhd_link_hw_prog_rxdma(struct crystalhd_hw *hw,
 		hw->pfnWriteFPGARegister(hw->adp, uv_high_addr_reg, desc_addr.high_part);
 		hw->pfnWriteFPGARegister(hw->adp, uv_low_addr_reg, desc_addr.low_part | 0x01);
 	}
+
+	spin_unlock_irqrestore(&hw->rx_lock, flags);
 
 	return BC_STS_SUCCESS;
 }
@@ -1893,6 +1915,7 @@ BC_STATUS crystalhd_link_do_fw_cmd(struct crystalhd_hw *hw, BC_FW_CMD *fw_cmd)
 	wait_queue_head_t fw_cmd_event;
 	int rc = 0;
 	BC_STATUS sts;
+	unsigned long flags;
 
 	crystalhd_create_event(&fw_cmd_event);
 
@@ -1916,6 +1939,8 @@ BC_STATUS crystalhd_link_do_fw_cmd(struct crystalhd_hw *hw, BC_FW_CMD *fw_cmd)
 	hw->fwcmd_evt_sts = 0;
 	hw->pfw_cmd_event = &fw_cmd_event;
 
+	spin_lock_irqsave(&hw->lock, flags);
+
 	/*Write the command to the memory*/
 	hw->pfnDevDRAMWrite(hw, hw->fwcmdPostAddr, FW_CMD_BUFF_SZ, cmd_buff);
 
@@ -1924,6 +1949,9 @@ BC_STATUS crystalhd_link_do_fw_cmd(struct crystalhd_hw *hw, BC_FW_CMD *fw_cmd)
 
 	/* Write the command address to mailbox */
 	hw->pfnWriteDevRegister(hw->adp, hw->fwcmdPostMbox, hw->fwcmdPostAddr);
+
+	spin_unlock_irqrestore(&hw->lock, flags);
+
 	msleep_interruptible(50);
 
 	crystalhd_wait_on_event(&fw_cmd_event, hw->fwcmd_evt_sts,
@@ -1947,11 +1975,15 @@ BC_STATUS crystalhd_link_do_fw_cmd(struct crystalhd_hw *hw, BC_FW_CMD *fw_cmd)
 		return sts;
 	}
 
+	spin_lock_irqsave(&hw->lock, flags);
+
 	/*Get the Responce Address*/
 	cmd_res_addr = hw->pfnReadDevRegister(hw->adp, hw->fwcmdRespMbox);
 
 	/*Read the Response*/
 	hw->pfnDevDRAMRead(hw, cmd_res_addr, FW_CMD_BUFF_SZ, res_buff);
+
+	spin_unlock_irqrestore(&hw->lock, flags);
 
 	if (res_buff[2] != C011_RET_SUCCESS) {
 		dev_err(dev, "res_buff[2] != C011_RET_SUCCESS\n");

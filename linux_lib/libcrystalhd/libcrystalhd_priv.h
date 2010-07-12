@@ -215,6 +215,7 @@ typedef struct _DTS_LIB_CONTEXT{
 	uint32_t				OpMode;			/* Mode of operation playback etc..*/
 	uint32_t				DevId;			/* HW Device ID */
 	uint32_t				hwRevId;		/* HW revision ID */
+	uint32_t				VendorId;		/* HW vendor ID - should always be Broadcom 0x14e4 */
 	uint32_t				fwcmdseq;		/* FW Cmd Sequence number */
 	uint32_t				FixFlags;		/* Flags for conditionally enabling fixes */
 
@@ -283,6 +284,8 @@ typedef struct _DTS_LIB_CONTEXT{
 	char			DilPath[MAX_PATH+1];	/* DIL runtime Location.. */
 
 	uint8_t			SingleThreadedAppMode;	/* flag to indicate that we are running in single threaded mode */
+	bool			hw_paused;
+	bool			fw_cmd_issued;
 	PES_CONVERT_PARAMS PESConvParams;
 	BC_HW_CAPS		capInfo;
 //	uint16_t		InSampleCount;

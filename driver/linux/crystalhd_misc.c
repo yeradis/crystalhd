@@ -30,7 +30,7 @@
 #include "crystalhd_misc.h"
 
 // Some HW specific code defines
-extern uint32_t link_GetRptDropParam(uint32_t picHeight, uint32_t picWidth, void *);
+extern uint32_t link_GetRptDropParam(void *, uint32_t picHeight, uint32_t picWidth, void *);
 extern uint32_t flea_GetRptDropParam(void *, void *);
 
 static crystalhd_dio_req *crystalhd_alloc_dio(struct crystalhd_adp *adp)
@@ -509,8 +509,9 @@ void *crystalhd_dioq_fetch_wait(struct crystalhd_hw *hw, uint32_t to_secs, uint3
 			// If format change packet, then return with out checking anything
 			if (r_pkt->flags & (COMP_FLAG_PIB_VALID | COMP_FLAG_FMT_CHANGE))
 				return r_pkt;
-			if (hw->adp->pdev->device == BC_PCI_DEVID_LINK)
-				picYcomp = link_GetRptDropParam(hw->PICHeight, hw->PICWidth, (void *)r_pkt);
+			if (hw->adp->pdev->device == BC_PCI_DEVID_LINK) {
+				picYcomp = link_GetRptDropParam(hw, hw->PICHeight, hw->PICWidth, (void *)r_pkt);
+			}
 			else {
 				// For Flea, we don't have the width and height handy since they
 				// come in the PIB in the picture, so this function will also
@@ -531,8 +532,9 @@ void *crystalhd_dioq_fetch_wait(struct crystalhd_hw *hw, uint32_t to_secs, uint3
 				r_pkt = NULL;
 			} else {
 				if(hw->adp->pdev->device == BC_PCI_DEVID_LINK) {
-					if((picYcomp - hw->LastPicNo) > 1)
+					if((picYcomp - hw->LastPicNo) > 1) {
 						dev_info(dev, "MISSING %u PICTURES\n", (picYcomp - hw->LastPicNo));
+					}
 				}
 				hw->LastTwoPicNo = hw->LastPicNo;
 				hw->LastPicNo = picYcomp;

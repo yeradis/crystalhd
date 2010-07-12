@@ -60,8 +60,8 @@ static void bc_cproc_mark_pwr_state(struct crystalhd_cmd *ctx)
 	for (i = 0; i < BC_LINK_MAX_OPENS; i++) {
 		if (!ctx->user[i].in_use)
 			continue;
-		if (ctx->user[i].mode == DTS_DIAG_MODE ||
-		    ctx->user[i].mode == DTS_PLAYBACK_MODE) {
+		if ((ctx->user[i].mode & 0xFF) == DTS_DIAG_MODE ||
+		    (ctx->user[i].mode & 0xFF) == DTS_PLAYBACK_MODE) {
 			ctx->pwr_state_change = 1;
 			break;
 		}
@@ -83,24 +83,27 @@ static BC_STATUS bc_cproc_notify_mode(struct crystalhd_cmd *ctx,
 		dev_err(dev, "Close the handle first..\n");
 		return BC_STS_ERR_USAGE;
 	}
-	if (idata->udata.u.NotifyMode.Mode == DTS_MONITOR_MODE) {
+
+	if ((idata->udata.u.NotifyMode.Mode && 0xFF) == DTS_MONITOR_MODE) {
 		ctx->user[idata->u_id].mode = idata->udata.u.NotifyMode.Mode;
 		return BC_STS_SUCCESS;
 	}
+
 	if (ctx->state != BC_LINK_INVALID) {
-		dev_err(dev, "Link invalid state %d \n", ctx->state);
+		dev_err(dev, "Link invalid state notify mode %d \n", ctx->state);
 		return BC_STS_ERR_USAGE;
 	}
 	/* Check for duplicate playback sessions..*/
 	for (i = 0; i < BC_LINK_MAX_OPENS; i++) {
-		if (ctx->user[i].mode == DTS_DIAG_MODE ||
-		    ctx->user[i].mode == DTS_PLAYBACK_MODE) {
+		if ((ctx->user[i].mode & 0xFF) == DTS_DIAG_MODE ||
+		    (ctx->user[i].mode & 0xFF) == DTS_PLAYBACK_MODE) {
 			dev_err(dev, "multiple playback sessions are not "
 				"supported..\n");
 			return BC_STS_ERR_USAGE;
 		}
 	}
 	ctx->cin_wait_exit = 0;
+
 	ctx->user[idata->u_id].mode = idata->udata.u.NotifyMode.Mode;
 	/* Create list pools */
 	rc = crystalhd_create_elem_pool(ctx->adp, BC_LINK_ELEM_POOL_SZ);
@@ -304,7 +307,7 @@ static BC_STATUS bc_cproc_download_fw(struct crystalhd_cmd *ctx,
 	}
 
 	if (ctx->state != BC_LINK_INVALID) {
-		dev_err(chddev(), "Link invalid state %d \n", ctx->state);
+		dev_err(chddev(), "Link invalid state download fw %d \n", ctx->state);
 		return BC_STS_ERR_USAGE;
 	}
 
@@ -340,7 +343,7 @@ static BC_STATUS bc_cproc_do_fw_cmd(struct crystalhd_cmd *ctx, crystalhd_ioctl_d
 	uint32_t *cmd;
 
 	if (!(ctx->state & BC_LINK_INIT)) {
-		dev_err(dev, "Link invalid state %d \n", ctx->state);
+		dev_err(dev, "Link invalid state do fw cmd %d \n", ctx->state);
 		return BC_STS_ERR_USAGE;
 	}
 
@@ -720,6 +723,7 @@ static BC_STATUS bc_cproc_get_stats(struct crystalhd_cmd *ctx,
 	uint32_t pic_width;
 	uint8_t flags = 0;
 	bool readTxOnly = false;
+	unsigned long irqflags;
 
 	if (!ctx || !idata) {
 		dev_err(chddev(), "%s: Invalid Arg\n", __func__);
@@ -743,15 +747,15 @@ static BC_STATUS bc_cproc_get_stats(struct crystalhd_cmd *ctx,
 	/* this will prevent the HW from going to low power because we assume that once we have told the application */
 	/* that we have space in the HW, the app is going to try to DMA. And if we block that DMA, a single threaded application */
 	/* will deadlock */
-	//if(pDrvStat->DrvNextMDataPLD & BC_BIT(31))
-	//{
-	//	Flags |= 0x08;
-	//	// Also for single threaded applications, check to see if we have reduced the power down
-	//	// pause threshold to too low and increase it if the RLL is close to the threshold
-	//	if(pDrvStat->drvRLL >= pDevExt->pHwExten->PauseThreshold)
-	//		pDevExt->pHwExten->PauseThreshold++;
-	//	PeekNextTS = TRUE;
-	//}
+	if(stats->DrvNextMDataPLD & BC_BIT(31))
+	{
+		flags |= 0x08;
+		// Also for single threaded applications, check to see if we have reduced the power down
+		// pause threshold to too low and increase it if the RLL is close to the threshold
+/*		if(pDrvStat->drvRLL >= pDevExt->pHwExten->PauseThreshold)
+			pDevExt->pHwExten->PauseThreshold++;
+		PeekNextTS = TRUE;*/
+	}
 
 	/* also indicate that we are just checking stats and not posting */
 	/* This allows multi-threaded applications to be placed into low power state */
@@ -771,16 +775,23 @@ static BC_STATUS bc_cproc_get_stats(struct crystalhd_cmd *ctx,
 	if(stats->DrvcpbEmptySize & BC_BIT(30))
 		readTxOnly = true;
 
+	spin_lock_irqsave(&ctx->hw_ctx->lock, irqflags);
 	ctx->hw_ctx->pfnCheckInputFIFO(ctx->hw_ctx, 0, &stats->DrvcpbEmptySize,
 				      false, &flags);
+	spin_unlock_irqrestore(&ctx->hw_ctx->lock, irqflags);
 
 	/* status peek ahead to retreive the next decoded frame timestamp */
 	if (!readTxOnly && stats->drvRLL && (stats->DrvNextMDataPLD & BC_BIT(31))) {
 		pic_width = stats->DrvNextMDataPLD & 0xffff;
 		stats->DrvNextMDataPLD = 0;
-		if (pic_width <= 1920)
-			ctx->hw_ctx->pfnPeekNextDeodedFr(ctx->hw_ctx,
-				&stats->DrvNextMDataPLD, pic_width);
+		if (pic_width <= 1920) {
+			if(ctx->hw_ctx->pfnPeekNextDeodedFr(ctx->hw_ctx,&stats->DrvNextMDataPLD, pic_width)) {
+				// Check in case we dropped a picture here
+				crystalhd_hw_stats(ctx->hw_ctx, &hw_stats);
+				stats->drvRLL = hw_stats.rdyq_count;
+				stats->drvFLL = hw_stats.freeq_count;
+			}
+		}
 	}
 
 	return BC_STS_SUCCESS;
@@ -798,16 +809,16 @@ static BC_STATUS bc_cproc_reset_stats(struct crystalhd_cmd *ctx,
 static const crystalhd_cmd_tbl_t	g_crystalhd_cproc_tbl[] = {
 	{ BCM_IOC_GET_VERSION,		bc_cproc_get_version,	0},
 	{ BCM_IOC_GET_HWTYPE,		bc_cproc_get_hwtype,	0},
-	{ BCM_IOC_REG_RD,		bc_cproc_reg_rd,	0},
-	{ BCM_IOC_REG_WR,		bc_cproc_reg_wr,	0},
-	{ BCM_IOC_FPGA_RD,		bc_cproc_link_reg_rd,	0},
-	{ BCM_IOC_FPGA_WR,		bc_cproc_link_reg_wr,	0},
-	{ BCM_IOC_MEM_RD,		bc_cproc_mem_rd,	0},
-	{ BCM_IOC_MEM_WR,		bc_cproc_mem_wr,	0},
+	{ BCM_IOC_REG_RD,			bc_cproc_reg_rd,	0},
+	{ BCM_IOC_REG_WR,			bc_cproc_reg_wr,	0},
+	{ BCM_IOC_FPGA_RD,			bc_cproc_link_reg_rd,	0},
+	{ BCM_IOC_FPGA_WR,			bc_cproc_link_reg_wr,	0},
+	{ BCM_IOC_MEM_RD,			bc_cproc_mem_rd,	0},
+	{ BCM_IOC_MEM_WR,			bc_cproc_mem_wr,	0},
 	{ BCM_IOC_RD_PCI_CFG,		bc_cproc_cfg_rd,	0},
 	{ BCM_IOC_WR_PCI_CFG,		bc_cproc_cfg_wr,	1},
 	{ BCM_IOC_FW_DOWNLOAD,		bc_cproc_download_fw,	1},
-	{ BCM_IOC_FW_CMD,		bc_cproc_do_fw_cmd,	1},
+	{ BCM_IOC_FW_CMD,			bc_cproc_do_fw_cmd,	1},
 	{ BCM_IOC_PROC_INPUT,		bc_cproc_proc_input,	1},
 	{ BCM_IOC_ADD_RXBUFFS,		bc_cproc_add_cap_buff,	1},
 	{ BCM_IOC_FETCH_RXBUFF,		bc_cproc_fetch_frame,	1},
@@ -816,7 +827,7 @@ static const crystalhd_cmd_tbl_t	g_crystalhd_cproc_tbl[] = {
 	{ BCM_IOC_GET_DRV_STAT,		bc_cproc_get_stats,	0},
 	{ BCM_IOC_RST_DRV_STAT,		bc_cproc_reset_stats,	0},
 	{ BCM_IOC_NOTIFY_MODE,		bc_cproc_notify_mode,	0},
-	{ BCM_IOC_END,			NULL},
+	{ BCM_IOC_END,				NULL},
 };
 
 /*=============== Cmd Proc Functions.. ===================================*/
@@ -975,7 +986,7 @@ BC_STATUS crystalhd_user_close(struct crystalhd_cmd *ctx, struct crystalhd_user 
 
 	dev_info(chddev(), "Closing user[%x] handle\n", uc->uid);
 
-	if ((mode == DTS_DIAG_MODE) || (mode == DTS_PLAYBACK_MODE)) {
+	if (((mode & 0xFF) == DTS_DIAG_MODE) || ((mode & 0xFF) == DTS_PLAYBACK_MODE)) {
 		// Stop the HW Capture just in case flush did not get called before stop
 		crystalhd_hw_stop_capture(ctx->hw_ctx, true);
 		crystalhd_hw_free_dma_rings(ctx->hw_ctx);

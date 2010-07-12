@@ -191,9 +191,9 @@ uint32_t link_GetPicInfoLineNum(crystalhd_dio_req *dio, uint8_t *base);
 uint32_t link_GetMode422Data(crystalhd_dio_req *dio, PBC_PIC_INFO_BLOCK pPicInfoLine, int type);
 uint32_t link_GetMetaDataFromPib(crystalhd_dio_req *dio,	PBC_PIC_INFO_BLOCK pPicInfoLine);
 uint32_t link_GetHeightFromPib(crystalhd_dio_req *dio, PBC_PIC_INFO_BLOCK pPicInfoLine);
-bool link_GetPictureInfo(uint32_t picHeight, uint32_t picWidth, crystalhd_dio_req *dio,
+bool link_GetPictureInfo(struct crystalhd_hw *hw, uint32_t picHeight, uint32_t picWidth, crystalhd_dio_req *dio,
 								uint32_t *PicNumber, uint64_t *PicMetaData);
-uint32_t link_GetRptDropParam(uint32_t picHeight, uint32_t picWidth, void *pRxDMAReq);
+uint32_t link_GetRptDropParam(struct crystalhd_hw *hw, uint32_t picHeight, uint32_t picWidth, void *pRxDMAReq);
 bool crystalhd_link_peek_next_decoded_frame(struct crystalhd_hw *hw, uint64_t *meta_payload, uint32_t PicWidth);
 bool crystalhd_link_check_input_full(struct crystalhd_hw *hw, uint32_t needed_sz, uint32_t *empty_sz,
 									 bool b_188_byte_pkts, uint8_t *flags);

@@ -364,7 +364,6 @@ BC_STATUS crystalhd_flea_mem_rd(struct crystalhd_hw *hw, uint32_t start_off,
 										(addr & BCHP_MISC2_DIRECT_WINDOW_CONTROL_DIRECT_WINDOW_BASE_ADDR_MASK) | BCHP_MISC2_DIRECT_WINDOW_CONTROL_DIRECT_WINDOW_ENABLE_MASK);
 		}
 	}
-
 	return BC_STS_SUCCESS;
 }
 
@@ -823,21 +822,11 @@ void crystalhd_flea_update_tx_buff_info(struct crystalhd_hw *hw)
 	return;
 }
 
-bool crystalhd_flea_notify_fll_change_sync(struct crystalhd_hw *hw)
-{
-	uint32_t freeListLen = 0;
-
-	freeListLen = crystalhd_dioq_count(hw->rx_freeq);
-	hw->pfnDevDRAMWrite(hw, hw->FleaFLLUpdateAddr, 1, &freeListLen);
-
-	return true;
-}
-
 // was HWFleaNotifyFllChange
 void crystalhd_flea_notify_fll_change(struct crystalhd_hw *hw, bool bCleanupContext)
 {
 	unsigned long flags = 0;
-
+	uint32_t freeListLen = 0;
 	/*
 	* When we are doing the cleanup we should update DRAM only if the
 	* firmware is running. So Detect the heart beat.
@@ -846,7 +835,8 @@ void crystalhd_flea_notify_fll_change(struct crystalhd_hw *hw, bool bCleanupCont
 		return;
 
 	spin_lock_irqsave(&hw->lock, flags);
-	crystalhd_flea_notify_fll_change_sync(hw);
+	freeListLen = crystalhd_dioq_count(hw->rx_freeq);
+	hw->pfnDevDRAMWrite(hw, hw->FleaFLLUpdateAddr, 1, &freeListLen);
 	spin_unlock_irqrestore(&hw->lock, flags);
 
 	return;
@@ -856,7 +846,7 @@ void crystalhd_flea_notify_fll_change(struct crystalhd_hw *hw, bool bCleanupCont
 static
 void crystalhd_flea_init_power_state(struct crystalhd_hw *hw)
 {
-	hw->FleaEnablePWM = true;	// disable by default
+	hw->FleaEnablePWM = false;	// disable by default
 	hw->FleaPowerState = FLEA_PS_NONE;
 }
 
@@ -1673,7 +1663,7 @@ bool crystalhd_flea_check_input_full(struct crystalhd_hw *hw, uint32_t needed_sz
 		if(*flags == 0)
 			crystalhd_flea_wake_up_hw(hw);
 		else {
-			//*TxBuffSzOut = 2 * 1024 * 1024; // FW Buffer size
+			*empty_sz = 2 * 1024 * 1024; // FW Buffer size
 			//*DramAddrOut=0;
 			*flags=0;
 			return false;
@@ -1685,6 +1675,7 @@ bool crystalhd_flea_check_input_full(struct crystalhd_hw *hw, uint32_t needed_sz
 	{
 		//*TxBuffSzOut=0;
 		//*DramAddrOut=0;
+		*empty_sz = 0;
 		*flags=0;
 		//printk("PD can't Tx\n");
 		return true; /*Indicate FULL*/
@@ -1827,6 +1818,7 @@ BC_STATUS crystalhd_flea_do_fw_cmd(struct crystalhd_hw *hw, BC_FW_CMD *fw_cmd)
 	wait_queue_head_t fw_cmd_event;
 	int rc = 0;
 	BC_STATUS sts;
+	unsigned long flags;
 
 	crystalhd_create_event(&fw_cmd_event);
 
@@ -1856,6 +1848,7 @@ BC_STATUS crystalhd_flea_do_fw_cmd(struct crystalhd_hw *hw, BC_FW_CMD *fw_cmd)
 		crystalhd_flea_set_next_power_state(hw,	FLEA_EVT_FW_CMD_POST);
 	}
 
+	spin_lock_irqsave(&hw->lock, flags);
 
 	/*Write the command to the memory*/
 	hw->pfnDevDRAMWrite(hw, hw->fwcmdPostAddr, FW_CMD_BUFF_SZ, cmd_buff);
@@ -1865,6 +1858,8 @@ BC_STATUS crystalhd_flea_do_fw_cmd(struct crystalhd_hw *hw, BC_FW_CMD *fw_cmd)
 
 	/* Write the command address to mailbox */
 	hw->pfnWriteDevRegister(hw->adp, hw->fwcmdPostMbox, hw->fwcmdPostAddr);
+
+	spin_unlock_irqrestore(&hw->lock, flags);
 
 	msleep_interruptible(50);
 
@@ -1889,11 +1884,15 @@ BC_STATUS crystalhd_flea_do_fw_cmd(struct crystalhd_hw *hw, BC_FW_CMD *fw_cmd)
 		return sts;
 	}
 
+	spin_lock_irqsave(&hw->lock, flags);
+
 	/*Get the Responce Address*/
 	cmd_res_addr = hw->pfnReadDevRegister(hw->adp, hw->fwcmdRespMbox);
 
 	/*Read the Response*/
 	hw->pfnDevDRAMRead(hw, cmd_res_addr, FW_CMD_BUFF_SZ, res_buff);
+
+	spin_unlock_irqrestore(&hw->lock, flags);
 
 	if (res_buff[2] != 0) {
 		dev_err(dev, "res_buff[2] != C011_RET_SUCCESS\n");
@@ -1948,14 +1947,13 @@ bool crystalhd_flea_peek_next_decoded_frame(struct crystalhd_hw *hw, uint64_t *m
 
 	if ((ioq->count > 0) && (ioq->head != (crystalhd_elem_t *)&ioq->head)) {
 		tmp = ioq->head;
+		spin_unlock_irqrestore(&ioq->lock, flags);
 		rpkt = (crystalhd_rx_dma_pkt *)tmp->data;
 		if (rpkt) {
 			flea_GetPictureInfo(hw, rpkt, &PicNumber, meta_payload);
 			//printk("%s: flea_GetPictureInfo Pic#:%d\n", __func__, PicNumber);
 		}
 	}
-
-	spin_unlock_irqrestore(&ioq->lock, flags);
 
 	return true;
 
@@ -2103,6 +2101,7 @@ BC_STATUS crystalhd_flea_hw_fire_rxdma(struct crystalhd_hw *hw,
 	if (rx_pkt->uv_phy_addr)
 		hw->rx_list_sts[hw->rx_list_post_index] |= rx_waiting_uv_intr;
 	hw->rx_list_post_index = (hw->rx_list_post_index + 1) % DMA_ENGINE_CNT;
+
 	spin_unlock_irqrestore(&hw->rx_lock, flags);
 
 	crystalhd_dioq_add(hw->rx_actq, (void *)rx_pkt, false, rx_pkt->pkt_tag);
@@ -2112,8 +2111,10 @@ BC_STATUS crystalhd_flea_hw_fire_rxdma(struct crystalhd_hw *hw,
 	/*
 	-- Write the parameters in DRAM.
 	*/
+	spin_lock_irqsave(&hw->lock, flags);
 	hw->pfnDevDRAMWrite(hw, hw->FleaRxPicDelAddr, BuffSzInDwords, (uint32_t*)&PicDeliInfo);
 	hw->pfnWriteDevRegister(hw->adp, RX_POST_MAILBOX, hw->channelNum);
+	spin_unlock_irqrestore(&hw->lock, flags);
 
 	hw->RxSeqNum++;
 
@@ -2183,7 +2184,6 @@ BC_STATUS crystalhd_flea_stop_tx_dma_engine(struct crystalhd_hw *hw)
 	struct device *dev;
 	uint32_t dma_cntrl, cnt = 30;
 	uint32_t l1 = 1, l2 = 1;
-	unsigned long flags = 0;
 
 	dma_cntrl = hw->pfnReadFPGARegister(hw->adp, BCHP_MISC1_TX_SW_DESC_LIST_CTRL_STS);
 
@@ -2233,9 +2233,7 @@ BC_STATUS crystalhd_flea_stop_tx_dma_engine(struct crystalhd_hw *hw)
 	hw->TxList0Sts = ListStsFree;
 	hw->TxList1Sts = ListStsFree;
 
-	spin_lock_irqsave(&hw->lock, flags);
 	hw->tx_list_post_index = 0;
-	spin_unlock_irqrestore(&hw->lock, flags);
 	dev_dbg(dev, "stopped TX DMA..\n");
 	crystalhd_flea_enable_interrupts(hw);
 
@@ -2280,7 +2278,6 @@ static void crystalhd_flea_update_tx_done_to_fw(struct crystalhd_hw *hw)
 bool crystalhd_flea_tx_list0_handler(struct crystalhd_hw *hw, uint32_t err_sts)
 {
 	uint32_t err_mask, tmp;
-	unsigned long flags = 0;
 
 	err_mask = MISC1_TX_DMA_ERROR_STATUS_TX_L0_DESC_TX_ABORT_ERRORS_MASK |
 	MISC1_TX_DMA_ERROR_STATUS_TX_L0_DMA_DATA_TX_ABORT_ERRORS_MASK |
@@ -2297,10 +2294,8 @@ bool crystalhd_flea_tx_list0_handler(struct crystalhd_hw *hw, uint32_t err_sts)
 		tmp &= ~MISC1_TX_DMA_ERROR_STATUS_TX_L0_FIFO_FULL_ERRORS_MASK;
 
 	if (tmp) {
-		spin_lock_irqsave(&hw->lock, flags);
 		/* reset list index.*/
 		hw->tx_list_post_index = 0;
-		spin_unlock_irqrestore(&hw->lock, flags);
 	}
 
 	tmp = err_sts & err_mask;
@@ -2312,7 +2307,6 @@ bool crystalhd_flea_tx_list0_handler(struct crystalhd_hw *hw, uint32_t err_sts)
 bool crystalhd_flea_tx_list1_handler(struct crystalhd_hw *hw, uint32_t err_sts)
 {
 	uint32_t err_mask, tmp;
-	unsigned long flags = 0;
 
 	err_mask = MISC1_TX_DMA_ERROR_STATUS_TX_L1_DESC_TX_ABORT_ERRORS_MASK |
 	MISC1_TX_DMA_ERROR_STATUS_TX_L1_DMA_DATA_TX_ABORT_ERRORS_MASK |
@@ -2329,10 +2323,8 @@ bool crystalhd_flea_tx_list1_handler(struct crystalhd_hw *hw, uint32_t err_sts)
 		tmp &= ~MISC1_TX_DMA_ERROR_STATUS_TX_L1_FIFO_FULL_ERRORS_MASK;
 
 	if (tmp) {
-		spin_lock_irqsave(&hw->lock, flags);
 		/* reset list index.*/
 		hw->tx_list_post_index = 0;
-		spin_unlock_irqrestore(&hw->lock, flags);
 	}
 
 	tmp = err_sts & err_mask;
@@ -2536,12 +2528,13 @@ void crystalhd_flea_rx_isr(struct crystalhd_hw *hw, FLEA_INTR_STS_REG intr_sts)
 		intr_sts.L0YRxDMAErr || intr_sts.L1YRxDMAErr || intr_sts.L0UVRxDMAErr || intr_sts.L1UVRxDMAErr))
 		return;
 
+	spin_lock_irqsave(&hw->rx_lock, flags);
+
 	y_err_sts = hw->pfnReadDevRegister(hw->adp, BCHP_MISC1_Y_RX_ERROR_STATUS);
 	uv_err_sts = hw->pfnReadDevRegister(hw->adp, BCHP_MISC1_HIF_RX_ERROR_STATUS);
 
 	for (i = 0; i < DMA_ENGINE_CNT; i++) {
 		/* Update States..*/
-		spin_lock_irqsave(&hw->rx_lock, flags);
 		if (i == 0)
 			ret = crystalhd_flea_rx_list0_handler(hw, intr_sts, y_err_sts, uv_err_sts);
 		else
@@ -2574,7 +2567,6 @@ void crystalhd_flea_rx_isr(struct crystalhd_hw *hw, FLEA_INTR_STS_REG intr_sts)
 					break;
 			}
 		}
-		spin_unlock_irqrestore(&hw->rx_lock, flags);
 
 		/* handle completion...*/
 		if (comp_sts != BC_STS_NO_DATA) {
@@ -2582,6 +2574,8 @@ void crystalhd_flea_rx_isr(struct crystalhd_hw *hw, FLEA_INTR_STS_REG intr_sts)
 			comp_sts = BC_STS_NO_DATA;
 		}
 	}
+
+	spin_unlock_irqrestore(&hw->rx_lock, flags);
 
 	if (list_avail)
 		crystalhd_hw_start_capture(hw);
@@ -2640,7 +2634,6 @@ bool crystalhd_flea_hw_interrupt_handle(struct crystalhd_adp *adp, struct crysta
 			hw->pfnWriteDevRegister(hw->adp, BCHP_INTR_INTR_CLR_REG, IntrStsValue.WholeReg);
 			hw->pfnWriteDevRegister(hw->adp, BCHP_INTR_EOI_CTRL, 1);
 		}
-
 		return (bIntFound);
 	}
 
@@ -2682,7 +2675,7 @@ bool crystalhd_flea_hw_interrupt_handle(struct crystalhd_adp *adp, struct crysta
 		bSomeCmdDone = true;
 	}
 	/*
-	-- We ar doing this here because we processed the interrupts.
+	-- We are doing this here because we processed the interrupts.
 	-- We might want to change the PicQSts bitmap in any of the interrupts.
 	-- This should be done before trying to post the next RX buffer.
 	-- NOTE: ArmMbox1Int is BCHP_ARMCR4_BRIDGE_REG_MBOX_ARM2
@@ -2753,7 +2746,10 @@ bool flea_GetPictureInfo(struct crystalhd_hw *hw, crystalhd_rx_dma_pkt * rx_pkt,
 	*PicMetaData = 0;
 
 	if (!dio)
-		goto getpictureinfo_err;
+		goto getpictureinfo_err_nosem;
+
+	if(down_interruptible(&hw->fetch_sem))
+		goto getpictureinfo_err_nosem;
 
 	tmpPicInfo = kmalloc(2 * sizeof(BC_PIC_INFO_BLOCK) + 16, GFP_KERNEL); // since copy_from_user can sleep anyway
 	if(tmpPicInfo == NULL)
@@ -2896,9 +2892,14 @@ bool flea_GetPictureInfo(struct crystalhd_hw *hw, crystalhd_rx_dma_pkt * rx_pkt,
 	if(tmpPicInfo)
 		kfree(tmpPicInfo);
 
+	up(&hw->fetch_sem);
+
 	return rtVal;
 
 getpictureinfo_err:
+	up(&hw->fetch_sem);
+
+getpictureinfo_err_nosem:
 	if(dio->pib_va)
 		kfree(dio->pib_va);
 	if(tmpPicInfo)
