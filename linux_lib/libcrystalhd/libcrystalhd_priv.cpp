@@ -1742,7 +1742,7 @@ BC_STATUS DtsClrPendMdataList(DTS_LIB_CONTEXT *Ctx)
 	while(temp && temp != DTS_MDATA_PEND_LINK(Ctx)){
 		DtsRemoveMdata(Ctx,temp,FALSE);
 		temp = Ctx->MDPendHead;
-		mdata_count++
+		mdata_count++;
 	}
 
 	if (mdata_count)
