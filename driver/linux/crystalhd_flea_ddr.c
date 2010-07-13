@@ -25,7 +25,6 @@
  **********************************************************************/
 
 #include "crystalhd_hw.h"
-#include "crystalhd_flea_rdb.h"
 #include "crystalhd_flea_ddr.h"
 
 //#include "bchp_ddr23_ctl_regs_0.h"
@@ -37,36 +36,36 @@
 
 // RTS Programming Values for all Clients
 //   column legend
-//   [0]: 1=Program, 0=Default; 
+//   [0]: 1=Program, 0=Default;
 //   [1]: Blockout Count;
-//   [2]: Critical Period; 
-//   [3]: Priority; 
-//   [4]: Access Mode 
+//   [2]: Critical Period;
+//   [3]: Priority;
+//   [4]: Access Mode
 // Default mode for clients is best effort
 
 uint32_t rts_prog_vals[21][5] = {
-  {1,    130,    130,      6,      1}, //       Deblock ( 0) 
-  {1,   1469,   1469,      9,      1}, //         Cabac ( 1) 
-  {1,    251,    251,      4,      1}, //         Iloop ( 2) 
-  {1,    842,    842,      5,      1}, //         Oloop ( 3) 
-  {1,   1512,   1512,     10,      1}, //      Symb_Int ( 4) 
-  {1,     43,     43,     14,      1}, //         Mcomp ( 5) 
-  {1,   1318,   1318,     11,      1}, //         XPT_0 ( 6) 
-  {1,   4320,   4320,     16,      1}, //         XPT_1 ( 7) 
-  {1,   5400,   5400,     17,      0}, //         XPT_2 ( 8) 
-  {1,   1080,   1080,     18,      1}, //           ARM ( 9) 
-  {1,    691,    691,      7,      0}, //       MEM_DMA (10) 
-  {1,   1382,   1382,     15,      0}, //         SHARF (11) 
-  {1,    346,    346,      2,      0}, //           BVN (12) 
-  {1,   1728,   1728,     13,      1}, //        RxDMA3 (13) 
-  {1,    864,    864,      8,      1}, //         TxDMA (14) 
-  {1,    173,    173,      3,      1}, //       MetaDMA (15) 
-  {1,   2160,   2160,     19,      1}, //     DirectDMA (16) 
-  {1,  10800,  10800,     20,      1}, //           MSA (17) 
-  {1,    216,    216,      1,      1}, //         TRACE (18) 
-  {1,   1598,   1598,     12,      0}, //      refresh1 (19) 
-  { 0, 0, 0, 0, 0}, //(20) 
-}; 
+  {1,    130,    130,      6,      1}, //       Deblock ( 0)
+  {1,   1469,   1469,      9,      1}, //         Cabac ( 1)
+  {1,    251,    251,      4,      1}, //         Iloop ( 2)
+  {1,    842,    842,      5,      1}, //         Oloop ( 3)
+  {1,   1512,   1512,     10,      1}, //      Symb_Int ( 4)
+  {1,     43,     43,     14,      1}, //         Mcomp ( 5)
+  {1,   1318,   1318,     11,      1}, //         XPT_0 ( 6)
+  {1,   4320,   4320,     16,      1}, //         XPT_1 ( 7)
+  {1,   5400,   5400,     17,      0}, //         XPT_2 ( 8)
+  {1,   1080,   1080,     18,      1}, //           ARM ( 9)
+  {1,    691,    691,      7,      0}, //       MEM_DMA (10)
+  {1,   1382,   1382,     15,      0}, //         SHARF (11)
+  {1,    346,    346,      2,      0}, //           BVN (12)
+  {1,   1728,   1728,     13,      1}, //        RxDMA3 (13)
+  {1,    864,    864,      8,      1}, //         TxDMA (14)
+  {1,    173,    173,      3,      1}, //       MetaDMA (15)
+  {1,   2160,   2160,     19,      1}, //     DirectDMA (16)
+  {1,  10800,  10800,     20,      1}, //           MSA (17)
+  {1,    216,    216,      1,      1}, //         TRACE (18)
+  {1,   1598,   1598,     12,      0}, //      refresh1 (19)
+  { 0, 0, 0, 0, 0}, //(20)
+};
 
 void crystalhd_flea_ddr_pll_config(struct crystalhd_hw* hw, int32_t *speed_grade, int32_t num_plls, uint32_t tmode)
 {
@@ -86,10 +85,10 @@ void crystalhd_flea_ddr_pll_config(struct crystalhd_hw* hw, int32_t *speed_grade
 
 	// If the test mode is not 0 then skip the PLL setups too.
 	if (tmode != 0){
-		skip_pll_setup = 1;  
+		skip_pll_setup = 1;
 	}
 	else {
-		skip_pll_setup = 0; 
+		skip_pll_setup = 0;
 	}
 
 	// Use this scratch register in DDR0 - which should reset to 0 - as a simple symaphore for the test
@@ -112,7 +111,7 @@ void crystalhd_flea_ddr_pll_config(struct crystalhd_hw* hw, int32_t *speed_grade
 
 		////////////////////////////
 		//setup the PLLs
-	  
+
 		for(i=0;i<num_plls;i++) {
 			if (skip_init[i]) continue;
 			hw->pfnWriteDevRegister(hw->adp, BCHP_DDR23_PHY_CONTROL_REGS_PLL_CONFIG,
@@ -157,7 +156,7 @@ void crystalhd_flea_ddr_pll_config(struct crystalhd_hw* hw, int32_t *speed_grade
 			if (timeout<=0)
 				printk("Timed out waiting for DDR Controller PLL %d to lock\n",i);
 		}
-	  
+
 		//deassert PLL digital reset
 		for(i=0;i<num_plls;i++){
 			if (skip_init[i]) continue;
@@ -165,7 +164,7 @@ void crystalhd_flea_ddr_pll_config(struct crystalhd_hw* hw, int32_t *speed_grade
 			config &= 0xfffffff7; //clear DRESET
 			hw->pfnWriteDevRegister(hw->adp, BCHP_DDR23_PHY_CONTROL_REGS_PLL_CONFIG, config);
 		}
-	  
+
 		//deassert reset of logic
 		for(i=0;i<num_plls;i++){
 			if (skip_init[i]) continue;
@@ -240,7 +239,7 @@ void crystalhd_flea_ddr_pll_config(struct crystalhd_hw* hw, int32_t *speed_grade
 			hw->pfnWriteDevRegister(hw->adp, BCHP_DDR23_CTL_REGS_0_UPDATE_VDL, BCHP_DDR23_CTL_REGS_0_UPDATE_VDL_refresh_MASK);
 		}
 		hw->pfnWriteDevRegister(hw->adp, BCHP_DDR23_PHY_CONTROL_REGS_STATIC_VDL_OVERRIDE,
-			(((tmp & 0x3f0) >> 4) << 0) |  // step override value 
+			(((tmp & 0x3f0) >> 4) << 0) |  // step override value
 			(1 << 16)  |  // override enable
 			(1 << 20)     // override force ; no update vdl required
 			);
@@ -249,7 +248,7 @@ void crystalhd_flea_ddr_pll_config(struct crystalhd_hw* hw, int32_t *speed_grade
 		hw->pfnWriteDevRegister(hw->adp, BCHP_DDR23_PHY_CONTROL_REGS_ZQ_PVT_COMP_CTL, 0);
 		hw->pfnWriteDevRegister(hw->adp, BCHP_DDR23_PHY_CONTROL_REGS_ZQ_PVT_COMP_CTL, BCHP_DDR23_PHY_CONTROL_REGS_ZQ_PVT_COMP_CTL_sample_en_MASK);
 		tmp = hw->pfnReadDevRegister(hw->adp, BCHP_DDR23_PHY_CONTROL_REGS_ZQ_PVT_COMP_CTL);
-		
+
 		poll_cnt = 0;
 		while(1)
 		{
@@ -257,7 +256,7 @@ void crystalhd_flea_ddr_pll_config(struct crystalhd_hw* hw, int32_t *speed_grade
 				tmp = hw->pfnReadDevRegister(hw->adp, BCHP_DDR23_PHY_CONTROL_REGS_ZQ_PVT_COMP_CTL);
 			else
 				break;
-			
+
 			if(poll_cnt++ > 100)
 				break;
 		}
@@ -415,7 +414,7 @@ void crystalhd_flea_ddr_ctrl_init(struct crystalhd_hw *hw,
 			tRRD =  6;
 			tWR = 8;
 			tWTR = 4;
-			tCAS = 7; 
+			tCAS = 7;
 			tWL = tCAS - 1;
 			tRTP = 4;
 			tRAS = 22;
@@ -428,8 +427,8 @@ void crystalhd_flea_ddr_ctrl_init(struct crystalhd_hw *hw,
 			tRP = 9;
 			tRRD =  5;// 4/5
 			tWR = 10;
-			tWTR = 5; 
-			tCAS = 9; 
+			tWTR = 5;
+			tCAS = 9;
 			tWL = 7;
 			tRTP = 5;
 			tRAS = 24;
@@ -437,7 +436,7 @@ void crystalhd_flea_ddr_ctrl_init(struct crystalhd_hw *hw,
 			tRFC = 74;
 			CWL = tWL - 5;
 		}
-		else 
+		else
 			printk("init: CANNOT HAPPEN - Memory DDR23 Ctrl_init failure. Incorrect speed grade type [%d]\n", speed_grade);
 
 		CTRL_BITS = 0; // Control Bit for CKE signal
@@ -461,7 +460,7 @@ void crystalhd_flea_ddr_ctrl_init(struct crystalhd_hw *hw,
 		DIS_LATENCY_CTRL = 0;
 
 		// ****** Start of Grain/Flea specific fixed settings *****
-		CS0_ONLY = 1 ;      // 16-bit mode only 
+		CS0_ONLY = 1 ;      // 16-bit mode only
 		INTLV_DISABLE = 1 ; // Interleave is always disabled
 		DQ_WIDTH = 16 ;
 		// ****** End of Grain specific fixed settings *****
@@ -483,9 +482,9 @@ void crystalhd_flea_ddr_ctrl_init(struct crystalhd_hw *hw,
 		SET_FIELD(data, BCHP_DDR23_CTL_REGS_0, PARAMS1, trcd, tRCD); // trcd
 		SET_FIELD(data, BCHP_DDR23_CTL_REGS_0, PARAMS1, trp, tRP); // trp
 		SET_FIELD(data, BCHP_DDR23_CTL_REGS_0, PARAMS1, trrd, tRRD);  // trrd
-		SET_FIELD(data, BCHP_DDR23_CTL_REGS_0, PARAMS1, twr, tWR);  // twr 
+		SET_FIELD(data, BCHP_DDR23_CTL_REGS_0, PARAMS1, twr, tWR);  // twr
 		SET_FIELD(data, BCHP_DDR23_CTL_REGS_0, PARAMS1, twtr, tWTR);  // twtr
-		SET_FIELD(data, BCHP_DDR23_CTL_REGS_0, PARAMS1, tcas, tCAS);  // tcas 
+		SET_FIELD(data, BCHP_DDR23_CTL_REGS_0, PARAMS1, tcas, tCAS);  // tcas
 		SET_FIELD(data, BCHP_DDR23_CTL_REGS_0, PARAMS1, twl, tWL); // twl
 		SET_FIELD(data, BCHP_DDR23_CTL_REGS_0, PARAMS1, trtp, tRTP); // trtp
 
@@ -564,7 +563,7 @@ void crystalhd_flea_ddr_ctrl_init(struct crystalhd_hw *hw,
 
 	hw->pfnWriteDevRegister(hw->adp, BCHP_DDR23_PHY_BYTE_LANE_0_WR_PREAMBLE_MODE, ddr3 ? 1 : 0);
 	hw->pfnWriteDevRegister(hw->adp, BCHP_DDR23_PHY_BYTE_LANE_1_WR_PREAMBLE_MODE, ddr3 ? 1 : 0);
-  
+
 	// Disable unused clocks
 
 	for (port_int=0; port_int<1; ++port_int) { // For Grain
@@ -573,7 +572,7 @@ void crystalhd_flea_ddr_ctrl_init(struct crystalhd_hw *hw,
 		//arb_refresh_addr = BCHP_PRI_ARB_CONTROL_REGS_REFRESH_CTL_0;
 		//offset += GLOBAL_REG_RBUS_START;
 		// Changes for Grain - till here
-   
+
 		if (ddr3) {
 			data = (CWL & 0x07) << 3;
 			//DEBUG_PRINT(LOAD_EMODE2_CMD, data);
@@ -637,7 +636,7 @@ void crystalhd_flea_ddr_ctrl_init(struct crystalhd_hw *hw,
 
 			//DEBUG_PRINT(PRECHARGE_CMD, data);
 			hw->pfnWriteDevRegister(hw->adp, BCHP_DDR23_CTL_REGS_0_PRECHARGE_CMD,  data );
-			
+
 			//DecSd_RegSdRefCmd      // Refresh
 			data = 0x69;
 			//DEBUG_PRINT(REFRESH_CMD, data);
@@ -654,16 +653,16 @@ void crystalhd_flea_ddr_ctrl_init(struct crystalhd_hw *hw,
 			hw->pfnWriteDevRegister(hw->adp, BCHP_DDR23_CTL_REGS_0_LOAD_MODE_CMD,  data );
 
 			//DecSd_RegSdLdEmodeCmd  // Enable DLL ; Rtt ; enable OCD
-			data = 0x3C0;  
+			data = 0x3C0;
 			//DEBUG_PRINT(LOAD_EMODE_CMD, data);
 			hw->pfnWriteDevRegister(hw->adp, BCHP_DDR23_CTL_REGS_0_LOAD_EMODE_CMD,  data );
 
 			//DecSd_RegSdLdEmodeCmd  // Enable DLL ; Rtt ; disable OCD
-			data = 0x40;  
+			data = 0x40;
 			//DEBUG_PRINT(LOAD_EMODE_CMD, data);
 			hw->pfnWriteDevRegister(hw->adp, BCHP_DDR23_CTL_REGS_0_LOAD_EMODE_CMD,  data );
 		}
-   
+
 		//Enable refresh
 		data = ((0x68 << 0) |  //Refresh period
 				(0x1 << 12)    //enable refresh
@@ -682,22 +681,22 @@ void crystalhd_flea_ddr_ctrl_init(struct crystalhd_hw *hw,
 		// The MIPS executes this code and we wait until DDR 1 is inited before setting the semaphore.
 		if ( port_int == 1)
 			hw->pfnWriteDevRegister(hw->adp, BCHP_DDR23_CTL_REGS_0_SCRATCH, 0xff);
-   
+
 		//Setup the Arbiter Data and Pict Buffer split if specified
 		if (port_int==0) { //only need to do this once
 			//where is the pict buff split (2 bits)
 			//0 = always mem_a, 1 = (<128 is mem_a), 2 = (<64 is mem_a), 3 = always mem_b
 			PSPLIT = 0;
-	     
+
 			//0 = 32MB, 1 = 64MB, 2 = 128 MB, 3 = 256MB, 4=512MB
 			DSPLIT = 4;
 
 			data = 0;
 			data += DSPLIT;
 			data += PSPLIT<< 4;
-			// MemSysRegWr (PRI_ARB_CONTROL_REGS_CONC_CTL + offset,  data ); 
+			// MemSysRegWr (PRI_ARB_CONTROL_REGS_CONC_CTL + offset,  data );
 		}
-   
+
 		if (DIS_LATENCY_CTRL == 1){
 			//set the work limit to the maximum
 			//DEBUG_PRINT(LATENCY, data);

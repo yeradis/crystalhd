@@ -1,7 +1,7 @@
 #ifndef _FLEA_DEFS_
 #define _FLEA_DEFS_
 
-/* 
+/*
 * Include a whole bunch of RDB files for register definitions
 */
 #include "bchp_misc1.h"
@@ -26,12 +26,13 @@
 #include "bchp_mfd.h"
 #include "bchp_sun_top_ctrl.h"
 #include "bchp_gio.h"
+#include "bchp_pri_client_regs.h"
 
 // Assume we have 64MB DRam
-#define FLEA_TOTAL_DRAM_SIZE		64*1024*1024  
+#define FLEA_TOTAL_DRAM_SIZE		64*1024*1024
 #define FLEA_GISB_DIRECT_BASE		0x50
 
-/*- These definition of the ADDRESS and DATA 
+/*- These definition of the ADDRESS and DATA
   - Registers are not there in RDB.
  */
 #define FLEA_GISB_INDIRECT_ADDRESS	0xFFF8
@@ -72,14 +73,14 @@
 #define DDRADDR_4_FWCMDS		0x100
 
 //
-// mailbox used for passing the FW Command address (DDR address) to 
+// mailbox used for passing the FW Command address (DDR address) to
 // firmware.
 //
 #define FW_CMD_POST_MBOX		BCHP_ARMCR4_BRIDGE_REG_MBOX_ARM1
 
-// Once we get a firmware command done interrupt, 
+// Once we get a firmware command done interrupt,
 // we will need to get the address of the response.
-// This mailbox is written by FW before asserting the 
+// This mailbox is written by FW before asserting the
 // firmware command done interrupt.
 #define FW_CMD_RES_MBOX			BCHP_ARMCR4_BRIDGE_REG_MBOX_PCI1
 
@@ -98,7 +99,7 @@
 -- and there is Width data. The driver will copy this 32 bit data to Y[0]
 -- location. This makes the Flea PIB compatible with Link.
 -- Also note that Flea is capable of putting out the odd size picture widths
--- so the PicWidth field is the actual picture width of the picture. In link 
+-- so the PicWidth field is the actual picture width of the picture. In link
 -- We were only getting 1920,1280 or 720 as picture widths.
 */
 #define PIC_PIB_DATA_OFFSET_FROM_END	4
@@ -107,8 +108,8 @@
 #define PIC_WIDTH_DATA_SIZE_IN_BYTES	4	//Width information for the driver.
 
 /*
--- The format change PIB comes in a dummy frame now. 
--- The Width field has the format change flag (bit-31) which 
+-- The format change PIB comes in a dummy frame now.
+-- The Width field has the format change flag (bit-31) which
 -- the driver uses to detect the format change now.
 */
 #define PIB_FORMAT_CHANGE_BIT			BC_BIT(31)
@@ -117,15 +118,15 @@
 #define FLEA_DECODE_ERROR_FLAG			0x800
 
 /*
--- Interrupt Mask, Set and Clear registers are exactly 
--- same as the interrupt status register. We will 
+-- Interrupt Mask, Set and Clear registers are exactly
+-- same as the interrupt status register. We will
 -- Use the following union for all the registers.
 */
-typedef 
-union 
+typedef
+union
 _FLEA_INTR_BITS_COMMON_
 {
-	struct 
+	struct
 	{
 		uint32_t	L0TxDMADone:1;		// Bit-0
 		uint32_t	L0TxDMAErr:1;		// Bit-1
@@ -140,7 +141,7 @@ _FLEA_INTR_BITS_COMMON_
 		uint32_t	L1YRxDMAErr:1;		// Bit-11
 		uint32_t	L1UVRxDMADone:1;	// Bit-12
 		uint32_t	L1UVRxDMAErr:1;		// Bit-13
-		uint32_t	Reserved2:2;		// Bit-14-15 
+		uint32_t	Reserved2:2;		// Bit-14-15
 		uint32_t	ArmMbox0Int:1;		// Bit-16
 		uint32_t	ArmMbox1Int:1;		// Bit-17
 		uint32_t	ArmMbox2Int:1;		// Bit-18
@@ -150,29 +151,29 @@ _FLEA_INTR_BITS_COMMON_
 		uint32_t	PcieTgtCaAttn:1;	// Bit-25
 		uint32_t 	HaltIntr:1;			// Bit-26
 		uint32_t	Reserved4:5;			// Bit-27-31
-	};								
-									
-	 uint32_t	WholeReg;				
+	};
+
+	 uint32_t	WholeReg;
 }FLEA_INTR_BITS_COMMON;
 
 typedef FLEA_INTR_BITS_COMMON FLEA_INTR_STS_REG;
 typedef FLEA_INTR_BITS_COMMON FLEA_MASK_REG;
 
-/* 
+/*
 ================================================================
 -- Flea power state machine
 -- FLEA_PS_NONE
 --	Enter to this state when system boots up and device is not open.
--- FLEA_PS_ACTIVE: 
+-- FLEA_PS_ACTIVE:
 --	1. Set when the device is started and FW downloaded.
---	2. We come to this state from FLEA_PS_LP_COMPLETE when 
+--	2. We come to this state from FLEA_PS_LP_COMPLETE when
 --		2.a Free list length becomes greater than X. [Same As Internal Pause Sequence]
 --		2.b There is a firmware command issued.
 --  3. We come to this state from FLEA_PS_LP_PENDING when
 --		3.a Free list length becomes greater than X. [Same As Internal Pause Sequence]
 --		3.b There is a firmware command Issued.
 -- FLEA_PS_LP_PENDING
---	1. Enter to this state from FLEA_PS_ACTIVE 
+--	1. Enter to this state from FLEA_PS_ACTIVE
 --		1.a FLL becomes greater less than Y[Same as Internal Resume].
 -- FLEA_PS_LP_COMPLETE
 --	1. Enter in to this state from FLEA_PS_LP_PENDING
@@ -184,8 +185,8 @@ typedef FLEA_INTR_BITS_COMMON FLEA_MASK_REG;
 --  4. Enter this state when RX is not running, either before it is started or after it is stopped.
 =================================================================
 */
-typedef 
-enum 
+typedef
+enum
 _FLEA_POWER_STATES_
 {
 	FLEA_PS_NONE=0,

@@ -34,7 +34,6 @@
 #include "crystalhd_lnx.h"
 #include "bc_defines.h"
 #include "FleaDefs.h"
-#include "crystalhd_flea_rdb.h"
 #include "crystalhd_flea_ddr.h"
 
 #define OFFSETOF(_s_, _m_) ((size_t)(unsigned long)&(((_s_ *)0)->_m_))
