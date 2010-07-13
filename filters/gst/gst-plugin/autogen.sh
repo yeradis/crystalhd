@@ -57,6 +57,13 @@ tool_run "$autoheader"
 tool_run "$autoconf"
 tool_run "$automake" "-a -c"
 
+if test ! -f /usr/include/libcrystalhd/libcrystalhd_if.h;
+then
+  echo libcrystalhd is not installed
+  echo install it from source or a binary package and re-run this script
+  exit 1
+fi 
+
 # if enable exists, add an -enable option for each of the lines in that file
 if test -f enable; then
   for a in `cat enable`; do

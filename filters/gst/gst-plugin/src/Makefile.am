@@ -3,15 +3,12 @@
 ROOTDIR    = ../../../..
 CC = g++
 CPP = g++
-INCLUDES = -I./ -I/usr/include
-INCLUDES += -I$(ROOTDIR)/include
-INCLUDES += -I$(ROOTDIR)/include/link
-INCLUDES += -I$(ROOTDIR)/linux_lib/libcrystalhd
+INCLUDES = -I./ -I/usr/include -I/usr/include/libcrystalhd
 
 BCMDEC_CFLAGS = $(INCLUDES) -D__LINUX_USER__ -DWMV_FILE_HANDLING
 BCMDEC_CFLAGS += -O2  -g -Wall
 
-BCMDEC_LDFLAGS = -L$(ROOTDIR)/linux_lib/libcrystalhd -lcrystalhd
+BCMDEC_LDFLAGS = -lcrystalhd
 
 ##############################################################################
 # change libgstplugin.la to something more suitable, e.g. libmysomething.la  #
