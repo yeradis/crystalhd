@@ -1,0 +1,12 @@
+Makefile
+*/Makefile
+config.log
+config.status
+config.h
+autom4te.cache/
+configure
+libtool
+src/libgstbcmdec.la
+src/libgstbcmdec_la-decif.lo
+src/libgstbcmdec_la-gstbcmdec.lo
+src/libgstbcmdec_la-parse.lo

@@ -212,10 +212,10 @@ top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 ROOTDIR = ../../../..
 INCLUDES = -I./ -I/usr/include -I$(ROOTDIR)/include \
-	-I$(ROOTDIR)/include/link -I$(ROOTDIR)/linux_lib/ldil
+	-I$(ROOTDIR)/include/link -I$(ROOTDIR)/linux_lib/libcrystalhd
 BCMDEC_CFLAGS = $(INCLUDES) -D__LINUX_USER__ -DWMV_FILE_HANDLING -O2 \
 	-g -Wall
-BCMDEC_LDFLAGS = -L$(ROOTDIR)/linux_lib/ldil -lcrystalhd
+BCMDEC_LDFLAGS = -L$(ROOTDIR)/linux_lib/libcrystalhd -lcrystalhd
 
 ##############################################################################
 # change libgstplugin.la to something more suitable, e.g. libmysomething.la  #

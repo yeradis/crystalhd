@@ -52,10 +52,10 @@ int main()
       printf("crap, DtsSetVideoParams failed\n");
       throw "Failed to set video params";
     }
-    ret = DtsSet422Mode(device, MODE422_YUY2);
+    ret = DtsSetColorSpace(device, MODE422_YUY2);
     if (ret != BC_STS_SUCCESS) {
-      printf("crap, DtsSet422Mode failed\n");
-      throw "Failed to set 422 mode";
+      printf("crap, DtsSetColorSpace failed\n");
+      throw "Failed to set colorspace mode";
     }
     ret = DtsStartDecoder(device);
     if (ret != BC_STS_SUCCESS) {
