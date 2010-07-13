@@ -24,7 +24,7 @@
 
 /* User Data Header */
 typedef struct user_data {
-   struct user_data* POINTER_32 next;
+   struct user_data* next;
    uint32_t      type;
    uint32_t      size;
 } UD_HDR;
@@ -63,7 +63,7 @@ typedef struct {
    /* MPEG_VALID_USERDATA
       User data is in the form of a linked list. */
    int32_t	userDataSize;
-   UD_HDR* POINTER_32 userData;
+   UD_HDR* userData;
 
 } PPB_MPEG;
 
@@ -101,7 +101,7 @@ typedef struct {
    /* VC1_VALID_USERDATA
       User data is in the form of a linked list. */
    int32_t	userDataSize;
-   UD_HDR* POINTER_32 userData;
+   UD_HDR* userData;
 
 } PPB_VC1;
 
@@ -121,7 +121,7 @@ typedef struct {
 #define MAX_FGT_VALUE_INTERVAL      (256)
 
 typedef struct FGT_SEI {
-    struct FGT_SEI* POINTER_32 next;
+    struct FGT_SEI* next;
     unsigned char model_values[3][MAX_FGT_VALUE_INTERVAL][MAX_FGT_MODEL_VALUE];
     unsigned char upper_bound[3][MAX_FGT_VALUE_INTERVAL];
     unsigned char lower_bound[3][MAX_FGT_VALUE_INTERVAL];
@@ -197,10 +197,10 @@ typedef struct {
 
    /* H264_VALID_USER */
    uint32_t	user_data_size;
-   UD_HDR* POINTER_32 user_data;
+   UD_HDR* user_data;
 
    /* H264 VALID FGT */
-   FGT_SEI* POINTER_32 pfgt;
+   FGT_SEI* pfgt;
 
 } PPB_H264;
 
@@ -448,7 +448,7 @@ typedef struct {
     uint32_t queue_write_offset; /* offset is w.r.t base of this data struct so value of 0-1 prohibited */
     /* queue if full if (write_offset+1 == read_offset) */
     /* write_offset modified by firmware and read_offset modified by Display Manager in host */
-    PPB* POINTER_32 display_elements[62];
+    PPB* display_elements[62];
 } PictureDeliveryQueue;
 
 /* Picture Release parameters returned by Display Manager to firmware */
@@ -457,7 +457,7 @@ typedef struct {
     uint32_t queue_write_offset; /* offset is w.r.t base of this data struct so value of 0-1 prohibited */
     /* queue if full if (write_offset+1 == read_offset) */
     /* read_offset modified by firmware and write_offset modified by Display Manager in host */
-    PPB* POINTER_32 display_elements[62];
+    PPB* display_elements[62];
 } PictureReleaseQueue;
 #endif
 

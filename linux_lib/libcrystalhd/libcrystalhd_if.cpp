@@ -1176,7 +1176,7 @@ DtsSetInputFormat(
 	{
 		if(pInputFormat->bEnableScaling) {
 			if((pInputFormat->ScalingParams.sWidth > 1920)||
-			   (pInputFormat->ScalingParams.sWidth < 1280))
+			   (pInputFormat->ScalingParams.sWidth < 128))
 				ScaledWidth = 1280;
 			else
 				ScaledWidth = pInputFormat->ScalingParams.sWidth;
@@ -3059,7 +3059,7 @@ DRVIFLIB_API BC_STATUS DtsSetScaleParams(HANDLE hDevice, PBC_SCALING_PARAMS pSca
 	uint32_t ScaledWidth = 0;
 
 	if (Ctx->DevId == BC_PCI_DEVID_FLEA) {
-		if ((pScaleParams->sWidth > 1920) || (pScaleParams->sWidth < 1280))
+		if ((pScaleParams->sWidth > 1920) || (pScaleParams->sWidth < 128))
 			ScaledWidth = 1280;
 		else
 			ScaledWidth = pScaleParams->sWidth;

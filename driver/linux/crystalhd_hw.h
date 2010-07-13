@@ -27,6 +27,7 @@
 #ifndef _CRYSTALHD_HW_H_
 #define _CRYSTALHD_HW_H_
 #include <linux/device.h>
+#include <linux/semaphore.h>
 #include "crystalhd_fw_if.h"
 #include "crystalhd_misc.h"
 #include "DriverFwShare.h"
@@ -378,7 +379,7 @@ struct crystalhd_hw {
 	uint32_t	LastTwoPicNo;	/* For Repeated Frame Detection on Interlace clip*/
 	uint32_t	LastSessNum;	/* For Session Change Detection */
 
-	struct	semaphore	fetch_sem; // semaphore between fetch and probe of the next picture information, since both will be in process context
+	struct semaphore fetch_sem; // semaphore between fetch and probe of the next picture information, since both will be in process context
 
 	bool RxCaptureState;
 

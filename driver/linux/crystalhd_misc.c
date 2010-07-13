@@ -25,6 +25,7 @@
  **********************************************************************/
 
 #include <linux/device.h>
+#include <linux/version.h>
 
 #include "crystalhd_lnx.h"
 #include "crystalhd_misc.h"
