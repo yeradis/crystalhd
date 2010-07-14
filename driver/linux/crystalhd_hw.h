@@ -516,7 +516,7 @@ BC_STATUS crystalhd_hw_post_tx(struct crystalhd_hw *hw, crystalhd_dio_req *ioreq
 				uint8_t data_flags);
 BC_STATUS crystalhd_hw_cancel_tx(struct crystalhd_hw *hw, uint32_t list_id);
 BC_STATUS crystalhd_hw_add_cap_buffer(struct crystalhd_hw *hw,crystalhd_dio_req *ioreq, bool en_post);
-BC_STATUS crystalhd_hw_get_cap_buffer(struct crystalhd_hw *hw,BC_PIC_INFO_BLOCK *pib,crystalhd_dio_req **ioreq);
+BC_STATUS crystalhd_hw_get_cap_buffer(struct crystalhd_hw *hw,C011_PIB *pib,crystalhd_dio_req **ioreq);
 BC_STATUS crystalhd_hw_start_capture(struct crystalhd_hw *hw);
 BC_STATUS crystalhd_hw_stop_capture(struct crystalhd_hw *hw, bool unmap);
 BC_STATUS crystalhd_hw_suspend(struct crystalhd_hw *hw);

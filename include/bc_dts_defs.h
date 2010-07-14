@@ -271,6 +271,8 @@ enum {
 	vdecFrameRate50,
 	vdecFrameRate59_94,
 	vdecFrameRate60,
+	vdecFrameRate14_985,
+	vdecFrameRate7_496,
 };
 
 /* Values for the 'aspect_ratio' field. */

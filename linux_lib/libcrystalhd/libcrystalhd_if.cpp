@@ -1669,7 +1669,7 @@ DtsProcOutput(
 	{
 		/* Merge in and out flags */
 		OutBuffs.PoutFlags |= pOut->PoutFlags;
-		width = Ctx->picWidth;
+		width = Ctx->HWOutPicWidth;
 		OutBuffs.b422Mode = Ctx->b422Mode;
 		pOut->AppCallBack(	pOut->hnd,
 							width,
@@ -2904,7 +2904,7 @@ DtsGetDriverStatus( HANDLE  hDevice,
 	DTS_LIB_CONTEXT			*Ctx = NULL;
 	DTS_GET_CTX(hDevice,Ctx);
 
-	temp.DrvNextMDataPLD = Ctx->picWidth | (0x1 << 31);
+	temp.DrvNextMDataPLD = Ctx->HWOutPicWidth | (0x1 << 31);
 
 	// If bit 31 of the input cpbEmptySize is set, then report the real HW size
 	// Else report the buffered size

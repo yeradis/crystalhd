@@ -323,6 +323,56 @@ static void DtsDecPend(DTS_LIB_CONTEXT	*Ctx)
 	DtsUnLock(Ctx);
 }
 
+void DtsGetFrameRate(DTS_LIB_CONTEXT *Ctx, BC_DTS_PROC_OUT *pOut)
+{
+	if (Ctx->VidParams.FrameRate == pOut->PicInfo.frame_rate)
+	{
+		pOut->PicInfo.frame_rate = 0;
+		return;
+	}
+
+	Ctx->VidParams.FrameRate = pOut->PicInfo.frame_rate;
+
+	if (pOut->PicInfo.frame_rate == vdecFrameRate23_97)
+		pOut->PicInfo.frame_rate = 23970;
+	else if (pOut->PicInfo.frame_rate == vdecFrameRate24)
+		pOut->PicInfo.frame_rate = 24000;
+	else if (pOut->PicInfo.frame_rate == vdecFrameRate25)
+		pOut->PicInfo.frame_rate = 25000;
+	else if (pOut->PicInfo.frame_rate == vdecFrameRate29_97)
+		pOut->PicInfo.frame_rate = 29970;
+	else if (pOut->PicInfo.frame_rate == vdecFrameRate30)
+		pOut->PicInfo.frame_rate = 30000;
+	else if (pOut->PicInfo.frame_rate == vdecFrameRate50)
+		pOut->PicInfo.frame_rate = 50000;
+	else if (pOut->PicInfo.frame_rate == vdecFrameRate59_94)
+		pOut->PicInfo.frame_rate = 59940;
+	else if (pOut->PicInfo.frame_rate == vdecFrameRate60)
+		pOut->PicInfo.frame_rate = 60000;
+	else if (pOut->PicInfo.frame_rate == vdecFrameRate14_985)
+		pOut->PicInfo.frame_rate = 14985;
+	else if (pOut->PicInfo.frame_rate == vdecFrameRate7_496)
+		pOut->PicInfo.frame_rate = 7496;
+	else if (pOut->PicInfo.frame_rate == vdecFrameRateUnknown)
+		pOut->PicInfo.frame_rate = 23970;
+	else
+		pOut->PicInfo.frame_rate = 23970;
+
+}
+
+
+uint32_t DtsGetHWOutputStride(DTS_LIB_CONTEXT *Ctx, C011_PIB *pPIBInfo)
+{
+	if (Ctx->DevId == BC_PCI_DEVID_FLEA)
+	{
+		return pPIBInfo->ppb.width;
+	}
+	else
+	{
+		return pPIBInfo->resolution;
+	}
+}
+
 uint32_t DtsGetWidthfromResolution(DTS_LIB_CONTEXT *Ctx, uint32_t Resolution)
 {
 	uint32_t Width;
@@ -386,32 +436,34 @@ uint32_t DtsGetWidthfromResolution(DTS_LIB_CONTEXT *Ctx, uint32_t Resolution)
 
 static void DtsCopyAppPIB(DTS_LIB_CONTEXT *Ctx, BC_DEC_OUT_BUFF *decOut, BC_DTS_PROC_OUT *pOut)
 {
-	BC_PIC_INFO_BLOCK	*srcPib = &decOut->PibInfo;
+	C011_PIB			*srcPib = &decOut->PibInfo;
 	BC_PIC_INFO_BLOCK	*dstPib = &pOut->PicInfo;
-	uint16_t					sNum = 0;
+	//uint16_t					sNum = 0;
+	//BC_STATUS			sts = BC_STS_SUCCESS;
 
-	memcpy(dstPib, srcPib,sizeof(*dstPib));
+	Ctx->FormatInfo.timeStamp		= dstPib->timeStamp	= 0;
+	Ctx->FormatInfo.picture_number	= dstPib->picture_number = srcPib->ppb.picture_number;
+	Ctx->FormatInfo.width			= dstPib->width			 = srcPib->ppb.width;
+	Ctx->FormatInfo.height			= dstPib->height		 = srcPib->ppb.height;
+	Ctx->FormatInfo.chroma_format	= dstPib->chroma_format	 = srcPib->ppb.chroma_format;
+	Ctx->FormatInfo.pulldown		= dstPib->pulldown		 = srcPib->ppb.pulldown;
+	Ctx->FormatInfo.flags			= dstPib->flags			 = srcPib->ppb.flags;
+	Ctx->FormatInfo.sess_num		= dstPib->sess_num		 = srcPib->ptsStcOffset;
+	Ctx->FormatInfo.aspect_ratio	= dstPib->aspect_ratio	 = srcPib->ppb.aspect_ratio;
+	Ctx->FormatInfo.colour_primaries = dstPib->colour_primaries = srcPib->ppb.colour_primaries;
+	Ctx->FormatInfo.picture_meta_payload= dstPib->picture_meta_payload	= srcPib->ppb.picture_meta_payload;
 
-	/* Calculate the appropriate source width */
-	if(dstPib->width > 1280)
-		Ctx->picWidth = 1920;
-	else if(dstPib->width > 720)
-		Ctx->picWidth = 1280;
-	else
-		Ctx->picWidth = 720;
-
-	Ctx->picHeight = dstPib->height;
-	if (Ctx->picHeight == 1088) {
-		Ctx->picHeight = 1080;
-	}
 	/* FIX_ME:: Add extensions part.. */
 
 	/* Retrieve Timestamp */
-	if(srcPib->flags & VDEC_FLAG_PICTURE_META_DATA_PRESENT){
-		sNum = (uint16_t) ( ((srcPib->picture_meta_payload & 0xFF) << 8) |
-						    ((srcPib->picture_meta_payload& 0xFF00) >> 8) );
+	// NAREN - FIXME - We should not copy the timestamp for Format Change since it is a dummy picture with no timestamp
+#if 0
+	if(srcPib->ppb.flags & VDEC_FLAG_PICTURE_META_DATA_PRESENT){
+		sNum = (U16) ( ((srcPib->ppb.picture_meta_payload & 0xFF) << 8) |
+		((srcPib->ppb.picture_meta_payload& 0xFF00) >> 8) );
 		DtsFetchMdata(Ctx,sNum,pOut);
-	}
+}
+#endif
 }
 static void dts_swap_buffer(uint32_t *dst, uint32_t *src, uint32_t cnt)
 {
@@ -443,10 +495,10 @@ static BC_STATUS DtsGetPictureInfo(DTS_LIB_CONTEXT *Ctx, BC_DTS_PROC_OUT *pOut)
 {
 
 	uint16_t			sNum = 0;
-	//unused BC_STATUS			sts = BC_STS_SUCCESS;
 	uint8_t*			pPicInfoLine = NULL;
 	uint32_t			PictureNumber = 0;
 	uint32_t			PicInfoLineNum;
+	bool				bInterlaced = false;
 
 	if (Ctx->DevId == BC_PCI_DEVID_FLEA)
 	{
@@ -492,16 +544,16 @@ static BC_STATUS DtsGetPictureInfo(DTS_LIB_CONTEXT *Ctx, BC_DTS_PROC_OUT *pOut)
 	-- extra lines.
 	*/
 
-	if( ( (PicInfoLineNum != Ctx->picHeight) && (PicInfoLineNum != (Ctx->picHeight+1))) &&
-		( (PicInfoLineNum != Ctx->picHeight/2) && (PicInfoLineNum != (Ctx->picHeight+1)/2)) )
+	if( ( (PicInfoLineNum != Ctx->HWOutPicHeight) && (PicInfoLineNum != (Ctx->HWOutPicHeight+1))) &&
+		( (PicInfoLineNum != Ctx->HWOutPicHeight/2) && (PicInfoLineNum != (Ctx->HWOutPicHeight+1)/2)) )
 	{
 		return BC_STS_IO_XFR_ERROR;
 	}
 
 	if (Ctx->b422Mode) {
-		pPicInfoLine = pOut->Ybuff + PicInfoLineNum * Ctx->picWidth * 2;
+		pPicInfoLine = pOut->Ybuff + PicInfoLineNum * Ctx->HWOutPicWidth * 2;
 	} else {
-		pPicInfoLine = pOut->Ybuff + PicInfoLineNum * Ctx->picWidth;
+		pPicInfoLine = pOut->Ybuff + PicInfoLineNum * Ctx->HWOutPicWidth;
 	}
 
 	if (Ctx->DevId != BC_PCI_DEVID_FLEA)
@@ -522,16 +574,6 @@ static BC_STATUS DtsGetPictureInfo(DTS_LIB_CONTEXT *Ctx, BC_DTS_PROC_OUT *pOut)
 
 	pOut->PoutFlags |= BC_POUT_FLAGS_PIB_VALID;
 
-	if(PictureNumber & 0x40000000)
-	{
-		PictureNumber &= ~0x40000000;
-		pOut->PoutFlags |= BC_POUT_FLAGS_FLD_BOT;
-	}
-	if(PictureNumber & 0x80000000)
-	{
-		PictureNumber &= ~0x80000000;
-		pOut->PoutFlags |= BC_POUT_FLAGS_ENCRYPTED;
-	}
 	if (Ctx->DevId != BC_PCI_DEVID_FLEA)
 	{
 		dts_swap_buffer((uint32_t*)&pOut->PicInfo,(uint32_t*)(pPicInfoLine + 4), 32);
@@ -542,6 +584,47 @@ static BC_STATUS DtsGetPictureInfo(DTS_LIB_CONTEXT *Ctx, BC_DTS_PROC_OUT *pOut)
 	{
 		memcpy((uint32_t*)&pOut->PicInfo,(uint32_t*)(pPicInfoLine + 4), sizeof(BC_PIC_INFO_BLOCK));
 	}
+
+	if (Ctx->DevId == BC_PCI_DEVID_FLEA)
+	{
+		if (pOut->PicInfo.flags & VDEC_FLAG_BOTTOMFIELD)
+			bInterlaced = true;
+	}
+	else
+	{
+		if (pOut->PicInfo.flags & VDEC_FLAG_INTERLACED_SRC)
+			bInterlaced = true;
+	}
+
+	if(bInterlaced)
+	{
+		Ctx->VidParams.Progressive = FALSE;
+		pOut->PicInfo.flags |= VDEC_FLAG_INTERLACED_SRC;
+		if (PictureNumber & 0x40000000)
+		{
+			pOut->PoutFlags |= BC_POUT_FLAGS_FLD_BOT;
+			pOut->PicInfo.flags |= VDEC_FLAG_BOTTOMFIELD;
+		}
+		else
+		{
+			pOut->PicInfo.flags &= ~VDEC_FLAG_BOTTOMFIELD;
+			pOut->PicInfo.flags |= VDEC_FLAG_TOPFIELD;
+		}
+	}
+	else
+	{
+		Ctx->VidParams.Progressive = TRUE;
+		pOut->PicInfo.flags &= ~(VDEC_FLAG_BOTTOMFIELD | VDEC_FLAG_INTERLACED_SRC);
+	}
+
+	if(PictureNumber & 0x80000000)
+	{
+		pOut->PoutFlags |= BC_POUT_FLAGS_ENCRYPTED;
+	}
+
+	DtsGetFrameRate(Ctx, pOut);
+	//DILDbg_Trace(BC_DIL_DBG_DETAIL, TEXT("DtsGetPictureInfo: PicInfo (W,H):(%d,%d) FR:%ld Flags:0x%x\n"),pOut->PicInfo.width, pOut->PicInfo.height,pOut->PicInfo.frame_rate, pOut->PicInfo.flags);
+
 	/* Replace Y Component data*/
 	if(Ctx->DevId == BC_PCI_DEVID_FLEA)
 	{
@@ -604,28 +687,15 @@ static BC_STATUS DtsGetPictureInfo(DTS_LIB_CONTEXT *Ctx, BC_DTS_PROC_OUT *pOut)
 
 BC_STATUS DtsUpdateVidParams(DTS_LIB_CONTEXT *Ctx, BC_DTS_PROC_OUT *pOut)
 {
-
 	Ctx->VidParams.WidthInPixels = pOut->PicInfo.width;
 	Ctx->VidParams.HeightInPixels = pOut->PicInfo.height;
 
-	switch(pOut->PicInfo.frame_rate)
-	{
-		case vdecRESOLUTION_480i0:
-		case vdecRESOLUTION_1080i0:
-		case vdecRESOLUTION_1080i29_97:
-		case vdecRESOLUTION_1080i25:
-		case vdecRESOLUTION_1080i:
-		case vdecRESOLUTION_480i:
-		case vdecRESOLUTION_NTSC:
-		case vdecRESOLUTION_PAL1:
-			Ctx->VidParams.Progressive = FALSE;
-			break;
-		default:
-			Ctx->VidParams.Progressive = TRUE;
-			break;
-	}
-	return BC_STS_SUCCESS;
+	if (pOut->PicInfo.flags & VDEC_FLAG_INTERLACED_SRC)
+		Ctx->VidParams.Progressive = FALSE;
+	else
+		Ctx->VidParams.Progressive = TRUE;
 
+	return BC_STS_SUCCESS;
 }
 
 
@@ -647,7 +717,7 @@ BOOL DtsCheckRptPic(DTS_LIB_CONTEXT *Ctx, BC_DTS_PROC_OUT *pOut)
 	{
 		if (Ctx->VidParams.Progressive)
 			nCheckFlag = PROGRESSIVE_FRAME_FLAG;
-		else if (pOut->PoutFlags & BC_POUT_FLAGS_FLD_BOT)
+		else if((pOut->PicInfo.flags & VDEC_FLAG_BOTTOMFIELD) == VDEC_FLAG_BOTTOMFIELD)
 			nCheckFlag = BOTTOM_FIELD_FLAG;
 		else
 			nCheckFlag = TOP_FIELD_FLAG;
@@ -749,43 +819,53 @@ static void DtsSetupProcOutInfo(DTS_LIB_CONTEXT *Ctx, BC_DTS_PROC_OUT *pOut, BC_
 	if(!pOut || !pIo)
 		return; // This is an internal function should never happen..
 
-	if(Ctx->RegCfg.DbgOptions & BC_BIT(6)){
+	if(Ctx->RegCfg.DbgOptions & BC_BIT(6))
+	{
 	/* Decoder PIC_INFO_ON mode, PIB is NOT embedded in frame */
-		if(pIo->u.DecOutData.Flags & COMP_FLAG_PIB_VALID){
+		if(pIo->u.DecOutData.Flags & COMP_FLAG_PIB_VALID)
+		{
 			pOut->PoutFlags |= BC_POUT_FLAGS_PIB_VALID;
 			DtsCopyAppPIB(Ctx, &pIo->u.DecOutData, pOut);
 		}
-		if(pIo->u.DecOutData.Flags & COMP_FLAG_DATA_ENC){
+		if(pIo->u.DecOutData.Flags & COMP_FLAG_DATA_ENC)
 			pOut->PoutFlags |= BC_POUT_FLAGS_ENCRYPTED;
-		}
-		if(pIo->u.DecOutData.Flags & COMP_FLAG_DATA_BOT){
-			pOut->PoutFlags |= BC_POUT_FLAGS_FLD_BOT;
-		}
+
+		if (pOut->PicInfo.flags & VDEC_FLAG_BOTTOMFIELD)
+			pOut->PicInfo.flags |= VDEC_FLAG_INTERLACED_SRC;
+
+		if (pOut->PicInfo.flags & VDEC_FLAG_INTERLACED_SRC)
+			Ctx->VidParams.Progressive = FALSE;
+		else
+			Ctx->VidParams.Progressive = TRUE;
 	}
 
 	/* No change in Format Change method */
-	if(pIo->u.DecOutData.Flags & COMP_FLAG_FMT_CHANGE){
-		if(pIo->u.DecOutData.Flags & COMP_FLAG_PIB_VALID){
+	if(pIo->u.DecOutData.Flags & COMP_FLAG_FMT_CHANGE)
+	{
+		if(pIo->u.DecOutData.Flags & COMP_FLAG_PIB_VALID)
+		{
 			pOut->PoutFlags |= BC_POUT_FLAGS_PIB_VALID;
 			DtsCopyAppPIB(Ctx, &pIo->u.DecOutData, pOut);
 		}else{
-			DebugLog_Trace(LDIL_DBG,"Error: Can't hadle F/C w/o PIB_VALID \n");
+			DebugLog_Trace(LDIL_DBG,"Error: Can't handle F/C w/o PIB_VALID \n");
 			return;
 		}
-		if(0 == (Ctx->picWidth = DtsGetWidthfromResolution(Ctx, pIo->u.DecOutData.PibInfo.frame_rate)))
-			Ctx->picWidth = pIo->u.DecOutData.PibInfo.width;
-		Ctx->picHeight = pIo->u.DecOutData.PibInfo.height;
+		Ctx->HWOutPicHeight = pOut->PicInfo.height;
+		// FW returns output picture's stride in PPB.resolution when Format changes.
+		Ctx->HWOutPicWidth = DtsGetHWOutputStride(Ctx,(C011_PIB *)&(pIo->u.DecOutData.PibInfo));
+
+		if (pOut->PicInfo.flags & VDEC_FLAG_BOTTOMFIELD)
+			pOut->PicInfo.flags |= VDEC_FLAG_INTERLACED_SRC;
+
 		pOut->PoutFlags |= BC_POUT_FLAGS_FMT_CHANGE;
-		pOut->PicInfo.frame_rate = pIo->u.DecOutData.PibInfo.frame_rate;
-		DebugLog_Trace(LDIL_DBG,"FormatCh:Height:%d Width:%d Res:%x\n",pOut->PicInfo.height,pOut->PicInfo.width,pOut->PicInfo.frame_rate);
 		if(pIo->u.DecOutData.Flags & COMP_FLAG_DATA_VALID){
 			DebugLog_Trace(LDIL_DBG,"Error: Data not expected with F/C \n");
 			return;
 		}
 	}
 
-	if(pIo->u.DecOutData.Flags & COMP_FLAG_DATA_VALID){
-
+	if(pIo->u.DecOutData.Flags & COMP_FLAG_DATA_VALID)
+	{
 		pOut->Ybuff = pIo->u.DecOutData.OutPutBuffs.YuvBuff;
 		pOut->YBuffDoneSz = pIo->u.DecOutData.OutPutBuffs.YBuffDoneSz;
 		pOut->YbuffSz = pIo->u.DecOutData.OutPutBuffs.UVbuffOffset;

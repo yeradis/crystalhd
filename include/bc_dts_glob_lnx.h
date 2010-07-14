@@ -219,7 +219,7 @@ enum _DECOUT_COMPLETION_FLAGS{
 
 typedef struct _BC_DEC_OUT_BUFF{
 	BC_DEC_YUV_BUFFS	OutPutBuffs;
-	BC_PIC_INFO_BLOCK	PibInfo;
+	C011_PIB	PibInfo;
 	uint32_t		Flags;
 	uint32_t		BadFrCnt;
 } BC_DEC_OUT_BUFF;

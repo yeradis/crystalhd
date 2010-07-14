@@ -1327,7 +1327,7 @@ DtsCopyRawDataToOutBuff(DTS_LIB_CONTEXT	*Ctx,
 	if(Vout->PoutFlags & BC_POUT_FLAGS_SIZE) {
 		// Use DShow provided size for now
 		dstWidthInPixels = Vout->PicInfo.width;
-		if(Vout->PoutFlags & BC_POUT_FLAGS_INTERLACED)
+		if(!Ctx->VidParams.Progressive)
 			dstHeightInPixels = Vout->PicInfo.height/2;
 		else
 			dstHeightInPixels = Vout->PicInfo.height;
@@ -1339,7 +1339,7 @@ DtsCopyRawDataToOutBuff(DTS_LIB_CONTEXT	*Ctx,
 			return BC_STS_IO_XFR_ERROR;
 		}
 #endif
-		srcWidthInPixels = Ctx->picWidth;
+	srcWidthInPixels = Ctx->HWOutPicWidth;
 		srcHeightInPixels = dstHeightInPixels;
 	} else {
 		dstWidthInPixels = Vin->PicInfo.width;
@@ -1393,7 +1393,7 @@ BC_STATUS DtsCopyNV12ToYV12(DTS_LIB_CONTEXT	*Ctx, BC_DTS_PROC_OUT *Vout, BC_DTS_
 
 		// Use DShow provided size for now
 		dstWidthInPixels = Vout->PicInfo.width;
-		if(Vout->PoutFlags & BC_POUT_FLAGS_INTERLACED)
+		if(!Ctx->VidParams.Progressive)
 			dstHeightInPixels = Vout->PicInfo.height/2;
 		else
 			dstHeightInPixels = Vout->PicInfo.height;
@@ -1405,7 +1405,7 @@ BC_STATUS DtsCopyNV12ToYV12(DTS_LIB_CONTEXT	*Ctx, BC_DTS_PROC_OUT *Vout, BC_DTS_
 			DebugLog_Trace(LDIL_DBG,"DtsCopyYV12: XFER ERROR\n");
 			return BC_STS_IO_XFR_ERROR;
 		}
-		srcWidthInPixels = Ctx->picWidth;
+		srcWidthInPixels = Ctx->HWOutPicWidth;
 		srcHeightInPixels = dstHeightInPixels;
 
 		//copy luma
@@ -1474,7 +1474,7 @@ BC_STATUS DtsCopyNV12(DTS_LIB_CONTEXT *Ctx, BC_DTS_PROC_OUT *Vout, BC_DTS_PROC_O
 	if(Vout->PoutFlags & BC_POUT_FLAGS_SIZE) {
 		// Use DShow provided size for now
 		dstWidthInPixels = Vout->PicInfo.width;
-		if(Vout->PoutFlags & BC_POUT_FLAGS_INTERLACED)
+		if(!Ctx->VidParams.Progressive)
 			dstHeightInPixels = Vout->PicInfo.height/2;
 		else
 			dstHeightInPixels = Vout->PicInfo.height;
@@ -1482,7 +1482,7 @@ BC_STATUS DtsCopyNV12(DTS_LIB_CONTEXT *Ctx, BC_DTS_PROC_OUT *Vout, BC_DTS_PROC_O
 		if((Vout->YBuffDoneSz < (dstWidthInPixels * dstHeightInPixels / 4)) ||
 			(Vout->UVBuffDoneSz < (dstWidthInPixels * dstHeightInPixels/2 / 4)))
 			return BC_STS_IO_XFR_ERROR;
-		srcWidthInPixels = Ctx->picWidth;
+		srcWidthInPixels = Ctx->HWOutPicWidth;
 		srcHeightInPixels = dstHeightInPixels;
 	} else {
 		dstWidthInPixels = Vin->PicInfo.width;

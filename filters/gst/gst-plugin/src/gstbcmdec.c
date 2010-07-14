@@ -1646,122 +1646,23 @@ static void bcmdec_init_procout(GstBcmDec *bcmdec,BC_DTS_PROC_OUT* pout, guint8*
 	return;
 }
 
-static void bcmdec_set_framerate(GstBcmDec * bcmdec,guint32 resolution)
+static void bcmdec_set_framerate(GstBcmDec * bcmdec,guint32 nFrameRate)
 {
 	gdouble framerate;
 
 	bcmdec->interlace = FALSE;
+	framerate = (gdouble)nFrameRate / 1000;
 
-	switch (resolution) {
-	case vdecRESOLUTION_480p0:
-		GST_DEBUG_OBJECT(bcmdec, "host frame rate 480p0");
-		framerate = bcmdec->input_framerate ? bcmdec->input_framerate : 60;
-		break;
-	case vdecRESOLUTION_576p0:
-		GST_DEBUG_OBJECT(bcmdec, "host frame rate 576p0");
-		framerate = bcmdec->input_framerate ? bcmdec->input_framerate : 25;
-		break;
-	case vdecRESOLUTION_720p0:
-		GST_DEBUG_OBJECT(bcmdec, "host frame rate 720p0");
-		framerate = bcmdec->input_framerate ? bcmdec->input_framerate : 60;
-		break;
-	case vdecRESOLUTION_1080p0:
-		GST_DEBUG_OBJECT(bcmdec, "host frame rate 1080p0");
-		framerate = bcmdec->input_framerate ? bcmdec->input_framerate : 23.976;
-		break;
-	case vdecRESOLUTION_480i0:
-		GST_DEBUG_OBJECT(bcmdec, "host frame rate 480i0");
-		framerate = bcmdec->input_framerate ? bcmdec->input_framerate : 59.94;
-		bcmdec->interlace = TRUE;
-		break;
-	case vdecRESOLUTION_1080i0:
-		GST_DEBUG_OBJECT(bcmdec, "host frame rate 1080i0");
-		framerate = bcmdec->input_framerate ? bcmdec->input_framerate : 59.94;
-		bcmdec->interlace = TRUE;
-		break;
-	case vdecRESOLUTION_1080p23_976:
-		framerate = 23.976;
-		break;
-	case vdecRESOLUTION_1080p29_97 :
-		framerate = 29.97;
-		break;
-	case vdecRESOLUTION_1080p30  :
-		framerate = 30;
-		break;
-	case vdecRESOLUTION_1080p24  :
-		framerate = 24;
-		break;
-	case vdecRESOLUTION_1080p25 :
-		framerate = 25;
-		break;
-	case vdecRESOLUTION_1080i29_97:
-		framerate = 59.94;
-		bcmdec->interlace = TRUE;
-		break;
-	case vdecRESOLUTION_1080i25:
-		framerate = 50;
-		bcmdec->interlace = TRUE;
-		break;
-	case vdecRESOLUTION_1080i:
-		framerate = 59.94;
-		bcmdec->interlace = TRUE;
-		break;
-	case vdecRESOLUTION_720p59_94:
-		framerate = 59.94;
-		break;
-	case vdecRESOLUTION_720p50:
-		framerate = 50;
-		break;
-	case vdecRESOLUTION_720p:
-		framerate = 60;
-		break;
-	case vdecRESOLUTION_720p23_976:
-		framerate = 23.976;
-		break;
-	case vdecRESOLUTION_720p24:
-		framerate = 25;
-		break;
-	case vdecRESOLUTION_720p29_97:
-		framerate = 29.97;
-		break;
-	case vdecRESOLUTION_480i:
-		framerate = 59.94;
-		bcmdec->interlace = TRUE;
-		break;
-	case vdecRESOLUTION_NTSC:
-		framerate = 60;
-		bcmdec->interlace = TRUE;
-		break;
-	case vdecRESOLUTION_480p:
-		framerate = 60;
-		break;
-	case vdecRESOLUTION_PAL1:
-		framerate = 50;
-		bcmdec->interlace = TRUE;
-		break;
-	case vdecRESOLUTION_480p23_976:
-		framerate = 23.976;
-		break;
-	case vdecRESOLUTION_480p29_97:
-		framerate = 29.97;
-		break;
-	case vdecRESOLUTION_576p25:
-		framerate = 25;
-		break;
-	default:
-		GST_DEBUG_OBJECT(bcmdec, "default frame rate %d",resolution);
-		framerate = 23.976;
-		break;
+	if((framerate) && (bcmdec->output_params.framerate != framerate))
+	{
+		bcmdec->output_params.framerate = framerate;
+		bcmdec->frame_time = (GstClockTime)(UNITS / bcmdec->output_params.framerate);
+
+		//if (bcmdec->interlace)
+		//	bcmdec->output_params.framerate /= 2;
+
+		GST_DEBUG_OBJECT(bcmdec, "framerate = %x  interlace = %d", framerate, bcmdec->interlace);
 	}
-
-	bcmdec->output_params.framerate = framerate;
-
-	if (bcmdec->interlace)
-		bcmdec->output_params.framerate /= 2;
-
-	GST_DEBUG_OBJECT(bcmdec, "resolution = %x  interlace = %d", resolution, bcmdec->interlace);
-
-	return;
 }
 
 static void bcmdec_set_aspect_ratio(GstBcmDec *bcmdec, BC_PIC_INFO_BLOCK *pic_info)
@@ -1860,7 +1761,7 @@ static gboolean bcmdec_format_change(GstBcmDec *bcmdec, BC_PIC_INFO_BLOCK *pic_i
 {
 	GST_DEBUG_OBJECT(bcmdec, "Got format Change to %dx%d", pic_info->width, pic_info->height);
 	gboolean result = FALSE;
-	bcmdec_set_framerate(bcmdec, pic_info->frame_rate);
+	//bcmdec_set_framerate(bcmdec, pic_info->frame_rate);  // moved to proc out for every picture.
 	if (pic_info->height == 1088)
 		pic_info->height = 1080;
 
@@ -2129,7 +2030,7 @@ static void * bcmdec_process_output(void *ctx)
 				    (pout.PoutFlags & BC_POUT_FLAGS_FMT_CHANGE)) {
 					if (bcmdec_format_change(bcmdec, &pout.PicInfo)) {
 						GST_DEBUG_OBJECT(bcmdec, "format change success");
-						bcmdec->frame_time = (GstClockTime)(UNITS / bcmdec->output_params.framerate);
+						//bcmdec->frame_time = (GstClockTime)(UNITS / bcmdec->output_params.framerate);
 						bcmdec->last_spes_time  = 0;
 						bcmdec->prev_clock_time = 0;
 						cur_stream_time_diff    = 0;
@@ -2161,6 +2062,7 @@ static void * bcmdec_process_output(void *ctx)
 					continue;
 				}
 
+				bcmdec_set_framerate(bcmdec, pout.PicInfo.frame_rate);
 				pic_number = pout.PicInfo.picture_number - first_picture;
 
 				if (!bcmdec->silent)

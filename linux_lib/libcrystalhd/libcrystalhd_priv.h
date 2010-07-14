@@ -138,7 +138,7 @@ typedef struct _DTS_VIDEO_PARAMS {
 	BOOL		FGTEnable;
 	BOOL		MetaDataEnable;
 	BOOL		Progressive;
-	BOOL		FrameRate;  //currently not used, frame rate is passed in the 1st byte of the OptFlags member
+	uint32_t	FrameRate;
 	uint32_t	OptFlags; //currently has the DEc_operation_mode in bits 4 and 5, bits 0:3 have the default framerate, Ignore frame rate is bit 6. Bit 7 is SingleThreadedAppMode
 	BC_MEDIA_SUBTYPE MediaSubType;
 	uint32_t	StartCodeSz;
@@ -278,8 +278,8 @@ typedef struct _DTS_LIB_CONTEXT{
 	char			FwBinFile[MAX_PATH+1];	/* Firmware Bin file place holder */
 
 	BC_OUTPUT_FORMAT b422Mode;				/* 422 Mode Identifier for Link */
-	uint32_t		picWidth;
-	uint32_t		picHeight;
+	uint32_t		HWOutPicWidth;
+	uint32_t		HWOutPicHeight;
 
 	char			DilPath[MAX_PATH+1];	/* DIL runtime Location.. */
 

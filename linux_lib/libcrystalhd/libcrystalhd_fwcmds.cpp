@@ -317,8 +317,8 @@ DtsFWHwSelfTest(
 	{
 		if (testID>3 || testID<6){
 			stest->mode = testID;
-			stest->height = Ctx->picHeight;
-			stest->width = Ctx->picWidth;
+			stest->height = Ctx->HWOutPicHeight;
+			stest->width = Ctx->HWOutPicWidth;
 		}
 	}
 

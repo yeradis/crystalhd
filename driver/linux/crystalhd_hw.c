@@ -878,8 +878,8 @@ BC_STATUS crystalhd_hw_add_cap_buffer(struct crystalhd_hw *hw,
 }
 
 BC_STATUS crystalhd_hw_get_cap_buffer(struct crystalhd_hw *hw,
-				    BC_PIC_INFO_BLOCK *pib,
-				    crystalhd_dio_req **ioreq)
+										C011_PIB *pib,
+										crystalhd_dio_req **ioreq)
 {
 	crystalhd_rx_dma_pkt *rpkt;
 	uint32_t timeout = BC_PROC_OUTPUT_TIMEOUT / 1000;
@@ -925,7 +925,19 @@ BC_STATUS crystalhd_hw_get_cap_buffer(struct crystalhd_hw *hw,
 	rpkt->dio_req->uinfo.comp_flags = rpkt->flags;
 
 	if (rpkt->flags & COMP_FLAG_PIB_VALID)
-		memcpy(pib, &rpkt->pib, sizeof(*pib));
+	{
+		pib->ppb.picture_number = rpkt->pib.picture_number;
+		pib->ppb.width = rpkt->pib.width;
+		pib->ppb.height = rpkt->pib.height;
+		pib->ppb.chroma_format = rpkt->pib.chroma_format;
+		pib->ppb.pulldown = rpkt->pib.pulldown;
+		pib->ppb.flags = rpkt->pib.flags;
+		pib->ptsStcOffset = rpkt->pib.sess_num;
+		pib->ppb.aspect_ratio = rpkt->pib.aspect_ratio;
+		pib->ppb.colour_primaries = rpkt->pib.colour_primaries;
+		pib->ppb.picture_meta_payload = rpkt->pib.picture_meta_payload;
+		pib->resolution = rpkt->pib.frame_rate;
+	}
 
 	*ioreq = rpkt->dio_req;
 
