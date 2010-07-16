@@ -215,3 +215,4 @@ typedef enum _FLEA_STATE_CH_EVENT_
 {_value_ |=  (0x01 << _bit_number_);}
 
 #endif
+
