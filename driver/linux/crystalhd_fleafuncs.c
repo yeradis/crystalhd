@@ -792,7 +792,7 @@ void crystalhd_flea_update_tx_buff_info(struct crystalhd_hw *hw)
 	uint32_t ReadSzInDWords=0;
 
 	ReadSzInDWords = (sizeof(TxBuffInfo) - sizeof(TxBuffInfo.Reserved))/4;
-	hw->pfnDevDRAMRead(hw, hw->TxBuffInfoAddr, ReadSzInDWords, (void*)&TxBuffInfo);
+	hw->pfnDevDRAMRead(hw, hw->TxBuffInfoAddr, ReadSzInDWords, (uint32_t*)&TxBuffInfo);
 
 	if(TxBuffInfo.DramBuffAdd % 4)
 	{

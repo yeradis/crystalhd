@@ -31,8 +31,8 @@
 #include "crystalhd_misc.h"
 
 // Some HW specific code defines
-extern uint32_t link_GetRptDropParam(void *, uint32_t picHeight, uint32_t picWidth, void *);
-extern uint32_t flea_GetRptDropParam(void *, void *);
+extern uint32_t link_GetRptDropParam(struct crystalhd_hw *hw, uint32_t picHeight, uint32_t picWidth, void *);
+extern uint32_t flea_GetRptDropParam(struct crystalhd_hw *hw, void *);
 
 static crystalhd_dio_req *crystalhd_alloc_dio(struct crystalhd_adp *adp)
 {
