@@ -266,7 +266,6 @@ uint32_t crystalhd_flea_reg_rd(struct crystalhd_adp *adp, uint32_t reg_off)
 		regAddr = adp->i2o_addr + FLEA_GISB_INDIRECT_ADDRESS;
 		writel(reg_off | 0x10000000, regAddr);
 		regAddr = adp->i2o_addr + FLEA_GISB_INDIRECT_DATA;
-		val = readl(regAddr);
 		return readl(regAddr);
 	}
 }
