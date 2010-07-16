@@ -832,7 +832,10 @@ bool crystalhd_link_peek_next_decoded_frame(struct crystalhd_hw *hw,
 			else
 				return false; // don't use the meta_payload information
 		}
+		return true;
 	}
+	spin_unlock_irqrestore(&ioq->lock, flags);
+
 	return true;
 }
 

@@ -1940,7 +1940,9 @@ bool crystalhd_flea_peek_next_decoded_frame(struct crystalhd_hw *hw, uint64_t *m
 			flea_GetPictureInfo(hw, rpkt, &PicNumber, meta_payload);
 			//printk("%s: flea_GetPictureInfo Pic#:%d\n", __func__, PicNumber);
 		}
+		return true;
 	}
+	spin_unlock_irqrestore(&ioq->lock, flags);
 
 	return true;
 
