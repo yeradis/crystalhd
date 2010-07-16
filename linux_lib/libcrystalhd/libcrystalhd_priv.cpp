@@ -1853,6 +1853,41 @@ BC_STATUS DtsClrPendMdataList(DTS_LIB_CONTEXT *Ctx)
 	return BC_STS_SUCCESS;
 }
 //------------------------------------------------------------------------
+// Name: DtsPendMdataGarbageCollect
+// Description: Garbage Collect Meta Data. This funtion is only called
+//              internel when we run out of Mdata.
+//------------------------------------------------------------------------
+BC_STATUS DtsPendMdataGarbageCollect(DTS_LIB_CONTEXT *Ctx)
+{
+	DTS_INPUT_MDATA		*temp=NULL;
+	int mdata_count = 0;
+
+	if(!Ctx || !Ctx->MdataPoolPtr){
+		return BC_STS_INV_ARG;
+	}
+
+	DtsLock(Ctx);
+
+	/* Collect garbage it */
+	temp = Ctx->MDPendHead;
+	while(temp && temp != DTS_MDATA_PEND_LINK(Ctx)){
+		//DebugLog_Trace(LDIL_DBG,"Clearing PendMdata %p %x \n", temp->Spes.SeqNum, temp->IntTag);
+		if(mdata_count > (BC_INPUT_MDATA_POOL_SZ - BC_INPUT_MDATA_POOL_SZ_COLLECT)) {
+			break;
+		}
+		DtsRemoveMdata(Ctx,temp,FALSE);
+		temp = Ctx->MDPendHead;
+		mdata_count++;
+	}
+
+	if (mdata_count)
+		DebugLog_Trace(LDIL_DBG,"Clearing %d PendMdata entries \n", mdata_count);
+
+	DtsUnLock(Ctx);
+
+	return BC_STS_SUCCESS;
+}
+//------------------------------------------------------------------------
 // Name: DtsInsertMdata
 // Description: Insert Meta Data into list.
 //------------------------------------------------------------------------
@@ -2008,7 +2043,8 @@ BC_STATUS DtsFetchTimeStampMdata(DTS_LIB_CONTEXT *Ctx, uint16_t snum, uint64_t *
 //------------------------------------------------------------------------
 BC_STATUS DtsPrepareMdata(DTS_LIB_CONTEXT *Ctx, uint64_t timeStamp, DTS_INPUT_MDATA **mData, uint8_t** ppData, uint32_t *pSize)
 {
-	DTS_INPUT_MDATA		*temp=NULL;
+	DTS_INPUT_MDATA		*temp = NULL;
+	BC_STATUS		ret;
 
 	if( !mData || !Ctx)
 		return BC_STS_INV_ARG;
@@ -2016,8 +2052,15 @@ BC_STATUS DtsPrepareMdata(DTS_LIB_CONTEXT *Ctx, uint64_t timeStamp, DTS_INPUT_MD
 	/* Alloc clears all fields */
 	if( (temp = DtsAllocMdata(Ctx)) == NULL)
 	{
-		DebugLog_Trace(LDIL_DBG,"COULD not find free MDATA\n");
-		return BC_STS_BUSY;
+		DebugLog_Trace(LDIL_DBG,"COULD not find free MDATA try again\n");
+		ret = DtsPendMdataGarbageCollect(Ctx);
+		if(ret != BC_STS_SUCCESS) {
+			return BC_STS_BUSY;
+		}
+		if( (temp = DtsAllocMdata(Ctx)) == NULL) {
+			DebugLog_Trace(LDIL_DBG,"COULD not find free MDATA finaly failed\n");
+			return BC_STS_BUSY;
+		}
 	}
 	/* Store all app data */
 	DtsMdataSetIntTag(Ctx,temp);

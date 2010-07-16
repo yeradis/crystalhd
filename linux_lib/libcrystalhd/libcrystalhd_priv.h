@@ -58,13 +58,14 @@ enum _bc_ldil_log_level{
  */
 enum _crystalhd_ldil_globals {
 	BC_EOS_PIC_COUNT	= 16,			/* EOS check counter..*/
-	BC_INPUT_MDATA_POOL_SZ  = 4560,			/* Input Meta Data Pool size */
+	BC_INPUT_MDATA_POOL_SZ  = 1024,			/* Input Meta Data Pool size */
+	BC_INPUT_MDATA_POOL_SZ_COLLECT  = 256,		/* Input Meta Data Pool size for collector */
 	BC_MAX_SW_VOUT_BUFFS    = BC_RX_LIST_CNT,	/* MAX - pre allocated buffers..*/
 	RX_START_DELIVERY_THRESHOLD = 0,
 	PAUSE_DECODER_THRESHOLD = 12,
 	RESUME_DECODER_THRESHOLD = 5,
-    FLEA_RT_PD_THRESHOLD = 14,
-    FLEA_RT_PU_THRESHOLD = 3,
+	FLEA_RT_PD_THRESHOLD = 14,
+	FLEA_RT_PU_THRESHOLD = 3,
 	HARDWARE_INIT_RETRY_CNT = 10,
 	HARDWARE_INIT_RETRY_LINK_CNT = 1,
 };
@@ -185,12 +186,12 @@ typedef struct _DTS_INPUT_MDATA{
 typedef struct _TXBUFFER{
 	uint32_t	readPointer; // Index into the buffer for next read
 	uint32_t	writePointer; // Index into the buffer for next write
-	uint32_t 	freeSize;
-	uint32_t 	totalSize;
-	uint32_t 	busySize;
-	uint8_t* 	basePointer; // First byte that can be written
-	uint8_t* 	endPointer; // Last byte that can be written
-	uint8_t* 	buffer;
+	uint32_t	freeSize;
+	uint32_t	totalSize;
+	uint32_t	busySize;
+	uint8_t		*basePointer; // First byte that can be written
+	uint8_t		*endPointer; // Last byte that can be written
+	uint8_t		*buffer;
 	pthread_mutex_t flushLock; // LOCK used only for flushing
 	pthread_mutex_t pushpopLock; // LOCK for push and pop operations
 }TXBUFFER, *pTXBUFFER;
@@ -264,7 +265,7 @@ typedef struct _DTS_LIB_CONTEXT{
 	uint32_t		DrvStatusEOSCnt;
 	uint32_t		LastPicNum;				/* Last picture number */
 	uint32_t		LastSessNum;			/* Last session number */
-	uint8_t		    PullDownFlag;
+	uint8_t			PullDownFlag;
 	BOOL			bEOS;
 
 	/* Statistics Related */
@@ -286,7 +287,7 @@ typedef struct _DTS_LIB_CONTEXT{
 	uint8_t			SingleThreadedAppMode;	/* flag to indicate that we are running in single threaded mode */
 	bool			hw_paused;
 	bool			fw_cmd_issued;
-	PES_CONVERT_PARAMS PESConvParams;
+	PES_CONVERT_PARAMS	PESConvParams;
 	BC_HW_CAPS		capInfo;
 //	uint16_t		InSampleCount;
 	uint8_t			bMapOutBufDone;
@@ -296,7 +297,7 @@ typedef struct _DTS_LIB_CONTEXT{
 	TXBUFFER		circBuf;
 	bool			txThreadExit; // Handle to event to indicate to the tx thread to exit
 	pthread_t		htxThread; // Handle to TX thread
-    uint8_t* 		alignBuf;
+	uint8_t			*alignBuf;
 
 	uint32_t		EnableScaling;
 	uint8_t			bEnable720pDropHalf;
@@ -357,28 +358,18 @@ BC_STATUS DtsNotifyOperatingMode(HANDLE hDevice, uint32_t Mode);
 uint32_t DtsGetWidthfromResolution(DTS_LIB_CONTEXT *Ctx, uint32_t Resolution);
 
 #ifdef _DYNAMIC_BUFFERS_
-BC_STATUS
-DtsAddBuffsWithFmtChInfo(DTS_LIB_CONTEXT	*Ctx);
+BC_STATUS DtsAddBuffsWithFmtChInfo(DTS_LIB_CONTEXT *Ctx);
 
-BC_STATUS
-DtsAllocNewRxBuffs(DTS_LIB_CONTEXT		*Ctx,
-					uint32_t				BuffSz,
-					uint32_t				BuffCnt);
+BC_STATUS DtsAllocNewRxBuffs(DTS_LIB_CONTEXT *Ctx, uint32_t BuffSz, uint32_t BuffCnt);
 
-BC_STATUS
-DtsFreeRxBuffs(DTS_LIB_CONTEXT		*Ctx);
+BC_STATUS DtsFreeRxBuffs(DTS_LIB_CONTEXT *Ctx);
 
-void
-DtsGetMaxSize(DTS_LIB_CONTEXT *Ctx, U32 *Sz);
+void DtsGetMaxSize(DTS_LIB_CONTEXT *Ctx, U32 *Sz);
 
-BC_STATUS
-DtsHandleTimingMrkr(DTS_LIB_CONTEXT *Ctx);
+BC_STATUS DtsHandleTimingMrkr(DTS_LIB_CONTEXT *Ctx);
 
 #if 0
-BC_STATUS
-DtsWaitForFlushDone(DTS_LIB_CONTEXT *Ctx,
-			  HANDLE hDevice,
-			  uint8_t *EOSDetected);
+BC_STATUS DtsWaitForFlushDone(DTS_LIB_CONTEXT *Ctx, HANDLE hDevice, uint8_t *EOSDetected);
 #endif
 
 #endif
@@ -398,7 +389,7 @@ BC_STATUS DtsUpdateVidParams(DTS_LIB_CONTEXT *Ctx, BC_DTS_PROC_OUT *pOut);
 
 #define BC_DIL_HWINIT_NOT_YET		0
 #define BC_DIL_HWINIT_IN_PROGRESS	1
-#define BC_DIL_HWINIT_DONE			2
+#define BC_DIL_HWINIT_DONE		2
 
 #ifdef _USE_SHMEM_
 #define BC_DIL_SHMEM_KEY 0xBABEFACE
