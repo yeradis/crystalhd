@@ -354,6 +354,8 @@ BC_STATUS DtsFetchTimeStampMdata(DTS_LIB_CONTEXT *Ctx, uint16_t snum, uint64_t *
 BC_STATUS DtsPrepareMdataASFHdr(DTS_LIB_CONTEXT *Ctx, DTS_INPUT_MDATA *mData, uint8_t* buf);
 BC_STATUS DtsPrepareMdata(DTS_LIB_CONTEXT *Ctx, uint64_t timeStamp, DTS_INPUT_MDATA **mData, uint8_t** pDataBuf, uint32_t *pSize);
 BC_STATUS DtsNotifyOperatingMode(HANDLE hDevice, uint32_t Mode);
+BC_STATUS DtsGetHWFeatures(uint32_t *pciids);
+
 /* Internal helper function */
 uint32_t DtsGetWidthfromResolution(DTS_LIB_CONTEXT *Ctx, uint32_t Resolution);
 

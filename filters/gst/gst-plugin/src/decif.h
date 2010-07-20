@@ -38,6 +38,8 @@ struct _DecIf
 };
 typedef struct _DecIf BcmDecIF;
 
+BC_STATUS decif_getcaps(BcmDecIF *decif, BC_HW_CAPS *hwCaps);
+
 BC_STATUS
 decif_open(BcmDecIF * decif);
 

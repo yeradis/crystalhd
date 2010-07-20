@@ -331,6 +331,8 @@ void DtsGetFrameRate(DTS_LIB_CONTEXT *Ctx, BC_DTS_PROC_OUT *pOut)
 		return;
 	}
 
+	// DebugLog_Trace(LDIL_DBG,"DtsGetFrameRate: frame_rate:%d (%d)\n", pOut->PicInfo.frame_rate, Ctx->VidParams.FrameRate);
+
 	Ctx->VidParams.FrameRate = pOut->PicInfo.frame_rate;
 
 	if (pOut->PicInfo.frame_rate == vdecFrameRate23_97)
@@ -2505,6 +2507,43 @@ void * txThreadProc(void *ctx)
 	free(localBuffer);
 	localBuffer = NULL;
 	return FALSE;
+}
+
+DRVIFLIB_INT_API BC_STATUS DtsGetHWFeatures(uint32_t *pciids)
+{
+	int drvHandle = -1;
+	BC_IOCTL_DATA pIo;
+	int rc;
+
+	memset(&pIo, 0, sizeof(BC_IOCTL_DATA));
+
+	drvHandle =open(CRYSTALHD_API_DEV_NAME, O_RDWR);
+	if(drvHandle < 0)
+	{
+		DebugLog_Trace(LDIL_ERR,"DtsGetHWFeatures: Create File Failed\n");
+		return BC_STS_ERROR;
+	}
+
+	pIo.u.pciCfg.Offset = 0;
+	pIo.u.pciCfg.Size = 4;
+
+	rc = ioctl(drvHandle, BCM_IOC_RD_PCI_CFG, &pIo);
+	if(rc < 0){
+		DebugLog_Trace(LDIL_ERR,"ioctl to get HW features failed\n");
+		close(drvHandle);
+		return BC_STS_ERROR;
+	}
+
+	if(pIo.RetSts == BC_STS_SUCCESS) {
+		*pciids = *(uint32_t*)pIo.u.pciCfg.pci_cfg_space;
+		close(drvHandle);
+		return BC_STS_SUCCESS;
+	}
+	else {
+		DebugLog_Trace(LDIL_ERR, "error in getting pciids\n");
+		close(drvHandle);
+		return BC_STS_ERROR;
+	}
 }
 
 /*====================== Debug Routines ========================================*/

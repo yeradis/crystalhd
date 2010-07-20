@@ -39,6 +39,16 @@
 
 #include "decif.h"
 
+BC_STATUS decif_getcaps(BcmDecIF *decif, BC_HW_CAPS *hwCaps)
+{
+	BC_STATUS sts = BC_STS_SUCCESS;
+	if(decif != NULL)
+		sts = DtsGetCapabilities(decif->hdev, hwCaps);
+	else
+		sts = DtsGetCapabilities(NULL, hwCaps);
+	return sts;
+}
+
 BC_STATUS decif_open(BcmDecIF *decif)
 {
 	BC_STATUS sts = BC_STS_SUCCESS;

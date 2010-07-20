@@ -43,7 +43,7 @@
 #define BCHP_CLK_TEMP_MON_STATUS 0x00070044 /* Temperature monitor status. */
 
 
-//===================================Externs ============================================
+//===================================Externs ===========================================
 DRVIFLIB_INT_API BC_STATUS
 DtsGetHwType(
     HANDLE  hDevice,

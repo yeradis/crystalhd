@@ -802,9 +802,13 @@ GLB_INST_STS *g_inst_sts = NULL;
  *
  * describe the real formats here.
  */
-static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE("sink", GST_PAD_SINK, GST_PAD_ALWAYS,
-		GST_STATIC_CAPS("video/mpeg, " "mpegversion = (int) {2}, " "systemstream =(boolean) false; "
-				"video/x-h264;" "video/x-vc1;" "video/x-wmv;"));
+static GstStaticPadTemplate sink_factory_bcm70015 = GST_STATIC_PAD_TEMPLATE("sink", GST_PAD_SINK, GST_PAD_ALWAYS,
+		GST_STATIC_CAPS("video/mpeg, " "mpegversion = (int) {2, 4}," "systemstream =(boolean) false; "
+						"video/x-h264;" "video/x-vc1;" "video/x-wmv;" "video/x-divx;" "video/x-xvid;"));
+
+static GstStaticPadTemplate sink_factory_bcm70012 = GST_STATIC_PAD_TEMPLATE("sink", GST_PAD_SINK, GST_PAD_ALWAYS,
+		GST_STATIC_CAPS("video/mpeg, " "mpegversion = (int) {2}," "systemstream =(boolean) false; "
+						"video/x-h264;" "video/x-vc1;" "video/x-wmv;"));
 
 #ifdef YV12__
 static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE("src", GST_PAD_SRC, GST_PAD_ALWAYS,
@@ -829,6 +833,7 @@ GST_BOILERPLATE(GstBcmDec, gst_bcmdec, GstElement, GST_TYPE_ELEMENT);
 static void gst_bcmdec_base_init(gpointer gclass)
 {
 	static GstElementDetails element_details;
+	BC_HW_CAPS hwCaps;
 
 	element_details.klass = (gchar *)"Codec/Decoder/Video";
 	element_details.longname = (gchar *)"Generic Video Decoder";
@@ -837,8 +842,14 @@ static void gst_bcmdec_base_init(gpointer gclass)
 
 	GstElementClass *element_class = GST_ELEMENT_CLASS(gclass);
 
+	hwCaps.DecCaps = 0;
+	decif_getcaps(NULL, &hwCaps);
+
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get (&src_factory));
-	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get (&sink_factory));
+	if(hwCaps.DecCaps & BC_DEC_FLAGS_M4P2)
+		gst_element_class_add_pad_template(element_class, gst_static_pad_template_get (&sink_factory_bcm70015));
+	else
+		gst_element_class_add_pad_template(element_class, gst_static_pad_template_get (&sink_factory_bcm70012));
 	gst_element_class_set_details(element_class, &element_details);
 }
 
@@ -874,12 +885,19 @@ static void gst_bcmdec_init(GstBcmDec *bcmdec, GstBcmDecClass *gclass)
 	pid_t pid;
 	BC_STATUS sts = BC_STS_SUCCESS;
 	int shmid = 0;
+	BC_HW_CAPS hwCaps;
 
 	GST_DEBUG_OBJECT(bcmdec, "gst_bcmdec_init");
 
 	bcmdec_reset(bcmdec);
 
-	bcmdec->sinkpad = gst_pad_new_from_static_template(&sink_factory, "sink");
+	hwCaps.DecCaps = 0;
+	sts = decif_getcaps(&bcmdec->decif, &hwCaps);
+	if(hwCaps.DecCaps & BC_DEC_FLAGS_M4P2) {
+		bcmdec->sinkpad = gst_pad_new_from_static_template(&sink_factory_bcm70015, "sink");
+	}
+	else
+		bcmdec->sinkpad = gst_pad_new_from_static_template(&sink_factory_bcm70012, "sink");
 
 	gst_pad_set_event_function(bcmdec->sinkpad, GST_DEBUG_FUNCPTR(gst_bcmdec_sink_event));
 
@@ -1080,8 +1098,11 @@ static gboolean gst_bcmdec_sink_set_caps(GstPad *pad, GstCaps *caps)
 		int version = 0;
 		gst_structure_get_int(structure, "mpegversion", &version);
 		if (version == 2) {
-			bcmdec->input_format = BC_MSUBTYPE_MPEG1VIDEO;
+			bcmdec->input_format = BC_MSUBTYPE_MPEG2VIDEO;
 			GST_DEBUG_OBJECT(bcmdec, "InFmt MPEG2");
+		} if (version == 4) {
+			bcmdec->input_format = BC_MSUBTYPE_DIVX;
+			GST_DEBUG_OBJECT(bcmdec, "InFmt MPEG4");
 		} else {
 			gst_object_unref(bcmdec);
 			return FALSE;
@@ -1089,6 +1110,12 @@ static gboolean gst_bcmdec_sink_set_caps(GstPad *pad, GstCaps *caps)
 	} else if (!strcmp("video/x-vc1", mime)) {
 		bcmdec->input_format = BC_MSUBTYPE_VC1;
 		GST_DEBUG_OBJECT(bcmdec, "InFmt VC1");
+	} else if (!strcmp("video/x-divx", mime)) {
+		bcmdec->input_format = BC_MSUBTYPE_DIVX;
+		GST_DEBUG_OBJECT(bcmdec, "InFmt DIVX");
+	} else if (!strcmp("video/x-xvid", mime)) {
+		bcmdec->input_format = BC_MSUBTYPE_DIVX;
+		GST_DEBUG_OBJECT(bcmdec, "InFmt XVID");
 	} else if (!strcmp("video/x-wmv", mime)) {
 		GST_DEBUG_OBJECT(bcmdec, "Detected WMV File %s", mime);
 		if (BC_STS_SUCCESS != connect_wmv_file(bcmdec,structure)) {

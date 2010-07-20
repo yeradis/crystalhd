@@ -443,8 +443,6 @@ DtsDeviceOpen(
 	DebugLog_Trace(LDIL_DBG,"Running DIL (%d.%d.%d) Version\n",
 		DIL_MAJOR_VERSION,DIL_MINOR_VERSION,DIL_REVISION );
 
-// 	uint32_t clkSet = (mode >> 19) & 0x7;
-
 	processID = getpid();
 
 	FixFlags = mode;
@@ -456,23 +454,6 @@ DtsDeviceOpen(
 		return BC_STS_ERROR;
 	}
 
-// 	switch (clkSet) {
-// 		case 6: clkSet = 200;
-// 				break;
-// 		case 5: clkSet = 180;
-// 				break;
-// 		case 4: clkSet = 165;
-// 				break;
-// 		case 3: clkSet = 150;
-// 				break;
-// 		case 2: clkSet = 125;
-// 				break;
-// 		case 1: clkSet = 105;
-// 				break;
-// 		default: clkSet = 165;
-// 				break;
-// 	}
-
 	DebugLog_Trace(LDIL_DBG,"DtsDeviceOpen: Opening HW in mode %x\n", mode);
 
 	/* For External API case, we support only Plyaback mode. */
@@ -480,6 +461,7 @@ DtsDeviceOpen(
 		DebugLog_Trace(LDIL_ERR,"DtsDeviceOpen: mode %d not supported\n",mode);
 		return BC_STS_INV_ARG;
 	}
+
 #ifdef _USE_SHMEM_
 	Sts = DtsCreateShMem(&shmid);
 	if(BC_STS_SUCCESS !=Sts)
@@ -3003,15 +2985,28 @@ DtsGetDriverStatus( HANDLE  hDevice,
 DRVIFLIB_API BC_STATUS DtsGetCapabilities (HANDLE  hDevice, PBC_HW_CAPS	pCapsBuffer)
 {
 	DTS_LIB_CONTEXT *Ctx;
-	DTS_GET_CTX(hDevice,Ctx);
+	BC_STATUS sts = BC_STS_SUCCESS;
+	uint32_t pciids = 0;
 
-	if (Ctx->DevId == BC_PCI_DEVID_INVALID)
+	if(hDevice != NULL) {
+		DTS_GET_CTX(hDevice,Ctx); // Called after the HW has been opened
+		pciids = Ctx->DevId;
+	}
+	else {
+		// called before HW has been opened
+		sts = DtsGetHWFeatures(&pciids);
+		pciids >>= 16;
+		if(sts != BC_STS_SUCCESS)
+			return sts;
+	}
+
+	if (pciids == BC_PCI_DEVID_INVALID)
 	{
 		return BC_STS_ERROR;
 	}
 
 	// Should check with driver/FW if current video is supported or not, and output supported format
-	if(Ctx->DevId == BC_PCI_DEVID_LINK)
+	if(pciids == BC_PCI_DEVID_LINK)
 	{
 		pCapsBuffer->flags = PES_CONV_SUPPORT;
 		pCapsBuffer->ColorCaps.Count = 3;
@@ -3024,19 +3019,7 @@ DRVIFLIB_API BC_STATUS DtsGetCapabilities (HANDLE  hDevice, PBC_HW_CAPS	pCapsBuf
 		//Decoder Capability
 		pCapsBuffer->DecCaps = BC_DEC_FLAGS_H264 | BC_DEC_FLAGS_MPEG2 | BC_DEC_FLAGS_VC1;
 	}
-	if(Ctx->DevId == BC_PCI_DEVID_DOZER)
-	{
-		pCapsBuffer->flags = PES_CONV_SUPPORT;
-		pCapsBuffer->ColorCaps.Count = 1;
-		pCapsBuffer->ColorCaps.OutFmt[0] = OUTPUT_MODE420;
-		pCapsBuffer->ColorCaps.OutFmt[1] = OUTPUT_MODE_INVALID;
-		pCapsBuffer->ColorCaps.OutFmt[2] = OUTPUT_MODE_INVALID;
-		pCapsBuffer->Reserved1 = NULL;
-
-		//Decoder Capability
-		pCapsBuffer->DecCaps = BC_DEC_FLAGS_H264 | BC_DEC_FLAGS_MPEG2 | BC_DEC_FLAGS_VC1;
-	}
-	if(Ctx->DevId == BC_PCI_DEVID_FLEA)
+	if(pciids == BC_PCI_DEVID_FLEA)
 	{
 		pCapsBuffer->flags = PES_CONV_SUPPORT;
 		pCapsBuffer->ColorCaps.Count = 1;
