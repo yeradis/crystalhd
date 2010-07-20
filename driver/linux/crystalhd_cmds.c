@@ -246,8 +246,10 @@ static BC_STATUS bc_cproc_cfg_rd(struct crystalhd_cmd *ctx,
 	off = idata->udata.u.pciCfg.Offset;
 	len = idata->udata.u.pciCfg.Size;
 
-	if (len <= 4)
-		return crystalhd_pci_cfg_rd(ctx->adp, off, len, temp);
+	if (len <= 4) {
+		sts = crystalhd_pci_cfg_rd(ctx->adp, off, len, temp);
+		return sts;
+	}
 
 	/* Truncate to dword alignment..*/
 	len = 4;

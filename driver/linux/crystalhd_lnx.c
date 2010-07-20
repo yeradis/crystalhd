@@ -51,16 +51,21 @@ static int chd_dec_enable_int(struct crystalhd_adp *adp)
 		return -EINVAL;
 	}
 
-	if (adp->pdev->msi_enabled)
-		adp->msi = 1;
+	rc = pci_enable_msi(adp->pdev);
+	if(rc != 0)
+		dev_err(&adp->pdev->dev, "MSI request failed..\n");
 	else
-		adp->msi = pci_enable_msi(adp->pdev);
+		adp->msi = 1;
 
 	rc = request_irq(adp->pdev->irq, chd_dec_isr, IRQF_SHARED,
 			 adp->name, (void *)adp);
-	if (rc) {
+
+	if (rc != 0) {
 		dev_err(&adp->pdev->dev, "Interrupt request failed..\n");
-		pci_disable_msi(adp->pdev);
+		if(adp->msi) {
+			pci_disable_msi(adp->pdev);
+			adp->msi = 0;
+		}
 	}
 
 	return rc;
@@ -75,8 +80,10 @@ static int chd_dec_disable_int(struct crystalhd_adp *adp)
 
 	free_irq(adp->pdev->irq, adp);
 
-	if (adp->msi)
+	if (adp->msi) {
 		pci_disable_msi(adp->pdev);
+		adp->msi = 0;
+	}
 
 	return 0;
 }
