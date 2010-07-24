@@ -37,6 +37,7 @@
 
 BC_STATUS crystalhd_hw_open(struct crystalhd_hw *hw, struct crystalhd_adp *adp)
 {
+	struct device *dev;
 	if (!hw || !adp) {
 		printk(KERN_ERR "%s: Invalid Arguments\n", __func__);
 		return BC_STS_INV_ARG;
@@ -45,13 +46,14 @@ BC_STATUS crystalhd_hw_open(struct crystalhd_hw *hw, struct crystalhd_adp *adp)
 	if (hw->dev_started)
 		return BC_STS_SUCCESS;
 
+	dev = &adp->pdev->dev;
 	hw->PauseThreshold = BC_RX_LIST_CNT - 2;
 	hw->DefaultPauseThreshold = BC_RX_LIST_CNT - 2;
 	hw->ResumeThreshold = 3;
 
 	// Setup HW specific functions appropriately
 	if (adp->pdev->device == BC_PCI_DEVID_FLEA) {
-		printk(KERN_ERR "crystalhd_hw_open: setting up functions, device = Flea\n");
+		dev_dbg(dev, "crystalhd_hw_open: setting up functions, device = Flea\n");
 		hw->pfnStartDevice = crystalhd_flea_start_device;
 		hw->pfnStopDevice = crystalhd_flea_stop_device;
 		hw->pfnFindAndClearIntr = crystalhd_flea_hw_interrupt_handle;
@@ -74,7 +76,7 @@ BC_STATUS crystalhd_hw_open(struct crystalhd_hw *hw, struct crystalhd_adp *adp)
 		hw->pfnNotifyFLLChange = crystalhd_flea_notify_fll_change;
 		hw->pfnNotifyHardware = crystalhd_flea_notify_event;
 	} else {
-		printk(KERN_ERR "crystalhd_hw_open: setting up functions, device = Link\n");
+		dev_dbg(dev, "crystalhd_hw_open: setting up functions, device = Link\n");
 		hw->pfnStartDevice = crystalhd_link_start_device;
 		hw->pfnStopDevice = crystalhd_link_stop_device;
 		hw->pfnFindAndClearIntr = crystalhd_link_hw_interrupt_handle;
@@ -111,8 +113,8 @@ BC_STATUS crystalhd_hw_open(struct crystalhd_hw *hw, struct crystalhd_adp *adp)
 	hw->pfnStartDevice(hw);
 	hw->dev_started = true;
 
-	printk(KERN_ERR "Opening HW. hw:0x%lx, hw->adp:0x%lx\n",
-	       (uintptr_t)hw, (uintptr_t)(hw->adp));
+	dev_dbg(dev, "Opening HW. hw:0x%lx, hw->adp:0x%lx\n",
+		(uintptr_t)hw, (uintptr_t)(hw->adp));
 
 	return BC_STS_SUCCESS;
 }

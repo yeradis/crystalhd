@@ -465,6 +465,7 @@ static void __devexit chd_dec_release_chdev(struct crystalhd_adp *adp)
 
 static int __devinit chd_pci_reserve_mem(struct crystalhd_adp *pinfo)
 {
+	struct device *dev = &pinfo->pdev->dev;
 	int rc;
 
 	uint32_t bar0		= pci_resource_start(pinfo->pdev, 0);
@@ -473,7 +474,7 @@ static int __devinit chd_pci_reserve_mem(struct crystalhd_adp *pinfo)
 	uint32_t bar2		= pci_resource_start(pinfo->pdev, 2);
 	uint32_t mem_len	= pci_resource_len(pinfo->pdev, 2);
 
-	printk(KERN_DEBUG "bar0:0x%x-0x%08x  bar2:0x%x-0x%08x\n",
+	dev_dbg(dev, "bar0:0x%x-0x%08x  bar2:0x%x-0x%08x\n",
 	        bar0, i2o_len, bar2, mem_len);
 
 	/* bar-0 */
@@ -515,7 +516,7 @@ static int __devinit chd_pci_reserve_mem(struct crystalhd_adp *pinfo)
 		return rc;
 	}
 
-	printk(KERN_DEBUG "i2o_addr:0x%08lx   Mapped addr:0x%08lx  \n",
+	dev_dbg(dev, "i2o_addr:0x%08lx   Mapped addr:0x%08lx  \n",
 	        (unsigned long)pinfo->i2o_addr, (unsigned long)pinfo->mem_addr);
 
 	return 0;
@@ -567,15 +568,16 @@ static void __devexit chd_dec_pci_remove(struct pci_dev *pdev)
 static int __devinit chd_dec_pci_probe(struct pci_dev *pdev,
 			     const struct pci_device_id *entry)
 {
+	struct device *dev = &pdev->dev;
 	struct crystalhd_adp *pinfo;
 	int rc;
 	BC_STATUS sts = BC_STS_SUCCESS;
 
-	printk(KERN_DEBUG "Starting Device:0x%04x\n", pdev->device);
+	dev_dbg(dev, "Starting Device:0x%04x\n", pdev->device);
 
 	pinfo = kzalloc(sizeof(struct crystalhd_adp), GFP_KERNEL);
 	if (!pinfo) {
-		printk(KERN_ERR "%s: Failed to allocate memory\n", __func__);
+		dev_err(dev, "%s: Failed to allocate memory\n", __func__);
 		return -ENOMEM;
 	}
 
@@ -583,7 +585,7 @@ static int __devinit chd_dec_pci_probe(struct pci_dev *pdev,
 
 	rc = pci_enable_device(pdev);
 	if (rc) {
-		printk(KERN_ERR "%s: Failed to enable PCI device\n", __func__);
+		dev_err(dev, "%s: Failed to enable PCI device\n", __func__);
 		return rc;
 	}
 
@@ -593,7 +595,7 @@ static int __devinit chd_dec_pci_probe(struct pci_dev *pdev,
 
 	rc = chd_pci_reserve_mem(pinfo);
 	if (rc) {
-		printk(KERN_ERR "%s: Failed to setup memory regions.\n",
+		dev_err(dev, "%s: Failed to setup memory regions.\n",
 			__func__);
 		return -ENOMEM;
 	}
@@ -608,7 +610,7 @@ static int __devinit chd_dec_pci_probe(struct pci_dev *pdev,
 	chd_dec_init_chdev(pinfo);
 	rc = chd_dec_enable_int(pinfo);
 	if (rc) {
-		printk(KERN_ERR "%s: _enable_int err:%d\n", __func__, rc);
+		dev_err(dev, "%s: _enable_int err:%d\n", __func__, rc);
 		pci_disable_device(pdev);
 		return -ENODEV;
 	}
@@ -621,14 +623,14 @@ static int __devinit chd_dec_pci_probe(struct pci_dev *pdev,
 		pci_set_consistent_dma_mask(pdev, DMA_BIT_MASK(32));
 		pinfo->dmabits = 32;
 	} else {
-		printk(KERN_ERR "%s: Unabled to setup DMA %d\n", __func__, rc);
+		dev_err(dev, "%s: Unabled to setup DMA %d\n", __func__, rc);
 		pci_disable_device(pdev);
 		return -ENODEV;
 	}
 
 	sts = crystalhd_setup_cmd_context(&pinfo->cmds, pinfo);
 	if (sts != BC_STS_SUCCESS) {
-		printk(KERN_ERR "%s: cmd setup :%d\n", __func__, sts);
+		dev_err(dev, "%s: cmd setup :%d\n", __func__, sts);
 		pci_disable_device(pdev);
 		return -ENODEV;
 	}
@@ -756,7 +758,7 @@ static int __init chd_dec_module_init(void)
 {
 	int rc;
 
-	printk(KERN_INFO "Loading crystalhd %d.%d.%d\n",
+	printk(KERN_DEBUG "Loading crystalhd v%d.%d.%d\n",
 	       crystalhd_kmod_major, crystalhd_kmod_minor, crystalhd_kmod_rev);
 
 	rc = pci_register_driver(&bc_chd_driver);
@@ -771,7 +773,7 @@ module_init(chd_dec_module_init);
 
 static void __exit chd_dec_module_cleanup(void)
 {
-	printk(KERN_INFO "unloading crystalhd %d.%d.%d\n",
+	printk(KERN_DEBUG "Unloading crystalhd %d.%d.%d\n",
 	       crystalhd_kmod_major, crystalhd_kmod_minor, crystalhd_kmod_rev);
 
 	pci_unregister_driver(&bc_chd_driver);
