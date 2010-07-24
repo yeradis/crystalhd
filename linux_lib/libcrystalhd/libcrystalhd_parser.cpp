@@ -245,8 +245,13 @@ BC_STATUS DtsSetSpsPps(HANDLE hDevice)
 	int iStartSize = 2;
 
 	DTS_GET_CTX(hDevice,Ctx);
+// 	if ((Ctx->VidParams.MediaSubType != BC_MSUBTYPE_AVC1) &&
+// 		(Ctx->VidParams.MediaSubType != BC_MSUBTYPE_H264) &&
+// 		(Ctx->VidParams.MediaSubType != BC_MSUBTYPE_DIVX) )
+// 		return BC_STS_SUCCESS;
+
+	// MSUBTYPE_H264 does not have codec_type to generate separate SPS/PPS
 	if ((Ctx->VidParams.MediaSubType != BC_MSUBTYPE_AVC1) &&
-		(Ctx->VidParams.MediaSubType != BC_MSUBTYPE_H264) &&
 		(Ctx->VidParams.MediaSubType != BC_MSUBTYPE_DIVX) )
 		return BC_STS_SUCCESS;
 
