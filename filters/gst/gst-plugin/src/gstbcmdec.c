@@ -106,683 +106,6 @@ static GstFlowReturn bcmdec_send_buff_detect_error(GstBcmDec *bcmdec, GstBuffer 
 	return GST_FLOW_OK;
 }
 
-static const guint8 b_asf_vc1_frame_scode[4] = { 0x00, 0x00, 0x01, 0x0D };
-static const uint8_t b_asf_vc1_sm_frame_scode[4] = { 0x00, 0x00, 0x01, 0xE0 };
-static const uint8_t b_asf_vc1_sm_codein_scode[4] = { 0x5a, 0x5a, 0x5a, 0x5a };
-static const uint8_t b_asf_vc1_sm_codein_data_suffix[1] = { 0x0D };
-static const uint8_t b_asf_vc1_sm_codein_sl_suffix[1] = { 0x0F };
-static const uint8_t b_asf_vc1_sm_codein_pts_suffix[1] = { 0xBD };
-
-
-#define GET_INTERLACED_INFORMATION
-guint64 swap64(guint64 x)
-{
-	return ((guint64)(((x) << 56) | ((x) >> 56) |
-			 (((x) & 0xFF00LL) << 40) |
-			 (((x) & 0xFF000000000000LL) >> 40) |
-			 (((x) & 0xFF0000LL) << 24) |
-			 (((x) & 0xFF0000000000LL) >> 24) |
-			 (((x) & 0xFF000000LL) << 8) |
-			 (((x) & 0xFF00000000LL) >> 8)));
-}
-
-
-void
-print_buffer(guint8 *pbuffer,guint32 sz)
-{
-	guint32 i = 0;
-	printf("\nprinting BufferSz %x\n", sz);
-	for (i = 0; i < sz; i++)
-		printf("0x%x ", pbuffer[i]);
-	printf("\n=====\n");
-}
-
-
-guint32 swap32(guint32 x)
-{
-	return ((guint32)(((x) << 24) |
-			  ((x) >> 24) |
-			 (((x) & 0xFF00) << 8) |
-			 (((x) & 0xFF0000) >> 8)));
-}
-
-guint16 swap16(guint16 x)
-{
-	return ((guint16)(((x) << 8) | ((x) >> 8)));
-}
-
-
-static BC_STATUS parse_VC1SeqHdr(GstBcmDec *bcmdec, void *pBuffer, guint32 buff_sz)
-{
-	guint8 *pdata, index = 0;
-	guint32 seq_hdr_sz;
-	pdata = (guint8 *)pBuffer;
-
-	if (!pdata || !buff_sz)
-		return BC_STS_INV_ARG;
-
-	/*Scan for VC1 Sequence Header SC for Advacned profile*/
-	bcmdec->adv_profile = FALSE;
-	bcmdec->vc1_seq_header_sz = 0;
-
-	for (index = 0; index < buff_sz; index++) {
-		pdata += index;
-		if (((buff_sz - index) >= 4) && (*pdata == 0x00) && (*(pdata + 1) == 0x00) &&
-		    (*(pdata + 2) == 0x01) && (*(pdata + 3) == 0x0f)) {
-			GST_DEBUG_OBJECT(bcmdec, "VC1 Seqeucne Header Found for AdvProfile");
-			bcmdec->adv_profile = TRUE;
-			seq_hdr_sz = buff_sz - index + 1;
-
-			if (seq_hdr_sz > MAX_ADV_PROF_SEQ_HDR_SZ)
-				seq_hdr_sz = MAX_ADV_PROF_SEQ_HDR_SZ;
-			bcmdec->vc1_seq_header_sz = seq_hdr_sz;
-			memcpy(bcmdec->vc1_advp_seq_header, pdata, bcmdec->vc1_seq_header_sz);
-			break;
-		}
-	}
-
-	if (bcmdec->adv_profile) {
-		GST_DEBUG_OBJECT(bcmdec, "Setting Input format to Adv Profile");
-		bcmdec->input_format = BC_MSUBTYPE_VC1;
-	} else {
-
-		GST_DEBUG_OBJECT(bcmdec, "Parsing VC-1 SI/MA Seq Header [Sz:%x]\n", buff_sz);
-		bcmdec->vc1_seq_header_sz = buff_sz;
-		memcpy(bcmdec->vc1_advp_seq_header, pBuffer, bcmdec->vc1_seq_header_sz);
-
-		bcmdec->input_format = BC_MSUBTYPE_WMV3;
-		bcmdec->proc_in_flags |= 0x02;
-		guint32 dwSH = swap32(*(guint32 *)(pBuffer));
-		bcmdec->bRangered    = 0x00000080 & dwSH;
-		bcmdec->bMaxbFrames  = 0x00000070 & dwSH;
-		bcmdec->bFinterpFlag = 0x00000002 & dwSH;
-	}
-
-	return BC_STS_SUCCESS;
-}
-
-static BC_STATUS connect_wmv_file(GstBcmDec *bcmdec, GstStructure *structure)
-{
-	GstBuffer *buffer;
-	guint8 *data;
-	guint size;
-
-	const GValue *g_value;
-
-	if (!structure || !bcmdec)
-		return BC_STS_INV_ARG;
-
-	bcmdec->wmv_file = TRUE;
-
-	if (!bcmdec->vc1_dest_buffer) {
-		bcmdec->vc1_dest_buffer = (guint8 *)malloc(MAX_VC1_INPUT_DATA_SZ);
-		if (!bcmdec->vc1_dest_buffer) {
-			GST_ERROR_OBJECT(bcmdec, "Failed to Allocate VC-1 Destination Buffer");
-			return BC_STS_ERROR;
-		}
-	}
-
-	gst_structure_get_int(structure, "width", &bcmdec->frame_width);
-	gst_structure_get_int(structure, "height", &bcmdec->frame_height);
-	g_value = gst_structure_get_value(structure, "codec_data");
-	if (g_value && (G_VALUE_TYPE(g_value) == GST_TYPE_BUFFER)) {
-		buffer = gst_value_get_buffer(g_value);
-		data = GST_BUFFER_DATA(buffer);
-		size = GST_BUFFER_SIZE(buffer);
-		return parse_VC1SeqHdr(bcmdec, data, size);
-	}
-
-	return BC_STS_ERROR;
-}
-
-static guint8 get_VC1_SPMP_frame_type(GstBcmDec *bcmdec, guint8 *pBuffer)
-{
-	guint8 checks[] = { 0x20, 0x10, 0x10, 0x08, 0x08, 0x04 };
-	guint check_offset = 0, frm_type = 0x0f;
-
-	if (bcmdec->bFinterpFlag)
-		check_offset += 2;
-	if (bcmdec->bRangered)
-		check_offset += 2;
-	/* The first check will be at check offset and
-	 * the second check at check offset + 1 */
-	if (pBuffer[0] & checks[check_offset])
-		frm_type = P_FRAME;
-	else if (!bcmdec->bMaxbFrames)
-		frm_type = I_FRAME;
-	else if (pBuffer[0] & checks[check_offset + 1])
-		frm_type = I_FRAME;
-	else
-		frm_type = B_FRAME;
-
-	return frm_type;
-}
-
-static guint8 get_VC1_adv_prof_frame_type(GstBcmDec *bcmdec, guint8 *pBuffer)
-{
-	guint8 frm_type = 0x0f;
-
-	if (!pBuffer || !bcmdec->adv_profile)
-		return 0xFF;
-
-	if (bcmdec->interlace) {
-		if ((pBuffer[0] & 0x20) == 0)
-			frm_type = P_FRAME;
-		else if ((pBuffer[0] & 0x10) == 0)
-			frm_type = B_FRAME;
-		else if ((pBuffer[0] & 0x08) == 0)
-			frm_type = I_FRAME;
-		else if ((pBuffer[0] & 0x04) == 0)
-			frm_type = BI_FRAME;
-	} else {
-		if ((pBuffer[0] & 0x80) == 0)
-			frm_type = P_FRAME;
-		else if ((pBuffer[0] & 0x40) == 0)
-			frm_type = B_FRAME;
-		else if ((pBuffer[0] & 0x20) == 0)
-			frm_type = I_FRAME;
-		else if ((pBuffer[0] & 0x10) == 0)
-			frm_type = BI_FRAME;
-	}
-
-	return frm_type;
-}
-
-/*
- * insert_asf_header: 16 byte header + 1 byte suffix.
- * ------------------------------------------------------------------
- *  | 5a5a5a5a | total_pkt_sz | last_data_loc | 0x5a5a5a5a | 0x0D |
- * ------------------------------------------------------------------
- * total_pkt_sz = payload_hdr_sz [17] + proc_in_buff_sz + zero_padding_Sz[for alignment]
- * last_data_loc = proc_in_buff_sz - 1;
- *
- * ** NOTE: This header should be sent only once for every payload
- * **       that you create for hardware.
- */
-guint32 insert_asf_header(guint8 *pHWbuffer, guint32 total_pkt_sz, guint32 last_data_loc)
-{
-	guint8 *pbuff_start = pHWbuffer;
-	memcpy(pHWbuffer, b_asf_vc1_sm_codein_scode, MAX_SC_SZ);
-	pHWbuffer += MAX_SC_SZ;
-	(*(guint32 *)pHWbuffer) = swap32((guint32)total_pkt_sz);
-	pHWbuffer += 4;
-	(*(guint32 *)pHWbuffer) = swap32((guint32)last_data_loc);
-	pHWbuffer += 4;
-	memcpy(pHWbuffer, b_asf_vc1_sm_codein_scode, MAX_SC_SZ);
-	pHWbuffer += MAX_SC_SZ;
-	memcpy(pHWbuffer, b_asf_vc1_sm_codein_data_suffix, 1);
-	pHWbuffer += 1;
-	//printf("INSERT-PALYLOAD \n");
-	//printf("TotalPktSz:0x%x LastDataLoc:0x%x\n",total_pkt_sz,last_data_loc);
-	//print_buffer(pbuff_start,(guint32)(pHWbuffer - pbuff_start));
-
-	return ((guint32)(pHWbuffer - pbuff_start));
-}
-
-/*
- * insert_pes_header: 9 byte header.
- * ------------------------------------------------------------------
- *  | 000001e0 | total_pes_pkt_len | 0x81    | 0     | pes_hdr_len |
- *  | 4-bytes  | 2-bytes	   | 1-byte  | 1byte | 1 byte      |
- * ------------------------------------------------------------------
- * total_pes_pkt_len =  payload_hdr_sz + current_xfer_sz + zero_pad_sz;
- * pes_hdr_len = 0 - data packets.
- *			     9 - PTS packets and sequence header packets
- *
- * ** NOTE: total_pes_pkt_len cannot be more than 0x7FFF [2 bytes]
- * ** If the data is more than this it should be broken in packets.
-*/
-
-guint32 insert_pes_header(guint8 *pHWbuffer, guint32 pes_pkt_len)
-{
-	guint8 *pbuff_start = pHWbuffer;
-
-	if (pes_pkt_len > MAX_RE_PES_BOUND) {
-		printf("Not Inserting PES Hdr %x\n",pes_pkt_len);
-		return 0;
-	}
-
-	memcpy(pHWbuffer, b_asf_vc1_sm_frame_scode, MAX_SC_SZ);
-	pHWbuffer += MAX_SC_SZ;
-	/*
-	 * The optional three bytes that we are using to tell that there is no
-	 * extension.
-	 */
-	(*(guint16 *)pHWbuffer) = swap16((guint16)pes_pkt_len);
-	pHWbuffer += 2;
-	(*(guint8 *)pHWbuffer) = 0x81;
-	pHWbuffer += 1;
-	(*(guint8 *)pHWbuffer) = 0x0;
-	pHWbuffer += 1;
-	(*(guint8 *)pHWbuffer) = 0;
-	pHWbuffer += 1;
-	//printf("INSERT-PES \n");
-	//print_buffer(pbuff_start,(guint32)(pHWbuffer - pbuff_start));
-	//printf("PesLen:0x%x \n",pes_pkt_len);
-
-	return ((guint32)(pHWbuffer - pbuff_start));
-}
-
-static void PTS2MakerBit5Bytes(guint *p_mrk_bit_loc, GstClockTime llPTS)
-{
-	//4 Bits: '0010'
-	//3 Bits: PTS[32:30]
-	//1 Bit: '1'
-	//15 Bits: PTS[29:15]
-	//1 Bit: '1'
-	//15 Bits: PTS[14:0]
-	//1 Bit : '1'
-	//0010 xxx1 xxxx xxxx xxxx xxx1 xxxx xxxx xxxx xxx1
-
-	//Swap
-	//guint64 ullSwap = swap64(llPTS);
-
-	guint64 ullSwap = swap32(llPTS);
-	guint8 *pPTS = (guint8 *)(&ullSwap);
-
-	//Reserved the last 5 bytes, using the last 33 bits of PTS
-	//0000 000x xxxx xxxx xxxx xxxx xxxx xxxx xxxx xxxx
-	pPTS = pPTS + 3;
-
-	//1st Byte: 0010 xxx1
-	*(p_mrk_bit_loc) = 0x21 | ((*(pPTS) & 0x01) << 3) | ((*(pPTS + 1) & 0xC0) >> 5);
-
-	//2nd Byte: xxxx xxxx
-	*(p_mrk_bit_loc + 1) = ((*(pPTS + 1) & 0x3F) << 2) | ((*(pPTS + 2) & 0xC0) >> 6);
-
-	//3rd Byte: xxxx xxx1
-	*(p_mrk_bit_loc + 2) = 0x01 | ((*(pPTS + 2) & 0x3F) << 2) | ((*(pPTS + 3) & 0x80) >> 6);
-
-	//4th Byte: xxxx xxxx
-	*(p_mrk_bit_loc + 3) = ((*(pPTS + 3) & 0x7F) << 1) | ((*(pPTS + 4) & 0x80) >> 7);
-
-	//5th Byte: xxxx xxx1
-	*(p_mrk_bit_loc + 4) = 0x01 | ((*(pPTS + 4) & 0x7F) << 1);
-}
-
-static guint32 send_VC1_SPMP_seq_hdr(GstBcmDec *bcmdec, GstBuffer *buf,
-				     guint8 *pBuffer) /* Destination Buffer for hardware */
-{
-	guint32 used_sz = 0;
-	guint8 *pcopy_loc = pBuffer;
-	guint32 CIN_HEADER_SZ = 17, CIN_DATA_SZ = 8, CIN_ZERO_PAD_SZ = 7, PES_HEADER_LEN = 5;
-	guint32 CIN_PKT_SZ = CIN_HEADER_SZ + CIN_DATA_SZ + CIN_ZERO_PAD_SZ;
-	guint32 PES_PKT_LEN = CIN_PKT_SZ + PES_HEADER_LEN + 3;
-	GstFlowReturn fret;
-#ifdef FILE_DUMP__
-	FILE *spmpfiledump;
-	spmpfiledump = fopen("spmpfiledump", "a+");
-#endif
-
-	memcpy(pcopy_loc, b_asf_vc1_sm_frame_scode, MAX_FRSC_SZ);
-	pcopy_loc += MAX_FRSC_SZ;
-	used_sz += MAX_FRSC_SZ;
-
-	*((guint16 *)pcopy_loc) = swap16((guint16)PES_PKT_LEN);
-	pcopy_loc += 2;
-	used_sz += 2;
-
-	*pcopy_loc = 0x81;
-	pcopy_loc += 1;
-	used_sz += 1;
-
-	*pcopy_loc = 0x80;
-	pcopy_loc += 1;
-	used_sz += 1;
-
-	*pcopy_loc = PES_HEADER_LEN;
-	pcopy_loc += 1;
-	used_sz += 1;
-
-	PTS2MakerBit5Bytes((guint *)pcopy_loc, 0);
-	pcopy_loc += 5;
-	used_sz += 5;
-
-	memcpy(pcopy_loc, b_asf_vc1_sm_codein_scode, MAX_SC_SZ);
-	pcopy_loc += MAX_SC_SZ;
-	used_sz += MAX_SC_SZ;
-
-	*((guint32 *)pcopy_loc) = swap32(CIN_PKT_SZ);
-	pcopy_loc += 4;
-	used_sz += 4;
-
-	*((guint32 *)pcopy_loc) = swap32(CIN_DATA_SZ - 1);
-	pcopy_loc += 4;
-	used_sz += 4;
-
-	memcpy(pcopy_loc, b_asf_vc1_sm_codein_scode, MAX_SC_SZ);
-	pcopy_loc += MAX_SC_SZ;
-	used_sz += MAX_SC_SZ;
-
-	memcpy(pcopy_loc, b_asf_vc1_sm_codein_sl_suffix, 1);
-	pcopy_loc += 1;
-	used_sz += 1;
-
-	*((guint16 *)pcopy_loc) = swap16(bcmdec->frame_width);
-	pcopy_loc += 2;
-	used_sz += 2;
-
-	*((guint16 *)pcopy_loc) = swap16(bcmdec->frame_height);
-	pcopy_loc += 2;
-	used_sz += 2;
-
-	memcpy(pcopy_loc, bcmdec->vc1_advp_seq_header, bcmdec->vc1_seq_header_sz);
-	pcopy_loc += bcmdec->vc1_seq_header_sz;
-	used_sz += bcmdec->vc1_seq_header_sz;
-
-	memset(pcopy_loc, 0, CIN_ZERO_PAD_SZ);
-	pcopy_loc += CIN_ZERO_PAD_SZ;
-	used_sz += CIN_ZERO_PAD_SZ;
-
-#ifdef FILE_DUMP__
-	fwrite(pBuffer, used_sz, 1, spmpfiledump);
-	fclose(spmpfiledump);
-#endif
-
-	fret = bcmdec_send_buff_detect_error(bcmdec, buf, pBuffer, used_sz,
-					     0, 0, bcmdec->proc_in_flags);
-	if (fret != GST_FLOW_OK) {
-		GST_ERROR_OBJECT(bcmdec, "Failed to Send the SPMP Sequence Header");
-		return 0;
-	}
-
-	return used_sz;
-}
-
-static guint32 send_VC1_SPMP_PES_payload_PTS(GstBcmDec *bcmdec, GstBuffer *buf,
-					     guint8 *pBuffer,	//Destination Buffer for hardware
-					     GstClockTime tCurrent)
-{
-	guint32 used_sz = 0;
-	guint8 *pcopy_loc = pBuffer;
-	guint32 cin_hdr_sz = 17, cin_zero_pad_sz = 5, cin_data_sz = 10;
-	guint32 pes_hdr_len = 0;
-	guint32 cin_pkt_sz = cin_hdr_sz + cin_zero_pad_sz + cin_data_sz;
-	guint32 cin_last_data_loc = cin_data_sz - 1;
-	guint32 pes_pkt_len = cin_pkt_sz + pes_hdr_len + 3;
-	GstFlowReturn fret;
-#ifdef FILE_DUMP__
-	FILE *spmpfiledump;
-	spmpfiledump = fopen("spmpfiledump", "a+");
-#endif
-
-	memcpy(pcopy_loc, b_asf_vc1_sm_frame_scode, MAX_FRSC_SZ);
-	pcopy_loc += MAX_FRSC_SZ;
-	used_sz += MAX_FRSC_SZ;
-
-	*((guint16 *) pcopy_loc) = swap16((guint16)pes_pkt_len);
-	pcopy_loc += 2;
-	used_sz += 2;
-
-	*pcopy_loc = 0x81;
-	pcopy_loc += 1;
-	used_sz += 1;
-
-	*pcopy_loc=0x0;
-	pcopy_loc += 1;
-	used_sz += 1;
-
-	*pcopy_loc = pes_hdr_len;
-	pcopy_loc += 1;
-	used_sz += 1;
-
-	memcpy(pcopy_loc, b_asf_vc1_sm_codein_scode, MAX_SC_SZ);
-	pcopy_loc += MAX_SC_SZ;
-	used_sz += MAX_SC_SZ;
-
-	*((guint32 *)pcopy_loc) = swap32(cin_pkt_sz);
-	pcopy_loc += 4;
-	used_sz += 4;
-
-	*((guint32 *)pcopy_loc) = swap32(cin_last_data_loc);
-	pcopy_loc += 4;
-	used_sz += 4;
-
-	memcpy(pcopy_loc, b_asf_vc1_sm_codein_scode, MAX_SC_SZ);
-	pcopy_loc += MAX_SC_SZ;
-	used_sz += MAX_SC_SZ;
-
-	memcpy(pcopy_loc, b_asf_vc1_sm_codein_pts_suffix, 1);
-	pcopy_loc += 1;
-	used_sz += 1;
-
-	*pcopy_loc = 0x01;
-	pcopy_loc += 1;
-	used_sz += 1;
-
-	if (tCurrent < 0)
-		tCurrent = 0;
-
-	PTS2MakerBit5Bytes((guint *)pcopy_loc, tCurrent);
-	pcopy_loc += 5;
-	used_sz += 5;
-
-	*((guint32 *)pcopy_loc) = 0xffffffff;
-	pcopy_loc += 4;
-	used_sz += 4;
-
-	memset(pcopy_loc, 0, cin_zero_pad_sz);
-	pcopy_loc += cin_zero_pad_sz;
-	used_sz += cin_zero_pad_sz;
-
-#ifdef FILE_DUMP__
-	fwrite(pBuffer, used_sz, 1, spmpfiledump);
-	fclose(spmpfiledump);
-#endif
-
-	fret = bcmdec_send_buff_detect_error(bcmdec, buf, pBuffer, used_sz,
-					     0, 0, bcmdec->proc_in_flags);
-	if (fret != GST_FLOW_OK) {
-		GST_ERROR_OBJECT(bcmdec, "Failed to Send the SPMP PTS Header");
-		return 0;
-	}
-
-	return used_sz;
-}
-
-static guint32 send_VC1_SPMP_data(GstBcmDec *bcmdec, GstBuffer *buf,
-				  guint8 *pbuffer_out, guint8 *pinput_data,
-				  guint32 input_data_sz, GstClockTime tCurrent)
-{
-	guint32 used_sz = 0, current_xfer_sz = 0;
-	guint32 zero_pad_sz = GET_ZERO_PAD_SZ(input_data_sz);
-	guint32 sz_in_asf_hdr, rem_xfer_sz = input_data_sz;
-	sz_in_asf_hdr = input_data_sz + zero_pad_sz + PAYLOAD_HDR_SZ_WITH_SUFFIX;
-	current_xfer_sz = input_data_sz;
-	GstFlowReturn fret;
-#ifdef FILE_DUMP__
-	FILE *spmpfiledump;
-	spmpfiledump = fopen("spmpfiledump", "a+");
-#endif
-
-	if (input_data_sz > MAX_FIRST_CHUNK_SZ) {
-		current_xfer_sz = MAX_FIRST_CHUNK_SZ;
-		zero_pad_sz = 0;
-	}
-
-	used_sz += insert_pes_header(pbuffer_out + used_sz, GET_PES_HDR_SZ_WITH_ASF(current_xfer_sz + zero_pad_sz));
-	used_sz += insert_asf_header(pbuffer_out + used_sz, sz_in_asf_hdr, input_data_sz - 1);
-	memcpy(pbuffer_out + used_sz, pinput_data, current_xfer_sz);
-	used_sz += current_xfer_sz;
-	pinput_data += current_xfer_sz;
-	rem_xfer_sz -= current_xfer_sz;
-
-	while (rem_xfer_sz) {
-
-		if (rem_xfer_sz > MAX_CHUNK_SZ) {
-			current_xfer_sz = MAX_CHUNK_SZ;
-		} else {
-			current_xfer_sz = rem_xfer_sz;
-			zero_pad_sz = GET_ZERO_PAD_SZ(input_data_sz);
-		}
-
-		used_sz += insert_pes_header(pbuffer_out + used_sz, GET_PES_HDR_SZ(current_xfer_sz + zero_pad_sz));
-		memcpy(pbuffer_out + used_sz, pinput_data, current_xfer_sz);
-		used_sz += current_xfer_sz;
-		pinput_data += current_xfer_sz;
-		rem_xfer_sz -= current_xfer_sz;
-	}
-
-	if (zero_pad_sz) {
-		memset(pbuffer_out + used_sz, 0, zero_pad_sz);
-		used_sz += zero_pad_sz;
-	}
-
-	fret = bcmdec_send_buff_detect_error(bcmdec, buf, pbuffer_out, used_sz,
-					     0, tCurrent, bcmdec->proc_in_flags);
-	if (fret != GST_FLOW_OK) {
-			GST_ERROR_OBJECT(bcmdec, "Failed to Send Data");
-			return 0;
-	}
-
-#ifdef FILE_DUMP__
-	fwrite(pbuffer_out, used_sz, 1, spmpfiledump);
-	fclose(spmpfiledump);
-#endif
-
-	return used_sz;
-}
-
-
-static guint32 handle_VC1_SPMP_data(GstBcmDec *bcmdec, GstBuffer *buf,
-				    guint8 *pBuffer,	/*The buffer with proc_in data*/
-				    guint32 buff_sz, guint8 frm_type,
-				    GstClockTime tCurrent)
-{
-	guint32 used_sz = 0, temp_sz = 0;
-	guint8 *pcopy_loc = NULL;
-
-	if (!bcmdec || !pBuffer || !buff_sz ||
-		  !bcmdec->vc1_seq_header_sz || !bcmdec->vc1_dest_buffer) {
-		GST_ERROR_OBJECT(bcmdec, "Invalid Arguments");
-		return 0;
-	}
-
-	pcopy_loc = bcmdec->vc1_dest_buffer;
-
-	if (I_FRAME == frm_type) {
-		temp_sz = send_VC1_SPMP_seq_hdr(bcmdec, buf, pcopy_loc);
-		if (!temp_sz) {
-			GST_ERROR_OBJECT(bcmdec, "Failed to create SeHdr Payload");
-			return 0;
-		}
-	}
-
-	used_sz += temp_sz;
-	pcopy_loc += temp_sz;
-	temp_sz = send_VC1_SPMP_PES_payload_PTS(bcmdec, buf, pcopy_loc, tCurrent);
-	if (!temp_sz) {
-		GST_ERROR_OBJECT(bcmdec, "Failed to create PTS-PES Payload");
-		return 0;
-	}
-
-	used_sz += temp_sz;
-	pcopy_loc += temp_sz;
-	temp_sz = send_VC1_SPMP_data(bcmdec, buf, pcopy_loc, pBuffer, buff_sz, tCurrent);
-	if (!temp_sz) {
-		GST_ERROR_OBJECT(bcmdec, "Failed to Send PTS-PES Payload");
-		return 0;
-	}
-
-	used_sz += temp_sz;
-	return used_sz;
-}
-
-static guint32 process_VC1_Input_data(GstBcmDec *bcmdec, GstBuffer *buf,
-				      GstClockTime tCurrent)
-{
-	guint8 *pBuffer;
-	gint8 frm_type = 0;
-	guint8 *pcopy_loc = NULL;
-	guint32 max_buff_sz_needed = 0, used_buff_sz = 0, offset = 0, buff_sz = 0;
-	GstFlowReturn fret;
-#ifdef FILE_DUMP__
-	FILE			*modified_data_dump;
-#endif
-
-	pBuffer = GST_BUFFER_DATA(buf);
-	buff_sz = GST_BUFFER_SIZE(buf);
-
-	if (!bcmdec || !pBuffer || !buff_sz || !bcmdec->vc1_dest_buffer) {
-		GST_ERROR_OBJECT(bcmdec, "Invalid Arguments");
-		return 0;
-	}
-
-	if ((pBuffer[0] == 0x00) && (pBuffer[1] == 0x00) && (pBuffer[2] == 0x01) &&
-		  ((pBuffer[3] == 0x0F) || (pBuffer[3] == 0x0D) || (pBuffer[3] == 0xE0))) {
-		/* Just Send The Buffer TO Hardware Here */
-		GST_DEBUG_OBJECT(bcmdec, "Found Start Codes in the Stream..!ADD CODE TO SEND BUFF!");
-		return 1;
-	}
-
-	/* Come here only if start codes are not found */
-	if (bcmdec->adv_profile) {
-		max_buff_sz_needed = buff_sz + MAX_FRSC_SZ + bcmdec->vc1_seq_header_sz;
-
-		if (max_buff_sz_needed > MAX_VC1_INPUT_DATA_SZ) {
-			GST_ERROR_OBJECT(bcmdec, "VC1 Buffer Too Small");
-			return 0;
-		}
-
-		frm_type = get_VC1_adv_prof_frame_type(bcmdec, pBuffer);
-
-#ifdef FILE_DUMP__
-		modified_data_dump = fopen("modified_data_dump", "a+");
-#endif
-		/*Start Code + Buffer Size*/
-		used_buff_sz = buff_sz + MAX_FRSC_SZ;
-
-		if (I_FRAME == frm_type) {
-			/*Copy Sequence Header And Start Code*/
-			used_buff_sz += bcmdec->vc1_seq_header_sz;
-			pcopy_loc = bcmdec->vc1_dest_buffer;
-			memcpy(pcopy_loc, bcmdec->vc1_advp_seq_header, bcmdec->vc1_seq_header_sz);
-			pcopy_loc += bcmdec->vc1_seq_header_sz;
-			memcpy(pcopy_loc, b_asf_vc1_frame_scode, MAX_FRSC_SZ);
-			pcopy_loc += MAX_FRSC_SZ;
-		} else {
-			/*Copy Only the Start code*/
-			pcopy_loc = bcmdec->vc1_dest_buffer;
-			memcpy(pcopy_loc, b_asf_vc1_frame_scode, MAX_FRSC_SZ);
-			pcopy_loc += MAX_FRSC_SZ;
-		}
-
-		memcpy(pcopy_loc, pBuffer, buff_sz);
-#ifdef FILE_DUMP__
-		fwrite(pBuffer, used_buff_sz, 1, modified_data_dump);
-		fclose(modified_data_dump);
-#endif
-
-		if (bcmdec->enable_spes) {
-			if (!parse_find_strt_code(&bcmdec->parse, bcmdec->input_format, bcmdec->vc1_dest_buffer, used_buff_sz, &offset)) {
-				offset = 0;
-				tCurrent = 0;
-			}
-		}
-
-		fret = bcmdec_send_buff_detect_error(bcmdec, buf,
-						     bcmdec->vc1_dest_buffer,
-						     used_buff_sz, offset,
-						     tCurrent,
-						     bcmdec->proc_in_flags);
-		if (fret != GST_FLOW_OK)
-			return 0;
-
-	} else {
-
-		frm_type = get_VC1_SPMP_frame_type(bcmdec, pBuffer);
-
-		used_buff_sz = handle_VC1_SPMP_data(bcmdec, buf, pBuffer,
-						    buff_sz, frm_type, tCurrent);
-		if (!used_buff_sz) {
-			GST_ERROR_OBJECT(bcmdec, "Failed to Prepare VC-1 SPMP Data");
-			return 0;
-		}
-	}
-
-	return used_buff_sz;
-}
-
 /* bcmdec signals and args */
 enum {
 	/* FILL ME */
@@ -804,11 +127,13 @@ GLB_INST_STS *g_inst_sts = NULL;
  */
 static GstStaticPadTemplate sink_factory_bcm70015 = GST_STATIC_PAD_TEMPLATE("sink", GST_PAD_SINK, GST_PAD_ALWAYS,
 		GST_STATIC_CAPS("video/mpeg, " "mpegversion = (int) {2, 4}," "systemstream =(boolean) false; "
-						"video/x-h264;" "video/x-vc1;" "video/x-wmv;" "video/x-divx;" "video/x-xvid;"));
+						"video/x-h264;" "video/x-vc1;" "video/x-wmv, " "wmvversion = (int) {3};"
+						"video/x-msmpeg, " "msmpegversion = (int) {43};"
+						"video/x-divx, " "divxversion = (int) {3, 4, 5};" "video/x-xvid;"));
 
 static GstStaticPadTemplate sink_factory_bcm70012 = GST_STATIC_PAD_TEMPLATE("sink", GST_PAD_SINK, GST_PAD_ALWAYS,
 		GST_STATIC_CAPS("video/mpeg, " "mpegversion = (int) {2}," "systemstream =(boolean) false; "
-						"video/x-h264;" "video/x-vc1;" "video/x-wmv;"));
+						"video/x-h264;" "video/x-vc1;" "video/x-wmv, " "wmvversion = (int) {3};"));
 
 #ifdef YV12__
 static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE("src", GST_PAD_SRC, GST_PAD_ALWAYS,
@@ -997,10 +322,10 @@ static gboolean gst_bcmdec_sink_event(GstPad* pad, GstEvent* event)
 		if (!bcmdec->silent)
 			GST_DEBUG_OBJECT(bcmdec, "new segment");
 
-		bcmdec->avcc_params.inside_buffer = TRUE;
-		bcmdec->avcc_params.consumed_offset = 0;
-		bcmdec->avcc_params.strtcode_offset = 0;
-		bcmdec->avcc_params.nal_sz = 0;
+		bcmdec->codec_params.inside_buffer = TRUE;
+		bcmdec->codec_params.consumed_offset = 0;
+		bcmdec->codec_params.strtcode_offset = 0;
+		bcmdec->codec_params.nal_sz = 0;
 		bcmdec->insert_pps = TRUE;
 		bcmdec->base_time = 0;
 
@@ -1077,6 +402,11 @@ static gboolean gst_bcmdec_sink_set_caps(GstPad *pad, GstCaps *caps)
 	guint num = 0;
 	guint den = 0;
 	const GValue *g_value;
+	int version = 0;
+	GstBuffer *buffer;
+	guint8 *data;
+	guint size;
+	guint index;
 
 	GST_DEBUG_OBJECT (pad, "setcaps called");
 
@@ -1095,12 +425,11 @@ static gboolean gst_bcmdec_sink_set_caps(GstPad *pad, GstCaps *caps)
 		// We might override this later down below if the codec_data indicates otherwise
 		// So don't print codec type yet GST_DEBUG_OBJECT(bcmdec, "InFmt H.264");
 	} else if (!strcmp("video/mpeg", mime)) {
-		int version = 0;
 		gst_structure_get_int(structure, "mpegversion", &version);
 		if (version == 2) {
 			bcmdec->input_format = BC_MSUBTYPE_MPEG2VIDEO;
 			GST_DEBUG_OBJECT(bcmdec, "InFmt MPEG2");
-		} if (version == 4) {
+		} else if (version == 4) {
 			bcmdec->input_format = BC_MSUBTYPE_DIVX;
 			GST_DEBUG_OBJECT(bcmdec, "InFmt MPEG4");
 		} else {
@@ -1111,15 +440,26 @@ static gboolean gst_bcmdec_sink_set_caps(GstPad *pad, GstCaps *caps)
 		bcmdec->input_format = BC_MSUBTYPE_VC1;
 		GST_DEBUG_OBJECT(bcmdec, "InFmt VC1");
 	} else if (!strcmp("video/x-divx", mime)) {
-		bcmdec->input_format = BC_MSUBTYPE_DIVX;
-		GST_DEBUG_OBJECT(bcmdec, "InFmt DIVX");
+		gst_structure_get_int(structure, "divxversion", &version);
+		if(version == 3) {
+			bcmdec->input_format = BC_MSUBTYPE_DIVX311;
+			GST_DEBUG_OBJECT(bcmdec, "InFmt DIVX3");
+		} else {
+			bcmdec->input_format = BC_MSUBTYPE_DIVX;
+			GST_DEBUG_OBJECT(bcmdec, "InFmt DIVX%d", version);
+		}
 	} else if (!strcmp("video/x-xvid", mime)) {
 		bcmdec->input_format = BC_MSUBTYPE_DIVX;
 		GST_DEBUG_OBJECT(bcmdec, "InFmt XVID");
+	} else if (!strcmp("video/x-msmpeg", mime)) {
+		bcmdec->input_format = BC_MSUBTYPE_DIVX311;
+		GST_DEBUG_OBJECT(bcmdec, "InFmt MPMPEGv43");
 	} else if (!strcmp("video/x-wmv", mime)) {
-		GST_DEBUG_OBJECT(bcmdec, "Detected WMV File %s", mime);
-		if (BC_STS_SUCCESS != connect_wmv_file(bcmdec,structure)) {
-			GST_DEBUG_OBJECT(bcmdec, "WMV Connection Failure");
+		gst_structure_get_int(structure, "wmvversion", &version);
+		if(version == 3) {
+			bcmdec->input_format = BC_MSUBTYPE_WMV3;
+			GST_DEBUG_OBJECT(bcmdec, "InFmt WMV9");
+		} else {
 			gst_object_unref(bcmdec);
 			return FALSE;
 		}
@@ -1136,17 +476,8 @@ static gboolean gst_bcmdec_sink_set_caps(GstPad *pad, GstCaps *caps)
 
 		bcmdec->input_framerate = (double)num / den;
 		GST_LOG_OBJECT(bcmdec, "demux frame rate = %f ", bcmdec->input_framerate);
-
 	} else {
 		GST_DEBUG_OBJECT(bcmdec, "no demux framerate_value");
-	}
-
-	g_value = gst_structure_get_value(structure, "format");
-	if (g_value && G_VALUE_TYPE(g_value) != GST_TYPE_FOURCC) {
-		guint32 fourcc;
-		//g_return_if_fail(G_VALUE_TYPE(g_value) == GST_TYPE_LIST);
-		fourcc = gst_value_get_fourcc(gst_value_list_get_value (g_value, 0));
-		GST_DEBUG_OBJECT(bcmdec, "fourcc = %d", fourcc);
 	}
 
 	g_value = gst_structure_get_value(structure, "pixel-aspect-ratio");
@@ -1165,47 +496,100 @@ static gboolean gst_bcmdec_sink_set_caps(GstPad *pad, GstCaps *caps)
 		GST_DEBUG_OBJECT (bcmdec, "no par from demux");
 	}
 
+	gst_structure_get_int(structure, "width", &bcmdec->frame_width);
+	gst_structure_get_int(structure, "height", &bcmdec->frame_height);
+
+	// Check Codec Data for various codecs
 	// Determine if this is bitstream video (AVC1 or no start codes) or Byte stream video (H264)
+	// Determine if this is VC-1 AP or SP/MP for VC-1
 	if ((g_value = gst_structure_get_value (structure, "codec_data"))) {
 		if (G_VALUE_TYPE(g_value) == GST_TYPE_BUFFER) {
-			GstBuffer *buffer;
-			guint8 *data;
-			guint size;
-
-			GST_DEBUG_OBJECT (bcmdec, "Don't have start codes'");
 			if (!strcmp("video/x-h264", mime)) {
+				GST_DEBUG_OBJECT (bcmdec, "Don't have start codes'");
 				bcmdec->input_format = BC_MSUBTYPE_AVC1;
-				GST_DEBUG_OBJECT(bcmdec, "InFmt H.264 (AVC1)");;
-			}
+				GST_DEBUG_OBJECT(bcmdec, "InFmt H.264 (AVC1)");
 
-			buffer = gst_value_get_buffer(g_value);
-			data = GST_BUFFER_DATA(buffer);
-			size = GST_BUFFER_SIZE(buffer);
+				buffer = gst_value_get_buffer(g_value);
+				data = GST_BUFFER_DATA(buffer);
+				size = GST_BUFFER_SIZE(buffer);
 
-			GST_DEBUG_OBJECT(bcmdec, "codec_data size = %d", size);
+				GST_DEBUG_OBJECT(bcmdec, "codec_data size = %d", size);
 
-			/* parse the avcC data */
-			if (size < 7) {
-				GST_ERROR_OBJECT(bcmdec, "avcC size %u < 7", size);
-				goto avcc_error;
-			}
-			/* parse the version, this must be 1 */
-			if (data[0] != 1)
-				goto wrong_version;
+				/* parse the avcC data */
+				if (size < 7) {
+					GST_ERROR_OBJECT(bcmdec, "avcC size %u < 7", size);
+					goto avcc_error;
+				}
+				/* parse the version, this must be 1 */
+				if (data[0] != 1)
+					goto wrong_version;
 
-			if (bcmdec->avcc_params.sps_pps_buf == NULL)
-				bcmdec->avcc_params.sps_pps_buf = (guint8 *)malloc(SPS_PPS_SIZE);
-			if (bcmdec_insert_sps_pps(bcmdec, buffer) != BC_STS_SUCCESS) {
-				bcmdec->avcc_params.pps_size = 0;
+				if (bcmdec->codec_params.sps_pps_buf == NULL)
+					bcmdec->codec_params.sps_pps_buf = (guint8 *)malloc(size * 2);
+				if (bcmdec_insert_sps_pps(bcmdec, buffer) != BC_STS_SUCCESS) {
+					bcmdec->codec_params.pps_size = 0;
+				}
+			} else if (!strcmp("video/x-wmv", mime)) {
+				buffer = gst_value_get_buffer(g_value);
+				data = GST_BUFFER_DATA(buffer);
+				size = GST_BUFFER_SIZE(buffer);
+
+				GST_DEBUG_OBJECT(bcmdec, "codec_data size = %d", size);
+				if (size == 4) {
+					// Simple or Main Profile
+					bcmdec->input_format = BC_MSUBTYPE_WMV3;
+					GST_DEBUG_OBJECT(bcmdec, "InFmt VC-1 (SP/MP)");
+					if (bcmdec->codec_params.sps_pps_buf == NULL)
+						bcmdec->codec_params.sps_pps_buf = (guint8 *)malloc(4);
+					memcpy(bcmdec->codec_params.sps_pps_buf, data, 4);
+					bcmdec->codec_params.pps_size = 4;
+				} else {
+					bcmdec->input_format = BC_MSUBTYPE_VC1;
+					GST_DEBUG_OBJECT(bcmdec, "InFmt VC-1 (AP)");
+					for (index = 0; index < size; index++) {
+						data += index;
+						if (((size - index) >= 4) && (*data == 0x00) && (*(data + 1) == 0x00) &&
+							(*(data + 2) == 0x01) && (*(data + 3) == 0x0f)) {
+							GST_DEBUG_OBJECT(bcmdec, "VC1 Sequence Header Found for Adv Profile");
+
+							if ((size - index + 1) > MAX_ADV_PROF_SEQ_HDR_SZ)
+								bcmdec->codec_params.pps_size = MAX_ADV_PROF_SEQ_HDR_SZ;
+							else
+								bcmdec->codec_params.pps_size = size - index + 1;
+							memcpy(bcmdec->codec_params.sps_pps_buf, data, bcmdec->codec_params.pps_size);
+							break;
+						}
+					}
+				}
 			}
 		}
 	} else {
-		GST_DEBUG_OBJECT (bcmdec, "Have start codes'");
 		if (!strcmp("video/x-h264", mime)) {
+			GST_DEBUG_OBJECT (bcmdec, "Have start codes'");
 			bcmdec->input_format = BC_MSUBTYPE_H264;
 			GST_DEBUG_OBJECT(bcmdec, "InFmt H.264 (H264)");;
+			bcmdec->codec_params.nal_size_bytes = 4; // 4 sync bytes used
+		} else {
+			// No Codec data. So try with FourCC for VC1/WMV9
+			if (!strcmp("video/x-wmv", mime)) {
+				guint32 fourcc;
+				if (gst_structure_get_fourcc (structure, "format", &fourcc)) {
+					if ((fourcc == GST_MAKE_FOURCC ('W', 'V', 'C', '1')) ||
+						(fourcc == GST_MAKE_FOURCC ('W', 'M', 'V', 'A'))) {
+						bcmdec->input_format = BC_MSUBTYPE_VC1;
+						GST_DEBUG_OBJECT(bcmdec, "InFmt VC-1 (AP)");
+					} else {
+						GST_DEBUG_OBJECT(bcmdec, "no codec_data. Don't know how to handle");
+						gst_object_unref(bcmdec);
+						return FALSE;
+					}
+				}
+			} else {
+				GST_DEBUG_OBJECT(bcmdec, "no codec_data. Don't know how to handle");
+				gst_object_unref(bcmdec);
+				return FALSE;
+			}
 		}
-		bcmdec->avcc_params.nal_size_bytes = 4; // 4 sync bytes used
 	}
 
     if (bcmdec->play_pending) {
@@ -1255,7 +639,7 @@ static GstFlowReturn gst_bcmdec_chain(GstPad *pad, GstBuffer *buf)
 	GstClockTime tCurrent = 0;
 	guint8 *pbuffer;
 	guint32 size = 0;
-	guint32 vc1_buff_sz = 0;
+//	guint32 vc1_buff_sz = 0;
 
 
 #ifdef FILE_DUMP__
@@ -1290,17 +674,6 @@ static GstFlowReturn gst_bcmdec_chain(GstPad *pad, GstBuffer *buf)
 		GST_DEBUG_OBJECT(bcmdec, "input while streaming is false");
 		gst_buffer_unref(buf);
 		return GST_FLOW_OK;
-	}
-
-	if (bcmdec->wmv_file) {
-		vc1_buff_sz = process_VC1_Input_data(bcmdec, buf, tCurrent);
-		gst_buffer_unref(buf);
-		if (!vc1_buff_sz) {
-			GST_ERROR_OBJECT(bcmdec, "process_VC1_Input_data failed\n");
-			return GST_FLOW_ERROR;
-		} else {
-			return GST_FLOW_OK;
-		}
 	}
 
 	pbuffer = GST_BUFFER_DATA (buf);
@@ -1361,8 +734,10 @@ static gboolean bcmdec_negotiate_format(GstBcmDec *bcmdec)
 
 	if (bcmdec->output_params.clr_space == MODE422_YUY2) {
 		bcmdec->output_params.y_size = bcmdec->output_params.width * bcmdec->output_params.height * BUF_MULT;
-		if (bcmdec->interlace)
+		if (bcmdec->interlace) {
+			GST_DEBUG_OBJECT(bcmdec, "bcmdec_negotiate_format Interlaced");
 			bcmdec->output_params.y_size /= 2;
+		}
 		bcmdec->output_params.uv_size = 0;
 		GST_DEBUG_OBJECT(bcmdec, "YUY2 set on caps");
 	} else if (bcmdec->output_params.clr_space == MODE420) {
@@ -1370,6 +745,7 @@ static gboolean bcmdec_negotiate_format(GstBcmDec *bcmdec)
 		bcmdec->output_params.uv_size = bcmdec->output_params.width * bcmdec->output_params.height / 2;
 #ifdef YV12__
 		if (bcmdec->interlace) {
+			GST_DEBUG_OBJECT(bcmdec, "bcmdec_negotiate_format Interlaced");
 			bcmdec->output_params.y_size = bcmdec->output_params.width * bcmdec->output_params.height / 2;
 			bcmdec->output_params.uv_size = bcmdec->output_params.y_size / 2;
 		}
@@ -1429,9 +805,9 @@ static gboolean bcmdec_process_play(GstBcmDec *bcmdec)
 		bcInputFormat.height = bcmdec->output_params.height;
 	}
 
-	bcInputFormat.startCodeSz = bcmdec->avcc_params.nal_size_bytes;
-	bcInputFormat.pMetaData = bcmdec->avcc_params.sps_pps_buf;
-	bcInputFormat.metaDataSz = bcmdec->avcc_params.pps_size;
+	bcInputFormat.startCodeSz = bcmdec->codec_params.nal_size_bytes;
+	bcInputFormat.pMetaData = bcmdec->codec_params.sps_pps_buf;
+	bcInputFormat.metaDataSz = bcmdec->codec_params.pps_size;
 	bcInputFormat.OptFlags = 0x80000000 | vdecFrameRate23_97;
 
 	sts = decif_setinputformat(&bcmdec->decif, bcInputFormat);
@@ -2471,9 +1847,9 @@ static BC_STATUS gst_bcmdec_cleanup(GstBcmDec *bcmdec)
 	pthread_mutex_destroy(&bcmdec->gst_buf_que_lock);
 	pthread_mutex_destroy(&bcmdec->gst_padbuf_que_lock);
 	//pthread_mutex_destroy(&bcmdec->fn_lock);
-	if (bcmdec->avcc_params.sps_pps_buf) {
-		free(bcmdec->avcc_params.sps_pps_buf);
-		bcmdec->avcc_params.sps_pps_buf = NULL;
+	if (bcmdec->codec_params.sps_pps_buf) {
+		free(bcmdec->codec_params.sps_pps_buf);
+		bcmdec->codec_params.sps_pps_buf = NULL;
 	}
 
 	if (bcmdec->dest_buf) {
@@ -2481,10 +1857,10 @@ static BC_STATUS gst_bcmdec_cleanup(GstBcmDec *bcmdec)
 		bcmdec->dest_buf = NULL;
 	}
 
-	if (bcmdec->vc1_dest_buffer) {
-		free(bcmdec->vc1_dest_buffer);
-		bcmdec->vc1_dest_buffer = NULL;
-	}
+// 	if (bcmdec->vc1_dest_buffer) {
+// 		free(bcmdec->vc1_dest_buffer);
+// 		bcmdec->vc1_dest_buffer = NULL;
+// 	}
 
 	if (bcmdec->gst_clock) {
 		gst_object_unref(bcmdec->gst_clock);
@@ -2536,19 +1912,19 @@ static void bcmdec_reset(GstBcmDec * bcmdec)
 	bcmdec->rbuf_thread_running = FALSE;
 
 	bcmdec->insert_start_code = FALSE;
-	bcmdec->avcc_params.sps_pps_buf = NULL;
+	bcmdec->codec_params.sps_pps_buf = NULL;
 
 	bcmdec->input_framerate = 0;
 	bcmdec->input_par_x = 0;
 	bcmdec->input_par_y = 0;
 	bcmdec->prev_pic = -1;
 
-	bcmdec->avcc_params.inside_buffer = TRUE;
-	bcmdec->avcc_params.consumed_offset = 0;
-	bcmdec->avcc_params.strtcode_offset = 0;
-	bcmdec->avcc_params.nal_sz = 0;
-	bcmdec->avcc_params.pps_size = 0;
-	bcmdec->avcc_params.nal_size_bytes = 4;
+	bcmdec->codec_params.inside_buffer = TRUE;
+	bcmdec->codec_params.consumed_offset = 0;
+	bcmdec->codec_params.strtcode_offset = 0;
+	bcmdec->codec_params.nal_sz = 0;
+	bcmdec->codec_params.pps_size = 0;
+	bcmdec->codec_params.nal_size_bytes = 4;
 
 	bcmdec->paused = FALSE;
 
@@ -2691,14 +2067,14 @@ static BC_STATUS bcmdec_insert_sps_pps(GstBcmDec *bcmdec, GstBuffer* gstbuf)
 	guint nal_size;
 	guint num_sps, num_pps, i;
 
-	bcmdec->avcc_params.pps_size = 0;
+	bcmdec->codec_params.pps_size = 0;
 
 	profile = (data[1] << 16) | (data[2] << 8) | data[3];
 	GST_DEBUG_OBJECT(bcmdec, "profile %06x",profile);
 
-	bcmdec->avcc_params.nal_size_bytes = (data[4] & 0x03) + 1;
+	bcmdec->codec_params.nal_size_bytes = (data[4] & 0x03) + 1;
 
-	GST_DEBUG_OBJECT(bcmdec, "nal size %d",bcmdec->avcc_params.nal_size_bytes);
+	GST_DEBUG_OBJECT(bcmdec, "nal size %d",bcmdec->codec_params.nal_size_bytes);
 
 	num_sps = data[5] & 0x1f;
 	GST_DEBUG_OBJECT(bcmdec, "num sps %d",num_sps);
@@ -2724,15 +2100,15 @@ static BC_STATUS bcmdec_insert_sps_pps(GstBcmDec *bcmdec, GstBuffer* gstbuf)
 			return BC_STS_ERROR;
 		}
 
-		bcmdec->avcc_params.sps_pps_buf[0] = 0;
-		bcmdec->avcc_params.sps_pps_buf[1] = 0;
-		bcmdec->avcc_params.sps_pps_buf[2] = 0;
-		bcmdec->avcc_params.sps_pps_buf[3] = 1;
+		bcmdec->codec_params.sps_pps_buf[0] = 0;
+		bcmdec->codec_params.sps_pps_buf[1] = 0;
+		bcmdec->codec_params.sps_pps_buf[2] = 0;
+		bcmdec->codec_params.sps_pps_buf[3] = 1;
 
-		bcmdec->avcc_params.pps_size += 4;
+		bcmdec->codec_params.pps_size += 4;
 
-		memcpy(bcmdec->avcc_params.sps_pps_buf + bcmdec->avcc_params.pps_size, data, nal_size);
-		bcmdec->avcc_params.pps_size += nal_size;
+		memcpy(bcmdec->codec_params.sps_pps_buf + bcmdec->codec_params.pps_size, data, nal_size);
+		bcmdec->codec_params.pps_size += nal_size;
 
 		data += nal_size;
 		data_size -= nal_size;
@@ -2766,15 +2142,15 @@ static BC_STATUS bcmdec_insert_sps_pps(GstBcmDec *bcmdec, GstBuffer* gstbuf)
 			return BC_STS_ERROR;
 		}
 
-		bcmdec->avcc_params.sps_pps_buf[bcmdec->avcc_params.pps_size+0] = 0;
-		bcmdec->avcc_params.sps_pps_buf[bcmdec->avcc_params.pps_size+1] = 0;
-		bcmdec->avcc_params.sps_pps_buf[bcmdec->avcc_params.pps_size+2] = 0;
-		bcmdec->avcc_params.sps_pps_buf[bcmdec->avcc_params.pps_size+3] = 1;
+		bcmdec->codec_params.sps_pps_buf[bcmdec->codec_params.pps_size+0] = 0;
+		bcmdec->codec_params.sps_pps_buf[bcmdec->codec_params.pps_size+1] = 0;
+		bcmdec->codec_params.sps_pps_buf[bcmdec->codec_params.pps_size+2] = 0;
+		bcmdec->codec_params.sps_pps_buf[bcmdec->codec_params.pps_size+3] = 1;
 
-		bcmdec->avcc_params.pps_size += 4;
+		bcmdec->codec_params.pps_size += 4;
 
-		memcpy(bcmdec->avcc_params.sps_pps_buf + bcmdec->avcc_params.pps_size, data, nal_size);
-		bcmdec->avcc_params.pps_size += nal_size;
+		memcpy(bcmdec->codec_params.sps_pps_buf + bcmdec->codec_params.pps_size, data, nal_size);
+		bcmdec->codec_params.pps_size += nal_size;
 
 		data += nal_size;
 		data_size -= nal_size;
@@ -2793,10 +2169,10 @@ static BC_STATUS bcmdec_suspend_callback(GstBcmDec *bcmdec)
 	bcmdec->base_time = 0;
 	if (bcmdec->decif.hdev)
 		sts = decif_close(&bcmdec->decif);
-	bcmdec->avcc_params.inside_buffer = TRUE;
-	bcmdec->avcc_params.consumed_offset = 0;
-	bcmdec->avcc_params.strtcode_offset = 0;
-	bcmdec->avcc_params.nal_sz = 0;
+	bcmdec->codec_params.inside_buffer = TRUE;
+	bcmdec->codec_params.consumed_offset = 0;
+	bcmdec->codec_params.strtcode_offset = 0;
+	bcmdec->codec_params.nal_sz = 0;
 	bcmdec->insert_pps = TRUE;
 
 	return sts;
@@ -2834,9 +2210,9 @@ static BC_STATUS bcmdec_resume_callback(GstBcmDec *bcmdec)
 		bcInputFormat.height = bcmdec->output_params.height;
 	}
 
-	bcInputFormat.startCodeSz = bcmdec->avcc_params.nal_size_bytes;
-	bcInputFormat.pMetaData = bcmdec->avcc_params.sps_pps_buf;
-	bcInputFormat.metaDataSz = bcmdec->avcc_params.pps_size;
+	bcInputFormat.startCodeSz = bcmdec->codec_params.nal_size_bytes;
+	bcInputFormat.pMetaData = bcmdec->codec_params.sps_pps_buf;
+	bcInputFormat.metaDataSz = bcmdec->codec_params.pps_size;
 	bcInputFormat.OptFlags = 0x80000000 | vdecFrameRate23_97;
 
 	sts = decif_setinputformat(&bcmdec->decif, bcInputFormat);

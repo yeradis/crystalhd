@@ -100,7 +100,7 @@ typedef struct {
 	guint32 strtcode_offset;
 	guint32 nal_sz;
 	guint8	nal_size_bytes;
-}AVCC_PLAY_PARAMS;
+} CODEC_PARAMS;
 
 
 
@@ -109,29 +109,7 @@ typedef struct _GSTBUF_LIST{
 	struct _GSTBUF_LIST	*next;
 }GSTBUF_LIST;
 
-#ifdef WMV_FILE_HANDLING
-
-#define MAX_FRSC_SZ				sizeof(b_asf_vc1_frame_scode)
-#define MAX_SC_SZ				4
-#define MAX_RE_PES_BOUND			0x7FFF
-#define PES_OPTIONAL_SZ				3
-#define PAYLOAD_HDR_SZ				16
-#define PAYLOAD_HDR_SZ_WITH_SUFFIX		(PAYLOAD_HDR_SZ + 1)
-#define GET_ZERO_PAD_SZ(x_sz)			((((PAYLOAD_HDR_SZ_WITH_SUFFIX + x_sz) / 32) + 1) * 32 - (PAYLOAD_HDR_SZ_WITH_SUFFIX + x_sz))
-#define GET_PES_HDR_SZ_WITH_ASF(xfer_sz)	(xfer_sz + PAYLOAD_HDR_SZ_WITH_SUFFIX + PES_OPTIONAL_SZ)
-#define GET_PES_HDR_SZ(xfer_sz)			(xfer_sz + PES_OPTIONAL_SZ)
-#define MAX_FIRST_CHUNK_SZ			(MAX_RE_PES_BOUND - PAYLOAD_HDR_SZ_WITH_SUFFIX - PES_OPTIONAL_SZ - 32)
-#define MAX_CHUNK_SZ				(MAX_RE_PES_BOUND - PES_OPTIONAL_SZ - 32)
 #define MAX_ADV_PROF_SEQ_HDR_SZ  		50
-#define MAX_VC1_INPUT_DATA_SZ	 		(2 * 1024 * 1024)
-
-typedef enum _ftype_{
-	P_FRAME=0,
-	B_FRAME,
-	I_FRAME,
-	BI_FRAME
-}ftype;
-#endif
 
 typedef enum {
 	UNKNOWN = 0,
@@ -203,7 +181,7 @@ struct _GstBcmDec
 	gboolean paused;
 	gboolean insert_start_code;
 
-	AVCC_PLAY_PARAMS avcc_params;
+	CODEC_PARAMS codec_params ;
 	gboolean sec_field;
 	guint8	input_par_x;
 	guint8 	input_par_y;
@@ -233,20 +211,9 @@ struct _GstBcmDec
 	GstClockTime prev_clock_time;
 	GstClockTime cur_stream_time;
 	guint8		 proc_in_flags;
-#ifdef WMV_FILE_HANDLING
-	/*WMV File handling*/
-	gboolean	wmv_file;
-	gboolean    adv_profile;
-	guint8		vc1_advp_seq_header[MAX_ADV_PROF_SEQ_HDR_SZ];
-	guint32		vc1_seq_header_sz;
-	guint8*		vc1_dest_buffer;
-	/*Simple/Main parameters*/
-	gboolean	bRangered;
-	gboolean	bMaxbFrames;
-	gboolean	bFinterpFlag;
-	gint		frame_width;	/*The value from Demux*/
-	gint		frame_height;	/*The value from Demux*/
-#endif
+
+	gint		frame_width;	/*The value from Demux used for WMV9 or VC-1 SP/MP */
+	gint		frame_height;	/*The value from Demux used for WMV9 or VC-1 SP/MP */
 
 	GSTBUF_LIST* gst_padbuf_que_hd;
 	GSTBUF_LIST* gst_padbuf_que_tl;
