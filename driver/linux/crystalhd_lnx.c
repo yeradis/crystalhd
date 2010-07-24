@@ -330,10 +330,10 @@ static int chd_dec_open(struct inode *in, struct file *fd)
 		dev_err(dev, "cmd_user_open - %d\n", sts);
 		rc = -EBUSY;
 	}
-
-	adp->cfg_users++;
-
-	fd->private_data = uc;
+	else {
+		adp->cfg_users++;
+		fd->private_data = uc;
+	}
 
 	return rc;
 }

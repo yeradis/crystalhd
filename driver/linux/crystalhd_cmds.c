@@ -955,7 +955,10 @@ BC_STATUS crystalhd_user_open(struct crystalhd_cmd *ctx,
 	dev_info(dev, "Opening new user[%x] handle\n", uc->uid);
 
 	ctx->hw_ctx = (struct crystalhd_hw*)kmalloc(sizeof(struct crystalhd_hw), GFP_KERNEL);
-	memset(ctx->hw_ctx, 0, sizeof(struct crystalhd_hw));
+	if(ctx->hw_ctx != NULL)
+		memset(ctx->hw_ctx, 0, sizeof(struct crystalhd_hw));
+	else
+		return BC_STS_ERROR;
 
 	crystalhd_hw_open(ctx->hw_ctx, ctx->adp);
 
