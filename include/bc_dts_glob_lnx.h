@@ -185,7 +185,8 @@ typedef struct _BC_DTS_STATS {
 
 	float			Temperature;
 	uint32_t		TempFromDriver;
-	uint32_t		res1[8];
+	uint32_t		picNumFlags;
+	uint32_t		res1[7];
 
 } BC_DTS_STATS;
 

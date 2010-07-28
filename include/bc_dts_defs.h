@@ -489,7 +489,11 @@ typedef struct _BC_DTS_STATUS {
 					 * Reported back from the driver */
 	uint8_t		TxBufData;
 
-	uint8_t		reserved__[15];
+	uint8_t		reserved__[3];
+
+	uint32_t	picNumFlags; /* Picture number and flags of the next picture to be delivered from the driver */
+
+	uint8_t		reserved___[8];
 
 } BC_DTS_STATUS;
 

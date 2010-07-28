@@ -1160,6 +1160,7 @@ DtsGetDrvStat(
 	pDrvStat->DrvNextMDataPLD = pIntDrvStat->DrvNextMDataPLD;
 	pDrvStat->DrvcpbEmptySize = pIntDrvStat->DrvcpbEmptySize;
 	pDrvStat->eosDetected = pIntDrvStat->eosDetected;
+	pDrvStat->picNumFlags = pIntDrvStat->picNumFlags;
 
 
 //

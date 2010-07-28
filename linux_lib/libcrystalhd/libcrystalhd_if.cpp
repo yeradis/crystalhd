@@ -2920,6 +2920,7 @@ DtsGetDriverStatus( HANDLE  hDevice,
 	pStatus->InputBusyCount     = temp.TxFifoBsyCnt;
 	pStatus->InputTotalSize     = temp.ipTotalSize;
 	pStatus->cpbEmptySize		= temp.DrvcpbEmptySize;
+	pStatus->picNumFlags		= temp.picNumFlags;
 
 	if(temp.eosDetected)
 	{

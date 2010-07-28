@@ -2493,9 +2493,7 @@ void * txThreadProc(void *ctx)
 			sts = DtsTxDmaText(hDevice, localBuffer, szDataToSend, &dramOff, encrypted);
 
 			if(sts == BC_STS_SUCCESS)
-			{
 				DtsUpdateInStats(Ctx, szDataToSend);
-			}
 			else
 			{
 				// signal error to the next procinput
