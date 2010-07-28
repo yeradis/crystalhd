@@ -1901,8 +1901,8 @@ void crystalhd_flea_get_dnsz(struct crystalhd_hw *hw, uint32_t list_index, uint3
 		y_dn_sz_reg  = BCHP_MISC1_Y_RX_LIST0_CUR_BYTE_CNT;
 		uv_dn_sz_reg = BCHP_MISC1_HIF_RX_LIST0_CUR_BYTE_CNT;
 	} else {
-		y_dn_sz_reg  = BCHP_MISC1_Y_RX_LIST0_CUR_BYTE_CNT;
-		uv_dn_sz_reg = BCHP_MISC1_HIF_RX_LIST0_CUR_BYTE_CNT;
+		y_dn_sz_reg  = BCHP_MISC1_Y_RX_LIST1_CUR_BYTE_CNT;
+		uv_dn_sz_reg = BCHP_MISC1_HIF_RX_LIST1_CUR_BYTE_CNT;
 	}
 
 	*y_dw_dnsz  = hw->pfnReadFPGARegister(hw->adp, y_dn_sz_reg);
@@ -1918,9 +1918,8 @@ BC_STATUS crystalhd_flea_hw_pause(struct crystalhd_hw *hw, bool state)
 	return BC_STS_SUCCESS;
 }
 
-bool crystalhd_flea_peek_next_decoded_frame(struct crystalhd_hw *hw, uint64_t *meta_payload, uint32_t PicWidth)
+bool crystalhd_flea_peek_next_decoded_frame(struct crystalhd_hw *hw, uint64_t *meta_payload, uint32_t *picNumFlags, uint32_t PicWidth)
 {
-	uint32_t PicNumber = 0;
 	unsigned long flags = 0;
 	crystalhd_dioq_t *ioq;
 	crystalhd_elem_t *tmp;
@@ -1936,7 +1935,7 @@ bool crystalhd_flea_peek_next_decoded_frame(struct crystalhd_hw *hw, uint64_t *m
 		spin_unlock_irqrestore(&ioq->lock, flags);
 		rpkt = (crystalhd_rx_dma_pkt *)tmp->data;
 		if (rpkt) {
-			flea_GetPictureInfo(hw, rpkt, &PicNumber, meta_payload);
+			flea_GetPictureInfo(hw, rpkt, picNumFlags, meta_payload);
 			//printk("%s: flea_GetPictureInfo Pic#:%d\n", __func__, PicNumber);
 		}
 		return true;
@@ -2761,6 +2760,7 @@ bool flea_GetPictureInfo(struct crystalhd_hw *hw, crystalhd_rx_dma_pkt * rx_pkt,
 	if (res != 0)
 		goto getpictureinfo_err;
 	widthField = *(uint32_t*)(dio->pib_va);
+
 	hw->PICWidth = widthField & 0x3FFFFFFF; // bit 31 is FMT Change, bit 30 is EOS
 	if (hw->PICWidth > 2048) {
 		printk("Invalid width [%d]\n", hw->PICWidth);

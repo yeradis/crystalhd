@@ -783,11 +783,12 @@ static BC_STATUS bc_cproc_get_stats(struct crystalhd_cmd *ctx,
 	spin_unlock_irqrestore(&ctx->hw_ctx->lock, irqflags);
 
 	/* status peek ahead to retreive the next decoded frame timestamp */
-	if (!readTxOnly && stats->drvRLL && (stats->DrvNextMDataPLD & BC_BIT(31))) {
+//	if (!readTxOnly && stats->drvRLL && (stats->DrvNextMDataPLD & BC_BIT(31))) {
+	if (!readTxOnly && stats->drvRLL) {
 		pic_width = stats->DrvNextMDataPLD & 0xffff;
 		stats->DrvNextMDataPLD = 0;
 		if (pic_width <= 1920) {
-			if(ctx->hw_ctx->pfnPeekNextDeodedFr(ctx->hw_ctx,&stats->DrvNextMDataPLD, pic_width)) {
+			if(ctx->hw_ctx->pfnPeekNextDeodedFr(ctx->hw_ctx,&stats->DrvNextMDataPLD, &stats->picNumFlags, pic_width)) {
 				// Check in case we dropped a picture here
 				crystalhd_hw_stats(ctx->hw_ctx, &hw_stats);
 				stats->drvRLL = hw_stats.rdyq_count;

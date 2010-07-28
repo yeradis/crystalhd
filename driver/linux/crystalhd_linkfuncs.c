@@ -787,7 +787,7 @@ uint32_t link_GetRptDropParam(struct crystalhd_hw *hw, uint32_t picHeight, uint3
 * and returns it. THIS IS ONLY USED FOR LINK.
 */
 bool crystalhd_link_peek_next_decoded_frame(struct crystalhd_hw *hw,
-					  uint64_t *meta_payload,
+					  uint64_t *meta_payload, uint32_t *picNumFlags,
 					  uint32_t PicWidth)
 {
 	uint32_t PicNumber = 0;

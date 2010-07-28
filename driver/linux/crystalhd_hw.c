@@ -629,6 +629,7 @@ BC_STATUS crystalhd_rx_pkt_done(struct crystalhd_hw *hw,
 			rx_pkt->dio_req->uinfo.uv_done_sz = uv_dw_dnsz;
 		crystalhd_dioq_add(hw->rx_rdyq, rx_pkt, true,
 							hw->rx_pkt_tag_seed + list_index);
+
 		if( hw->adp->pdev->device == BC_PCI_DEVID_FLEA)
 		{
 			//printk("pre-PD state %x RLL %x Ptsh %x ratio %d currentPS %d\n",

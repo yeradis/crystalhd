@@ -318,7 +318,7 @@ typedef void		(*HW_GET_DONE_SIZE)(struct crystalhd_hw *hw, uint32_t, uint32_t*, 
 /* typedef bool		(*HW_ADD_DRP_TO_FREE_LIST)(struct crystalhd_adp*,crystalhd_dio_req *ioreq); */
 typedef crystalhd_dio_req*	(*HW_FETCH_DONE_BUFFERS)(struct crystalhd_adp*,bool);
 /* typedef bool		(*HW_ADD_ROLLBACK_RXBUF)(struct crystalhd_adp*,crystalhd_dio_req *ioreq); */
-typedef bool		(*HW_PEEK_NEXT_DECODED_RXBUF)(struct crystalhd_hw*,uint64_t*,uint32_t);
+typedef bool		(*HW_PEEK_NEXT_DECODED_RXBUF)(struct crystalhd_hw*,uint64_t*,uint32_t*,uint32_t);
 typedef BC_STATUS	(*HW_FW_PASSTHRU_CMD)(struct crystalhd_hw*,PBC_FW_CMD);
 /* typedef bool		(*HW_CANCEL_FW_CMDS)(struct crystalhd_adp*,OS_CANCEL_CALLBACK); */
 /* typedef void*	(*HW_GET_FW_DONE_OS_CMD)(struct crystalhd_adp*); */
