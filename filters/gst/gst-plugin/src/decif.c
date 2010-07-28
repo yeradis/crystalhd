@@ -162,7 +162,7 @@ BC_STATUS decif_send_buffer(BcmDecIF *decif, guint8 *buffer, guint32 size,
 	return sts;
 }
 
-BC_STATUS decif_get_drv_status(BcmDecIF *decif, gboolean *suspended, guint32 *rll)
+BC_STATUS decif_get_drv_status(BcmDecIF *decif, gboolean *suspended, guint32 *rll, guint32 *picNumFlags)
 {
 	BC_DTS_STATUS drv_status;
 	BC_STATUS sts = DtsGetDriverStatus(decif->hdev, &drv_status);
@@ -172,6 +172,7 @@ BC_STATUS decif_get_drv_status(BcmDecIF *decif, gboolean *suspended, guint32 *rl
 		else
 			*suspended = FALSE;
 		*rll = drv_status.ReadyListCount;
+		*picNumFlags = drv_status.picNumFlags;
 	}
 
 	return sts;

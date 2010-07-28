@@ -71,7 +71,7 @@ BC_STATUS
 decif_setcolorspace(BcmDecIF * decif, BC_OUTPUT_FORMAT mode);
 
 BC_STATUS
-decif_get_drv_status(BcmDecIF * decif, gboolean* suspended, guint32 *rll);
+decif_get_drv_status(BcmDecIF * decif, gboolean* suspended, guint32 *rll, guint32 *picNumFlags);
 
 BC_STATUS
 decif_get_eos(BcmDecIF *decif, gboolean *bEOS);

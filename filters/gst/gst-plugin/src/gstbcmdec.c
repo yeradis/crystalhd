@@ -39,6 +39,7 @@
 #include <time.h>
 #include <glib.h>
 #include <gst/base/gstadapter.h>
+#include <gst/video/video.h>
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -64,7 +65,8 @@ static GstFlowReturn bcmdec_send_buff_detect_error(GstBcmDec *bcmdec, GstBuffer 
 {
 	BC_STATUS sts, suspend_sts = BC_STS_SUCCESS;
 	gboolean suspended = FALSE;
-	uint32_t rll=0;
+	guint32 rll=0;
+	guint32 nextPicNumFlags = 0;
 
 	sts = decif_send_buffer(&bcmdec->decif, pbuffer, size, tCurrent, flags);
 
@@ -74,7 +76,7 @@ static GstFlowReturn bcmdec_send_buff_detect_error(GstBcmDec *bcmdec, GstBuffer 
 				 GST_BUFFER_TIMESTAMP(buf), GST_BUFFER_SIZE(buf),
 				 GST_BUFFER_DATA (buf));
 		if ((sts == BC_STS_IO_USER_ABORT) || (sts == BC_STS_ERROR)) {
-			suspend_sts = decif_get_drv_status(&bcmdec->decif,&suspended, &rll);
+			suspend_sts = decif_get_drv_status(&bcmdec->decif,&suspended, &rll, &nextPicNumFlags);
 			if (suspend_sts == BC_STS_SUCCESS) {
 				if (suspended) {
 					GST_DEBUG_OBJECT(bcmdec, "suspend status recv");
@@ -713,21 +715,29 @@ static gboolean bcmdec_negotiate_format(GstBcmDec *bcmdec)
 	guint den = 1000;
 	GstStructure *s1;
 	const GValue *framerate_value;
+	GstVideoFormat vidFmt;
 
 #ifdef YV12__
 	fourcc = GST_STR_FOURCC("YV12");
+	vidFmt = GST_VIDEO_FORMAT_YV12;
 #else
 	fourcc = GST_STR_FOURCC("YUY2");
+	vidFmt = GST_VIDEO_FORMAT_YUY2;
 #endif
 	GST_DEBUG_OBJECT(bcmdec, "framerate = %f", bcmdec->output_params.framerate);
 
-	caps = gst_caps_new_simple("video/x-raw-yuv",
-				   "format", GST_TYPE_FOURCC, fourcc,
-				   "width", G_TYPE_INT, bcmdec->output_params.width,
-				   "height", G_TYPE_INT, bcmdec->output_params.height,
-				   "pixel-aspect-ratio", GST_TYPE_FRACTION, bcmdec->output_params.aspectratio_x,
-				   bcmdec->output_params.aspectratio_y,
-				   "framerate", GST_TYPE_FRACTION, num, den, NULL);
+	if(bcmdec->interlace) {
+		caps = gst_video_format_new_caps_interlaced(vidFmt, bcmdec->output_params.width,
+													bcmdec->output_params.height, num, den,
+													bcmdec->output_params.aspectratio_x,
+													bcmdec->output_params.aspectratio_y,
+													TRUE);
+	} else {
+		caps = gst_video_format_new_caps(vidFmt, bcmdec->output_params.width,
+													bcmdec->output_params.height, num, den,
+													bcmdec->output_params.aspectratio_x,
+													bcmdec->output_params.aspectratio_y);
+	}
 
 	result = gst_pad_set_caps(bcmdec->srcpad, caps);
 	GST_DEBUG_OBJECT(bcmdec, "gst_bcmdec_negotiate_format %d", result);
@@ -809,6 +819,9 @@ static gboolean bcmdec_process_play(GstBcmDec *bcmdec)
 	bcInputFormat.pMetaData = bcmdec->codec_params.sps_pps_buf;
 	bcInputFormat.metaDataSz = bcmdec->codec_params.pps_size;
 	bcInputFormat.OptFlags = 0x80000000 | vdecFrameRate23_97;
+
+	bcInputFormat.bEnableScaling = true;
+	bcInputFormat.ScalingParams.sWidth = 800;
 
 	sts = decif_setinputformat(&bcmdec->decif, bcInputFormat);
 	if (sts == BC_STS_SUCCESS) {
@@ -1002,6 +1015,7 @@ static gboolean bcmdec_get_buffer(GstBcmDec *bcmdec, GstBuffer **obuf)
 
 static void bcmdec_init_procout(GstBcmDec *bcmdec,BC_DTS_PROC_OUT* pout, guint8* buf)
 {
+	// GSTREAMER only supports Interleaved mode for Interlaced content
 	//if (bcmdec->format_reset)
 	{
 		memset(pout,0,sizeof(BC_DTS_PROC_OUT));
@@ -1016,10 +1030,11 @@ static void bcmdec_init_procout(GstBcmDec *bcmdec,BC_DTS_PROC_OUT* pout, guint8*
 #endif
 		if (bcmdec->interlace)
 			pout->PoutFlags |= BC_POUT_FLAGS_INTERLACED;
+
 		if ((bcmdec->output_params.stride) || (bcmdec->interlace)) {
 			pout->PoutFlags |= BC_POUT_FLAGS_STRIDE ;
 			if (bcmdec->interlace)
-				pout->StrideSz = bcmdec->output_params.width + bcmdec->output_params.stride;
+				pout->StrideSz = bcmdec->output_params.width + 2 * bcmdec->output_params.stride;
 			else
 				pout->StrideSz = bcmdec->output_params.stride;
 		}
@@ -1053,7 +1068,7 @@ static void bcmdec_set_framerate(GstBcmDec * bcmdec,guint32 nFrameRate)
 {
 	gdouble framerate;
 
-	bcmdec->interlace = FALSE;
+//	bcmdec->interlace = FALSE;
 	framerate = (gdouble)nFrameRate / 1000;
 
 	if((framerate) && (bcmdec->output_params.framerate != framerate))
@@ -1064,7 +1079,7 @@ static void bcmdec_set_framerate(GstBcmDec * bcmdec,guint32 nFrameRate)
 		//if (bcmdec->interlace)
 		//	bcmdec->output_params.framerate /= 2;
 
-		GST_DEBUG_OBJECT(bcmdec, "framerate = %x  interlace = %d", framerate, bcmdec->interlace);
+		GST_DEBUG_OBJECT(bcmdec, "framerate = %x", framerate);
 	}
 }
 
@@ -1146,14 +1161,13 @@ static void bcmdec_set_aspect_ratio(GstBcmDec *bcmdec, BC_PIC_INFO_BLOCK *pic_in
 		break;
 	}
 
-	if (bcmdec->output_params.aspectratio_x == 0) {
-		if (bcmdec->input_par_x == 0) {
-			bcmdec->output_params.aspectratio_x = 1;
-			bcmdec->output_params.aspectratio_y = 1;
-		} else {
-			bcmdec->output_params.aspectratio_x = bcmdec->input_par_x;
-			bcmdec->output_params.aspectratio_y = bcmdec->input_par_y;
-		}
+	// Use Demux Aspect ratio first before falling back to HW ratio
+	if(bcmdec->input_par_x != 0) {
+		bcmdec->output_params.aspectratio_x = bcmdec->input_par_x;
+		bcmdec->output_params.aspectratio_y = bcmdec->input_par_y;
+	} else if (bcmdec->output_params.aspectratio_x == 0) {
+		bcmdec->output_params.aspectratio_x = 1;
+		bcmdec->output_params.aspectratio_y = 1;
 	}
 
 	GST_DEBUG_OBJECT(bcmdec, "dec_par x = %d", bcmdec->output_params.aspectratio_x);
@@ -1164,7 +1178,7 @@ static gboolean bcmdec_format_change(GstBcmDec *bcmdec, BC_PIC_INFO_BLOCK *pic_i
 {
 	GST_DEBUG_OBJECT(bcmdec, "Got format Change to %dx%d", pic_info->width, pic_info->height);
 	gboolean result = FALSE;
-	//bcmdec_set_framerate(bcmdec, pic_info->frame_rate);  // moved to proc out for every picture.
+
 	if (pic_info->height == 1088)
 		pic_info->height = 1080;
 
@@ -1172,6 +1186,20 @@ static gboolean bcmdec_format_change(GstBcmDec *bcmdec, BC_PIC_INFO_BLOCK *pic_i
 	bcmdec->output_params.height = pic_info->height;
 
 	bcmdec_set_aspect_ratio(bcmdec,pic_info);
+
+	// Interlaced
+	if((pic_info->flags & VDEC_FLAG_INTERLACED_SRC) == VDEC_FLAG_INTERLACED_SRC)
+		bcmdec->interlace = true;
+	else
+		bcmdec->interlace = false;
+
+	if( (bcmdec->input_format == BC_MSUBTYPE_AVC1) || (bcmdec->input_format == BC_MSUBTYPE_H264)) {
+		if (!bcmdec->interlace &&
+			(pic_info->pulldown == vdecFrame_X1) &&
+			(pic_info->flags & VDEC_FLAG_FIELDPAIR) &&
+			(pic_info->flags & VDEC_FLAG_INTERLACED_SRC))
+				bcmdec->interlace = true;
+	}
 
 	result = bcmdec_negotiate_format(bcmdec);
 	if (!bcmdec->silent) {
@@ -1350,6 +1378,7 @@ static void * bcmdec_process_output(void *ctx)
 	gboolean first_frame_after_seek = FALSE;
 	GstClockTime cur_stream_time_diff = 0;
 	int wait_cnt = 0;
+	guint32 nextPicNumFlags = 0;
 
 	gboolean is_paused = FALSE;
 
@@ -1370,7 +1399,7 @@ static void * bcmdec_process_output(void *ctx)
 			// NAREN FIXME - This is HARDCODED right now till we get HW PAUSE and RESUME working from the driver
 			uint32_t rll;
 			gboolean tmp;
-			decif_get_drv_status(&(bcmdec->decif), &tmp, &rll);
+			decif_get_drv_status(&(bcmdec->decif), &tmp, &rll, &nextPicNumFlags);
 			if(rll >= 12 && !is_paused) {
 				GST_DEBUG_OBJECT(bcmdec, "HW PAUSE with RLL %u", rll);
 				decif_pause(&(bcmdec->decif), TRUE);
@@ -1380,6 +1409,11 @@ static void * bcmdec_process_output(void *ctx)
 				GST_DEBUG_OBJECT(bcmdec, "HW RESUME with RLL %u", rll);
 				decif_pause(&(bcmdec->decif), false);
 				is_paused = FALSE;
+			}
+
+			if(rll == 0) {
+				usleep(3 * 1000);
+				continue;
 			}
 
 			guint8* data_ptr;
@@ -1423,7 +1457,29 @@ static void * bcmdec_process_output(void *ctx)
 			bcmdec_init_procout(bcmdec, &pout, data_ptr);
 			rx_flush = TRUE;
 			pout.PicInfo.picture_number = 0;
-			sts = DtsProcOutput(bcmdec->decif.hdev, PROC_TIMEOUT,&pout);
+			// For interlaced content, if I am holding a buffer but the next buffer is not from the same picture
+			// i.e. the second field, then assume that this is a case of one field per picture and deliver this field
+			// Don't deliver the one with picture number of 0
+			if(bcmdec->sec_field) {
+				if(((nextPicNumFlags & 0x0FFFFFFF) - first_picture) != pic_number) {
+					if(pic_number == 0)
+						gst_buffer_unref(gstbuf);
+					else if (gst_queue_element) {
+						GST_BUFFER_FLAG_SET(gstbuf, GST_VIDEO_BUFFER_ONEFIELD);
+						gst_queue_element->gstbuf = gstbuf;
+						bcmdec_ins_buf(bcmdec, gst_queue_element);
+						bcmdec->prev_pic = pic_number;
+						gst_queue_element = NULL;
+					} else {
+						GST_DEBUG_OBJECT(bcmdec, "SOMETHING BAD HAPPENED\n");
+						gst_buffer_unref(gstbuf);
+					}
+					gstbuf = NULL;
+					bcmdec->sec_field = FALSE;;
+					continue;
+				}
+			}
+			sts = DtsProcOutput(bcmdec->decif.hdev, PROC_TIMEOUT, &pout);
 			GST_DEBUG_OBJECT(bcmdec, "procoutput status %d", sts);
 			switch (sts) {
 			case BC_STS_FMT_CHANGE:
@@ -1469,12 +1525,13 @@ static void * bcmdec_process_output(void *ctx)
 				pic_number = pout.PicInfo.picture_number - first_picture;
 
 				if (!bcmdec->silent)
-					GST_DEBUG_OBJECT(bcmdec, "pic_number is %u", pic_number);
+					GST_DEBUG_OBJECT(bcmdec, "pic_number from HW is %u", pout.PicInfo.picture_number);
 
 				if (bcmdec->flushing) {
 					GST_DEBUG_OBJECT(bcmdec, "flushing discard, pic = %d", pic_number);
 					continue;
 				}
+
 				if (bcmdec->prev_pic + 1 < pic_number) {
 					if (!bcmdec->silent)
 						GST_DEBUG_OBJECT(bcmdec, "LOST PICTURE pic_no = %d, prev = %d", pic_number, bcmdec->prev_pic);
@@ -1489,6 +1546,7 @@ static void * bcmdec_process_output(void *ctx)
 				}*/
 
 				if (!bcmdec->interlace || bcmdec->sec_field) {
+					GST_DEBUG_OBJECT(bcmdec, "Progressive or Second Field");
 					GST_BUFFER_OFFSET(gstbuf) = 0;
 					GST_BUFFER_TIMESTAMP(gstbuf) = bcmdec_get_time_stamp(bcmdec, pic_number, pout.PicInfo.timeStamp);
 					GST_BUFFER_DURATION(gstbuf)  = bcmdec->frame_time;
@@ -1519,6 +1577,9 @@ static void * bcmdec_process_output(void *ctx)
 
 				if (!bcmdec->interlace || bcmdec->sec_field) {
 					if (gst_queue_element) {
+						// If interlaced, set the GST_VIDEO_BUFFER_TFF flags
+						if(bcmdec->sec_field)
+							GST_BUFFER_FLAG_SET(gstbuf, GST_VIDEO_BUFFER_TFF);
 						gst_queue_element->gstbuf = gstbuf;
 						bcmdec_ins_buf(bcmdec, gst_queue_element);
 						bcmdec->prev_pic = pic_number;
@@ -1527,12 +1588,11 @@ static void * bcmdec_process_output(void *ctx)
 					}
 					gstbuf = NULL;
 					bcmdec->sec_field = FALSE;
-		    		if (!(bcmdec->prev_pic % 100))
-						GST_DEBUG_OBJECT(bcmdec, ".");
+					gst_queue_element = NULL;
 				} else {
+					GST_DEBUG_OBJECT(bcmdec, "Wait for second field");
 					bcmdec->sec_field = TRUE;
 				}
-				gst_queue_element = NULL;
 				break;
 
 			case BC_STS_TIMEOUT:
