@@ -820,8 +820,9 @@ static gboolean bcmdec_process_play(GstBcmDec *bcmdec)
 	bcInputFormat.metaDataSz = bcmdec->codec_params.pps_size;
 	bcInputFormat.OptFlags = 0x80000000 | vdecFrameRate23_97;
 
-	bcInputFormat.bEnableScaling = true;
-	bcInputFormat.ScalingParams.sWidth = 800;
+	// ENABLE the Following lines if HW Scaling is desired
+//	bcInputFormat.bEnableScaling = true;
+//	bcInputFormat.ScalingParams.sWidth = 800;
 
 	sts = decif_setinputformat(&bcmdec->decif, bcInputFormat);
 	if (sts == BC_STS_SUCCESS) {
