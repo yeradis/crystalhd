@@ -33,6 +33,8 @@
 #include "libcrystalhd_int_if.h"
 #include "libcrystalhd_fwcmds.h"
 
+#include <emmintrin.h>
+
 #define SV_MAX_LINE_SZ 128
 #define PCI_GLOBAL_CONTROL MISC2_GLOBAL_CTRL
 #define PCI_INT_STS_REG MISC2_INTERNAL_STATUS
@@ -632,7 +634,12 @@ DtsReadPciConfigSpace(
 		return sts;
 	}
 
-	*Value = *(uint32_t *)(pciInfo->pci_cfg_space);
+	*Value = pciInfo->pci_cfg_space[0] |
+				(pciInfo->pci_cfg_space[1] << 8)|
+				(pciInfo->pci_cfg_space[2] << 16)|
+				(pciInfo->pci_cfg_space[3] << 24);
+
+	//*Value = *(uint32_t *)(pciInfo->pci_cfg_space);
 
 	DtsRelIoctlData(Ctx,pIocData);
 
@@ -661,7 +668,12 @@ DtsWritePciConfigSpace(
 
 	pciInfo->Size = Size;
 	pciInfo->Offset = Offset;
-	*((uint32_t *)(pciInfo->pci_cfg_space)) = Value;
+	pciInfo->pci_cfg_space[0] = Value & 0xFF;
+	pciInfo->pci_cfg_space[1] = (Value >> 8) & 0xFF;
+	pciInfo->pci_cfg_space[2] = (Value >> 16) & 0xFF;
+	pciInfo->pci_cfg_space[3] = (Value >> 24) & 0xFF;
+
+	//*((uint32_t *)(pciInfo->pci_cfg_space)) = Value;
 	if( (sts=DtsDrvCmd(Ctx,BCM_IOC_WR_PCI_CFG,0,pIocData,FALSE)) != BC_STS_SUCCESS){
 		DtsRelIoctlData(Ctx,pIocData);
 		DebugLog_Trace(LDIL_DBG,"DtsGetPciConfigSpace: Ioctl failed: %d\n",sts);
@@ -1316,7 +1328,7 @@ DtsCopyRawDataToOutBuff(DTS_LIB_CONTEXT	*Ctx,
 	uint32_t	y,lDestStride=0;
 	uint8_t	*pSrc = NULL, *pDest=NULL;
 	uint32_t	dstWidthInPixels, dstHeightInPixels;
-	uint32_t srcWidthInPixels, srcHeightInPixels;
+	uint32_t srcWidthInPixels = 0, srcHeightInPixels;
 	BC_STATUS	Sts = BC_STS_SUCCESS;
 
 	if ( (Sts = DtsChkYUVSizes(Ctx,Vout,Vin)) != BC_STS_SUCCESS)
@@ -1378,7 +1390,7 @@ BC_STATUS DtsCopyNV12ToYV12(DTS_LIB_CONTEXT	*Ctx, BC_DTS_PROC_OUT *Vout, BC_DTS_
 	uint8_t	*yv12buff = NULL;
 	uint32_t uvbase=0;
 	BC_STATUS	Sts = BC_STS_SUCCESS;
-	uint32_t	x,y,lDestStride=0;
+	uint32_t	x,y,lDestStrideY=0, lDestStrideUV=0;
 	uint8_t	*pSrc = NULL, *pDest=NULL;
 	uint32_t	dstWidthInPixels, dstHeightInPixels;
 	uint32_t srcWidthInPixels, srcHeightInPixels;
@@ -1390,7 +1402,9 @@ BC_STATUS DtsCopyNV12ToYV12(DTS_LIB_CONTEXT	*Ctx, BC_DTS_PROC_OUT *Vout, BC_DTS_
 	if(Vout->PoutFlags & BC_POUT_FLAGS_SIZE)// needs to be optimized.
 	{
 		if(Vout->PoutFlags & BC_POUT_FLAGS_STRIDE)
-			lDestStride = Vout->StrideSz;
+			lDestStrideUV = (lDestStrideY = Vout->StrideSz)/2;
+		if(Vout->PoutFlags & BC_POUT_FLAGS_STRIDE_UV)
+			lDestStrideUV = Vout->StrideSzUV;
 
 		// Use DShow provided size for now
 		dstWidthInPixels = Vout->PicInfo.width;
@@ -1415,13 +1429,13 @@ BC_STATUS DtsCopyNV12ToYV12(DTS_LIB_CONTEXT	*Ctx, BC_DTS_PROC_OUT *Vout, BC_DTS_
 		for (y = 0; y < dstHeightInPixels; y++)
 		{
 			memcpy(pDest,pSrc,dstWidthInPixels);
-			pDest += dstWidthInPixels + lDestStride;
+			pDest += dstWidthInPixels + lDestStrideY;
 			pSrc += srcWidthInPixels;
 		}
 		//copy chroma
 		pDest = Vout->UVbuff;
 		pSrc = Vin->UVbuff;
-		uvbase = (dstWidthInPixels + lDestStride) * dstHeightInPixels/4 ;//(Vin->UVBuffDoneSz * 4/2);
+		uvbase = (dstWidthInPixels + lDestStrideY) * dstHeightInPixels/4 ;//(Vin->UVBuffDoneSz * 4/2);
 		for (y = 0; y < dstHeightInPixels/2; y++)
 		{
 			for(x = 0; x < dstWidthInPixels; x += 2)
@@ -1429,7 +1443,7 @@ BC_STATUS DtsCopyNV12ToYV12(DTS_LIB_CONTEXT	*Ctx, BC_DTS_PROC_OUT *Vout, BC_DTS_
 				pDest[x/2] = pSrc[x+1];
 				pDest[uvbase + x/2] = pSrc[x];
 			}
-			pDest += (dstWidthInPixels + lDestStride) / 2;
+			pDest += dstWidthInPixels / 2 + lDestStrideUV;
 			pSrc += srcWidthInPixels;
 		}
 	}
@@ -1459,10 +1473,10 @@ BC_STATUS DtsCopyNV12ToYV12(DTS_LIB_CONTEXT	*Ctx, BC_DTS_PROC_OUT *Vout, BC_DTS_
 
 BC_STATUS DtsCopyNV12(DTS_LIB_CONTEXT *Ctx, BC_DTS_PROC_OUT *Vout, BC_DTS_PROC_OUT *Vin)
 {
-	uint32_t y,lDestStride=0;
+	uint32_t y,lDestStrideY=0,lDestStrideUV=0;
 	uint8_t	*pSrc = NULL, *pDest=NULL;
 	uint32_t dstWidthInPixels, dstHeightInPixels;
-	uint32_t srcWidthInPixels, srcHeightInPixels;
+	uint32_t srcWidthInPixels=0, srcHeightInPixels;
 
 	BC_STATUS	Sts = BC_STS_SUCCESS;
 
@@ -1470,7 +1484,9 @@ BC_STATUS DtsCopyNV12(DTS_LIB_CONTEXT *Ctx, BC_DTS_PROC_OUT *Vout, BC_DTS_PROC_O
 		return Sts;
 
 	if(Vout->PoutFlags & BC_POUT_FLAGS_STRIDE)
-		lDestStride = Vout->StrideSz;
+		lDestStrideUV = lDestStrideY = Vout->StrideSz;
+	if(Vout->PoutFlags & BC_POUT_FLAGS_STRIDE_UV)
+		lDestStrideUV = Vout->StrideSzUV;
 
 	if(Vout->PoutFlags & BC_POUT_FLAGS_SIZE) {
 		// Use DShow provided size for now
@@ -1490,20 +1506,16 @@ BC_STATUS DtsCopyNV12(DTS_LIB_CONTEXT *Ctx, BC_DTS_PROC_OUT *Vout, BC_DTS_PROC_O
 		dstHeightInPixels = Vin->PicInfo.height;
 	}
 
-
-
-	//WidthInPixels = 1280;
-	//HeightInPixels = 720;
-    // NV12 is planar: Y plane, followed by packed U-V plane.
+	// NV12 is planar: Y plane, followed by packed U-V plane.
 
 	// Do a strided copy only if the stride is non-zero
-	if( (lDestStride != 0) || (srcWidthInPixels != dstWidthInPixels) ) {
+	if((lDestStrideY != 0) || (lDestStrideUV != 0) || (srcWidthInPixels != dstWidthInPixels)) {
 		// Y plane
 		pDest = Vout->Ybuff;
 		pSrc = Vin->Ybuff;
 		for (y = 0; y < dstHeightInPixels; y++){
 			memcpy(pDest,pSrc,dstWidthInPixels);
-			pDest += dstWidthInPixels + lDestStride;
+			pDest += dstWidthInPixels + lDestStrideY;
 			pSrc += srcWidthInPixels;
 		}
 	// U-V plane
@@ -1511,7 +1523,7 @@ BC_STATUS DtsCopyNV12(DTS_LIB_CONTEXT *Ctx, BC_DTS_PROC_OUT *Vout, BC_DTS_PROC_O
 		pSrc = Vin->UVbuff;
 		for (y = 0; y < dstHeightInPixels/2; y++){
 			memcpy(pDest,pSrc,dstWidthInPixels);
-			pDest += dstWidthInPixels + lDestStride;
+			pDest += dstWidthInPixels + lDestStrideUV;
 			pSrc += srcWidthInPixels;
 		}
 	} else {
@@ -1524,6 +1536,701 @@ BC_STATUS DtsCopyNV12(DTS_LIB_CONTEXT *Ctx, BC_DTS_PROC_OUT *Vout, BC_DTS_PROC_O
 
 	return BC_STS_SUCCESS;
 }
+
+// TODO: add sse2 detection
+static bool gSSE2 = true; // most of the platforms will have it anyway:
+// 64 bits: no test necessary
+// mac: no test necessary
+// linux/windows: we might have to do the test.
+
+static void fast_memcpy(uint8_t *dst, const uint8_t *src, uint32_t count)
+{
+	// tested
+	if (gSSE2)
+	{
+		if (((((uintptr_t) dst) & 0xf) == 0) && ((((uintptr_t) src) & 0xf) == 0))
+		{
+			while (count >= (16*4))
+			{
+				_mm_stream_si128((__m128i *) (dst+ 0*16),  _mm_load_si128((__m128i *) (src+ 0*16)));
+				_mm_stream_si128((__m128i *) (dst+ 1*16),  _mm_load_si128((__m128i *) (src+ 1*16)));
+				_mm_stream_si128((__m128i *) (dst+ 2*16),  _mm_load_si128((__m128i *) (src+ 2*16)));
+				_mm_stream_si128((__m128i *) (dst+ 3*16),  _mm_load_si128((__m128i *) (src+ 3*16)));
+				count -= 16*4;
+				src += 16*4;
+				dst += 16*4;
+			}
+		}
+		else
+		{
+			while (count >= (16*4))
+			{
+				_mm_storeu_si128((__m128i *) (dst+ 0*16),  _mm_loadu_si128((__m128i *) (src+ 0*16)));
+				_mm_storeu_si128((__m128i *) (dst+ 1*16),  _mm_loadu_si128((__m128i *) (src+ 1*16)));
+				_mm_storeu_si128((__m128i *) (dst+ 2*16),  _mm_loadu_si128((__m128i *) (src+ 2*16)));
+				_mm_storeu_si128((__m128i *) (dst+ 3*16),  _mm_loadu_si128((__m128i *) (src+ 3*16)));
+				count -= 16*4;
+				src += 16*4;
+				dst += 16*4;
+			}
+		}
+	}
+
+	while (count --)
+		*dst++ = *src++;
+}
+
+// this is not good.
+// if we have 3 buffers, we cannot assume V is after U
+static BC_STATUS DtsCopy422ToYV12(uint8_t *dstY, uint8_t *dstUV, const uint8_t *srcY, uint32_t srcWidth, uint32_t dstWidth, uint32_t height, uint32_t strideY, uint32_t strideUV)
+{ // copy YUY2 to YV12
+	// TODO
+	// NOTE: if we want to support this porperly, we will need to add a Vbuffer pointer
+	// if we have 3 destination buffers, there's no guarantee that V buffer is derivable from UV pointer.
+	return BC_STS_INV_ARG;
+}
+
+// this is just a memcpy
+static BC_STATUS DtsCopy422ToYUY2(uint8_t *dstY, uint8_t *dstUV, const uint8_t *srcY, uint32_t srcWidth, uint32_t dstWidth, uint32_t height, uint32_t strideY, uint32_t strideUV)
+{ // copy YUY2 to YUY2
+	uint32_t y;
+
+	// TODO: test this
+	strideY += dstWidth*2;
+
+	for (y = 0; y < height; y++)
+	{
+		fast_memcpy(dstY, srcY, srcWidth*2);
+		srcY += srcWidth*2;
+		dstY += strideY;
+	}
+	return BC_STS_SUCCESS;
+}
+
+// almost a memcpy, we just need to shuffle YUV's around
+static BC_STATUS DtsCopy422ToUYVY(uint8_t *dstY, uint8_t *dstUV, const uint8_t *srcY, uint32_t srcWidth, uint32_t dstWidth, uint32_t height, uint32_t strideY, uint32_t strideUV)
+{
+	// TODO, test this
+	uint32_t x, __y;
+
+	strideY += dstWidth*2;
+
+	for (__y = 0; __y < height; __y++)
+	{
+		if (gSSE2)
+		{
+			if (((((uintptr_t) dstY) & 0xf) == 0) && ((((uintptr_t) srcY) & 0xf) == 0))
+			{
+				while (x < srcWidth-7)
+				{
+					__m128i v = _mm_load_si128((__m128i *)(srcY+x*2));
+					__m128i v1 = _mm_srli_epi16(v, 8);
+					__m128i v2 = _mm_slli_epi16(v, 8);
+					_mm_stream_si128((__m128i *)(dstY+x*2), _mm_or_si128(v1, v2));
+					x += 8;
+				}
+			}
+			else
+			{
+				while (x < srcWidth-7)
+				{
+					__m128i v = _mm_loadu_si128((__m128i *)(srcY+x*2));
+					__m128i v1 = _mm_srli_epi16(v, 8);
+					__m128i v2 = _mm_slli_epi16(v, 8);
+					_mm_storeu_si128((__m128i *)(dstY+x*2), _mm_or_si128(v1, v2));
+					x += 8;
+				}
+			}
+		}
+
+		while (x < srcWidth-1)
+		{
+			dstY[x*2+0] = srcY[x+1];
+			dstY[x*2+1] = srcY[x+0];
+			dstY[x*2+2] = srcY[x+3];
+			dstY[x*2+3] = srcY[x+2];
+			x += 2;
+		}
+
+		srcY += srcWidth*2;
+		dstY += strideY;
+	}
+	return BC_STS_SUCCESS;
+}
+
+// convert to NV12
+static BC_STATUS DtsCopy422ToNV12(uint8_t *dstY, uint8_t *dstUV, const uint8_t *srcY, uint32_t srcWidth, uint32_t dstWidth, uint32_t height, uint32_t strideY, uint32_t strideUV)
+{
+	// tested
+	uint32_t x, __y;
+
+	strideY += dstWidth;
+	strideUV += dstWidth;
+
+	static __m128i mask = _mm_set_epi16(0x00ff, 0x00ff, 0x00ff, 0x00ff, 0x00ff, 0x00ff, 0x00ff, 0x00ff);
+
+	for (__y = 0; __y < height; __y += 2)
+	{
+		x = 0;
+
+		// first line: Y and UV extraction
+
+		if (gSSE2)
+		{
+			if (((((uintptr_t) dstY) & 0xf) == 0) && ((((uintptr_t) srcY) & 0xf) == 0) && ((((uintptr_t) dstUV) & 0xf) == 0))
+			{
+				while (x < srcWidth-15)
+				{
+					__m128i s1 = _mm_load_si128((__m128i *) (srcY+x*2+ 0)); // load 8 pixels
+					__m128i s2 = _mm_load_si128((__m128i *) (srcY+x*2+16)); // load 8 more
+
+					__m128i y1 = _mm_and_si128(s1, mask); // mask out uvs
+					__m128i y2 = _mm_and_si128(s2, mask); // mask out uvs
+					__m128i y = _mm_packus_epi16 (y1, y2); // get the y together
+					_mm_stream_si128((__m128i *) (dstY+x), y); // store 16 Y
+
+					s1 = _mm_srli_epi16(s1, 8); // get rid of Y
+					s2 = _mm_srli_epi16(s2, 8); // get rid of Y
+					__m128i uv = _mm_packus_epi16 (s1, s2); // get the uv together
+					_mm_stream_si128((__m128i *) (dstUV+x), uv); // store 8 UV pairs
+
+					x += 16;
+				}
+			}
+			else
+			{
+				while (x < srcWidth-15)
+				{
+					__m128i s1 = _mm_loadu_si128((__m128i *) (srcY+x*2+ 0)); // load 8 pixels
+					__m128i s2 = _mm_loadu_si128((__m128i *) (srcY+x*2+16)); // load 8 more
+
+					__m128i y1 = _mm_and_si128(s1, mask); // mask out uvs
+					__m128i y2 = _mm_and_si128(s2, mask); // mask out uvs
+					__m128i y = _mm_packus_epi16 (y1, y2); // get the y together
+					_mm_storeu_si128((__m128i *) (dstY+x), y); // store 16 Y
+
+					s1 = _mm_srli_epi16(s1, 8); // get rid of Y
+					s2 = _mm_srli_epi16(s2, 8); // get rid of Y
+					__m128i uv = _mm_packus_epi16 (s1, s2); // get the uv together
+					_mm_storeu_si128((__m128i *) (dstUV+x), uv); // store 8 UV pairs
+
+					x += 16;
+				}
+			}
+		}
+
+
+		while (x < srcWidth-1)
+		{
+			dstY [x+0] = srcY[x*2+0]; // Y
+			dstUV[x+0] = srcY[x*2+1]; // U
+			dstY [x+1] = srcY[x*2+2]; // Y
+			dstUV[x+1] = srcY[x*2+3]; // V
+			x += 2;
+		}
+
+		srcY += srcWidth*2;
+		dstY += strideY;
+		dstUV += strideUV;
+
+		// second line: just Y
+		x = 0;
+		if (gSSE2)
+		{
+			if (((((uintptr_t) dstY) & 0xf) == 0) && ((((uintptr_t) srcY) & 0xf) == 0))
+			{
+				while (x < srcWidth-15)
+				{
+					__m128i s1 = _mm_load_si128((__m128i *) (srcY+x*2+ 0)); // load 8 pixels
+					__m128i s2 = _mm_load_si128((__m128i *) (srcY+x*2+16)); // load 8 more
+
+					__m128i y1 = _mm_and_si128(s1, mask); // mask out uvs
+					__m128i y2 = _mm_and_si128(s2, mask); // mask out uvs
+					__m128i y = _mm_packus_epi16 (y1, y2); // get the y
+					_mm_stream_si128((__m128i *) (dstY+x), y); // store 16 Y
+
+					x += 16;
+				}
+			}
+			else
+			{
+				while (x < srcWidth-15)
+				{
+					__m128i s1 = _mm_loadu_si128((__m128i *) (srcY+x*2+ 0)); // load 8 pixels
+					__m128i s2 = _mm_loadu_si128((__m128i *) (srcY+x*2+16)); // load 8 more
+
+					__m128i y1 = _mm_and_si128(s1, mask); // mask out uvs
+					__m128i y2 = _mm_and_si128(s2, mask); // mask out uvs
+					__m128i y = _mm_packus_epi16 (y1, y2); // get the y
+					_mm_storeu_si128((__m128i *) (dstY+x), y); // store 16 Y
+
+					x += 16;
+				}
+			}
+		}
+
+		while (x < srcWidth-1)
+		{
+			dstY [x+0] = srcY[x*2+0]; // Y
+			dstY [x+1] = srcY[x*2+2]; // Y
+			x += 2;
+		}
+
+		srcY += srcWidth*2;
+		dstY += strideY;
+	}
+	return BC_STS_SUCCESS;
+}
+
+
+// this is not good.
+// if we have 3 textures, we cannot assume V is after U
+static BC_STATUS DtsCopy420ToYV12(uint8_t *dstY, uint8_t *dstUV, const uint8_t *srcY, const uint8_t *srcUV, uint32_t srcWidth, uint32_t dstWidth, uint32_t height, uint32_t strideY, uint32_t strideUV)
+{
+	// TODO
+	// NOTE: if we want to support this porperly, we will need to add a Vbuffer pointer
+	return BC_STS_INV_ARG;
+}
+
+static BC_STATUS DtsCopy420ToYUY2(uint8_t *dstY, uint8_t *dstUV, const uint8_t *srcY, const uint8_t *srcUV, uint32_t srcWidth, uint32_t dstWidth, uint32_t height, uint32_t strideY, uint32_t strideUV)
+{
+	// TODO, test this
+	uint32_t x, __y;
+
+	strideY += dstWidth*2;
+
+	__y = 0;
+	while (__y < height-2)
+	{
+		// first line
+		x = 0;
+
+		if (gSSE2)
+		{
+			if (((((uintptr_t) dstY) & 0xf) == 0) && ((((uintptr_t) srcY) & 0xf) == 0))
+			{
+				while (x < srcWidth-15)
+				{
+					__m128i y = _mm_load_si128((__m128i *) (srcY+x)); // load 16 Y pixels
+					__m128i uv = _mm_load_si128((__m128i *) (srcUV+x)); // load 8 UV
+					_mm_stream_si128((__m128i *) (dstY+x*2+ 0), _mm_unpacklo_epi8(y, uv)); // store 8 pixels
+					_mm_stream_si128((__m128i *) (dstY+x*2+16), _mm_unpackhi_epi8(y, uv)); // store 8 pixels
+
+					x += 16;
+				}
+			}
+			else
+			{
+				while (x < srcWidth-15)
+				{
+					__m128i y = _mm_loadu_si128((__m128i *) (srcY+x)); // load 16 Y pixels
+					__m128i uv = _mm_loadu_si128((__m128i *) (srcUV+x)); // load 8 UV
+					_mm_storeu_si128((__m128i *) (dstY+x*2+ 0), _mm_unpacklo_epi8(y, uv)); // store 8 pixels
+					_mm_storeu_si128((__m128i *) (dstY+x*2+16), _mm_unpackhi_epi8(y, uv)); // store 8 pixels
+
+					x += 16;
+				}
+			}
+		}
+
+		while (x < srcWidth-1)
+		{
+			dstY[x*2+0] = srcY [x+0];
+			dstY[x*2+1] = srcUV[x+0];
+			dstY[x*2+2] = srcY [x+1];
+			dstY[x*2+3] = srcUV[x+1];
+
+			x += 2;
+		}
+
+		srcY += srcWidth;
+		dstY += strideY;
+
+		// second line
+
+		x = 0;
+
+		if (gSSE2)
+		{
+			if (((((uintptr_t) dstY) & 0xf) == 0) && ((((uintptr_t) srcY) & 0xf) == 0))
+			{
+				while (x < srcWidth-15)
+				{
+					__m128i y = _mm_load_si128((__m128i *) (srcY+x)); // load 16 Y pixels
+					__m128i uv1 = _mm_load_si128((__m128i *) (srcUV+x)); // load 8 UV
+					__m128i uv2 = _mm_load_si128((__m128i *) (srcUV+x+srcWidth)); // load 8 UV
+					__m128i uv = _mm_avg_epu8(uv1, uv2);
+					_mm_stream_si128((__m128i *) (dstY+x*2+ 0), _mm_unpacklo_epi8(y, uv)); // store 8 pixels
+					_mm_stream_si128((__m128i *) (dstY+x*2+16), _mm_unpackhi_epi8(y, uv)); // store 8 pixels
+
+					x += 16;
+				}
+			}
+			else
+			{
+				while (x < srcWidth-15)
+				{
+					__m128i y = _mm_loadu_si128((__m128i *) (srcY+x)); // load 16 Y pixels
+					__m128i uv1 = _mm_loadu_si128((__m128i *) (srcUV+x)); // load 8 UV
+					__m128i uv2 = _mm_loadu_si128((__m128i *) (srcUV+x+srcWidth)); // load 8 UV
+					__m128i uv = _mm_avg_epu8(uv1, uv2);
+					_mm_storeu_si128((__m128i *) (dstY+x*2+ 0), _mm_unpacklo_epi8(y, uv)); // store 8 pixels
+					_mm_storeu_si128((__m128i *) (dstY+x*2+16), _mm_unpackhi_epi8(y, uv)); // store 8 pixels
+
+					x += 16;
+				}
+			}
+		}
+
+		while (x < srcWidth-1)
+		{
+			dstY[x*2+0] = srcY [x+0];
+			dstY[x*2+1] = (srcUV[x+0] + srcUV[x+0+srcWidth])/2;
+			dstY[x*2+2] = srcY [x+1];
+			dstY[x*2+3] = (srcUV[x+1] + srcUV[x+1+srcWidth])/2;
+
+			x += 2;
+		}
+
+		srcY += srcWidth;
+		srcUV += srcWidth;
+		dstY += strideY;
+
+		__y += 2;
+	}
+
+	// last 2 lines
+	while (__y < height)
+	{
+		x = 0;
+
+		if (gSSE2)
+		{
+			if (((((uintptr_t) dstY) & 0xf) == 0) && ((((uintptr_t) srcY) & 0xf) == 0))
+			{
+				while (x < srcWidth-15)
+				{
+					__m128i y = _mm_load_si128((__m128i *) (srcY+x)); // load 16 Y pixels
+					__m128i uv = _mm_load_si128((__m128i *) (srcUV+x)); // load 8 UV
+					_mm_stream_si128((__m128i *) (dstY+x*2+ 0), _mm_unpacklo_epi8(y, uv)); // store 8 pixels
+					_mm_stream_si128((__m128i *) (dstY+x*2+16), _mm_unpackhi_epi8(y, uv)); // store 8 pixels
+
+					x += 16;
+				}
+			}
+			else
+			{
+				while (x < srcWidth-15)
+				{
+					__m128i y = _mm_loadu_si128((__m128i *) (srcY+x)); // load 16 Y pixels
+					__m128i uv = _mm_loadu_si128((__m128i *) (srcUV+x)); // load 8 UV
+					_mm_storeu_si128((__m128i *) (dstY+x*2+ 0), _mm_unpacklo_epi8(y, uv)); // store 8 pixels
+					_mm_storeu_si128((__m128i *) (dstY+x*2+16), _mm_unpackhi_epi8(y, uv)); // store 8 pixels
+
+					x += 16;
+				}
+			}
+		}
+
+		while (x < srcWidth-1)
+		{
+			dstY[x*2+0] = srcY [x+0];
+			dstY[x*2+1] = srcUV[x+0];
+			dstY[x*2+2] = srcY [x+1];
+			dstY[x*2+3] = srcUV[x+1];
+
+			x += 2;
+		}
+
+		srcY += srcWidth;
+		dstY += strideY;
+
+		__y++;
+	}
+
+	return BC_STS_SUCCESS;
+}
+
+static BC_STATUS DtsCopy420ToUYVY(uint8_t *dstY, uint8_t *dstUV, const uint8_t *srcY, const uint8_t *srcUV, uint32_t srcWidth, uint32_t dstWidth, uint32_t height, uint32_t strideY, uint32_t strideUV)
+{
+	// TODO, test this
+	uint32_t x, __y;
+
+	strideY += dstWidth*2;
+
+	__y = 0;
+	while (__y < height-2)
+	{
+		// first line
+		x = 0;
+
+		if (gSSE2)
+		{
+			if (((((uintptr_t) dstY) & 0xf) == 0) && ((((uintptr_t) srcY) & 0xf) == 0))
+			{
+				while (x < srcWidth-15)
+				{
+					__m128i y = _mm_load_si128((__m128i *) (srcY+x)); // load 16 Y pixels
+					__m128i uv = _mm_load_si128((__m128i *) (srcUV+x)); // load 8 UV
+					_mm_stream_si128((__m128i *) (dstY+x*2+ 0), _mm_unpacklo_epi8(uv, y)); // store 8 pixels
+					_mm_stream_si128((__m128i *) (dstY+x*2+16), _mm_unpackhi_epi8(uv, y)); // store 8 pixels
+
+					x += 16;
+				}
+			}
+			else
+			{
+				while (x < srcWidth-15)
+				{
+					__m128i y = _mm_loadu_si128((__m128i *) (srcY+x)); // load 16 Y pixels
+					__m128i uv = _mm_loadu_si128((__m128i *) (srcUV+x)); // load 8 UV
+					_mm_storeu_si128((__m128i *) (dstY+x*2+ 0), _mm_unpacklo_epi8(uv, y)); // store 8 pixels
+					_mm_storeu_si128((__m128i *) (dstY+x*2+16), _mm_unpackhi_epi8(uv, y)); // store 8 pixels
+
+					x += 16;
+				}
+			}
+		}
+
+		while (x < srcWidth-1)
+		{
+			dstY[x*2+1] = srcY [x+0];
+			dstY[x*2+0] = srcUV[x+0];
+			dstY[x*2+3] = srcY [x+1];
+			dstY[x*2+2] = srcUV[x+1];
+
+			x += 2;
+		}
+
+		srcY += srcWidth;
+		dstY += strideY;
+
+		// second line
+
+		x = 0;
+
+		if (gSSE2)
+		{
+			if (((((uintptr_t) dstY) & 0xf) == 0) && ((((uintptr_t) srcY) & 0xf) == 0))
+			{
+				while (x < srcWidth-15)
+				{
+					__m128i y = _mm_load_si128((__m128i *) (srcY+x)); // load 16 Y pixels
+					__m128i uv1 = _mm_load_si128((__m128i *) (srcUV+x)); // load 8 UV
+					__m128i uv2 = _mm_load_si128((__m128i *) (srcUV+x+srcWidth)); // load 8 UV
+					__m128i uv = _mm_avg_epu8(uv1, uv2);
+					_mm_stream_si128((__m128i *) (dstY+x*2+ 0), _mm_unpacklo_epi8(uv, y)); // store 8 pixels
+					_mm_stream_si128((__m128i *) (dstY+x*2+16), _mm_unpackhi_epi8(uv, y)); // store 8 pixels
+
+					x += 16;
+				}
+			}
+			else
+			{
+				while (x < srcWidth-15)
+				{
+					__m128i y = _mm_loadu_si128((__m128i *) (srcY+x)); // load 16 Y pixels
+					__m128i uv1 = _mm_loadu_si128((__m128i *) (srcUV+x)); // load 8 UV
+					__m128i uv2 = _mm_loadu_si128((__m128i *) (srcUV+x+srcWidth)); // load 8 UV
+					__m128i uv = _mm_avg_epu8(uv1, uv2);
+					_mm_storeu_si128((__m128i *) (dstY+x*2+ 0), _mm_unpacklo_epi8(uv, y)); // store 8 pixels
+					_mm_storeu_si128((__m128i *) (dstY+x*2+16), _mm_unpackhi_epi8(uv, y)); // store 8 pixels
+
+					x += 16;
+				}
+			}
+		}
+
+		while (x < srcWidth-1)
+		{
+			dstY[x*2+1] = srcY [x+0];
+			dstY[x*2+0] = (srcUV[x+0] + srcUV[x+0+srcWidth])/2;
+			dstY[x*2+3] = srcY [x+1];
+			dstY[x*2+2] = (srcUV[x+1] + srcUV[x+1+srcWidth])/2;
+
+			x += 2;
+		}
+
+		srcY += srcWidth;
+		srcUV += srcWidth;
+		dstY += strideY;
+	}
+
+	// last 2 lines
+	while (__y < height)
+	{
+		x = 0;
+
+		if (gSSE2)
+		{
+			if (((((uintptr_t) dstY) & 0xf) == 0) && ((((uintptr_t) srcY) & 0xf) == 0))
+			{
+				while (x < srcWidth-15)
+				{
+					__m128i y = _mm_load_si128((__m128i *) (srcY+x)); // load 16 Y pixels
+					__m128i uv = _mm_load_si128((__m128i *) (srcUV+x)); // load 8 UV
+					_mm_stream_si128((__m128i *) (dstY+x*2+ 0), _mm_unpacklo_epi8(uv, y)); // store 8 pixels
+					_mm_stream_si128((__m128i *) (dstY+x*2+16), _mm_unpackhi_epi8(uv, y)); // store 8 pixels
+
+					x += 16;
+				}
+			}
+			else
+			{
+				while (x < srcWidth-15)
+				{
+					__m128i y = _mm_loadu_si128((__m128i *) (srcY+x)); // load 16 Y pixels
+					__m128i uv = _mm_loadu_si128((__m128i *) (srcUV+x)); // load 8 UV
+					_mm_storeu_si128((__m128i *) (dstY+x*2+ 0), _mm_unpacklo_epi8(uv, y)); // store 8 pixels
+					_mm_storeu_si128((__m128i *) (dstY+x*2+16), _mm_unpackhi_epi8(uv, y)); // store 8 pixels
+
+					x += 16;
+				}
+			}
+		}
+
+		while (x < srcWidth-1)
+		{
+			dstY[x*2+1] = srcY [x+0];
+			dstY[x*2+0] = srcUV[x+0];
+			dstY[x*2+3] = srcY [x+1];
+			dstY[x*2+2] = srcUV[x+1];
+
+			x += 2;
+		}
+
+		srcY += srcWidth;
+		dstY += strideY;
+
+		__y++;
+	}
+
+	return BC_STS_SUCCESS;
+}
+
+static BC_STATUS DtsCopy420ToNV12(uint8_t *dstY, uint8_t *dstUV, const uint8_t *srcY, const uint8_t *srcUV, uint32_t srcWidth, uint32_t dstWidth, uint32_t height, uint32_t strideY, uint32_t strideUV)
+{ // tested
+	uint32_t __y;
+
+	strideY += dstWidth;
+	strideUV += dstWidth;
+
+	// first copy Y
+	for (__y = 0; __y < height; __y++)
+	{
+		fast_memcpy(dstY, srcY, srcWidth);
+		dstY += strideY;
+		srcY += srcWidth;
+	}
+
+	// now copy uvs
+	height /= 2;
+	for (__y = 0; __y < height; __y++)
+	{
+		fast_memcpy(dstUV, srcUV, srcWidth);
+		srcUV += srcWidth;
+		dstUV += strideUV;
+
+	}
+	return BC_STS_SUCCESS;
+}
+
+
+// copy 422/420 ( device format to format specified in Vout)
+BC_STATUS DtsCopyFormat(DTS_LIB_CONTEXT	*Ctx, BC_DTS_PROC_OUT *Vout, BC_DTS_PROC_OUT *Vin)
+{
+	uint32_t lDestStrideY=0, lDestStrideUV=0;
+	uint32_t dstHeightInPixels;
+
+	BC_STATUS	Sts = BC_STS_SUCCESS;
+
+	if ( (Sts = DtsChkYUVSizes(Ctx,Vout,Vin)) != BC_STS_SUCCESS)
+		return Sts;
+
+	if(Vout->PoutFlags & BC_POUT_FLAGS_STRIDE)
+		lDestStrideUV = lDestStrideY = Vout->StrideSz;
+	if(Vout->PoutFlags & BC_POUT_FLAGS_STRIDE_UV)
+		lDestStrideUV = Vout->StrideSzUV;
+
+	if(Vout->PoutFlags & BC_POUT_FLAGS_SIZE) {
+		// Use application provided size for now
+		if(!Ctx->VidParams.Progressive)
+			dstHeightInPixels = Vout->PicInfo.height/2;
+		else
+			dstHeightInPixels = Vout->PicInfo.height;
+		/* Check for Valid data based on the application information */
+		// we cannot do that any more.size may vary, we have to suppose them
+		// ok
+	//	if((Vout->YBuffDoneSz < (dstWidthInPixels * dstHeightInPixels / 4)) ||
+	//		(Vout->UVBuffDoneSz < (dstWidthInPixels * dstHeightInPixels/2 / 4)))
+	//		return BC_STS_IO_XFR_ERROR;
+	} else {
+		dstHeightInPixels = Vin->PicInfo.height;
+	}
+
+	// check that we can do the copy properly
+	if (Ctx->HWOutPicWidth > Vin->PicInfo.width)
+		return BC_STS_IO_XFR_ERROR;
+
+	DebugLog_Trace(LDIL_DBG,"Copying from %d to %d\n", Ctx->b422Mode, Vout->b422Mode);
+
+	if (Ctx->b422Mode) {
+		// input is 422 (YUY2)
+		switch (Vout->b422Mode) {
+			case OUTPUT_MODE422_YUY2:
+				Sts = DtsCopy422ToYUY2(
+					Vout->Ybuff, Vout->UVbuff, Vin->Ybuff,
+					Ctx->HWOutPicWidth, Vin->PicInfo.width,  dstHeightInPixels, lDestStrideY, lDestStrideUV
+				);
+				break;
+			case OUTPUT_MODE422_UYVY:
+				Sts = DtsCopy422ToUYVY(
+					Vout->Ybuff, Vout->UVbuff, Vin->Ybuff,
+					Ctx->HWOutPicWidth, Vin->PicInfo.width, dstHeightInPixels, lDestStrideY, lDestStrideUV
+				);
+				break;
+			case OUTPUT_MODE420_NV12:
+				Sts = DtsCopy422ToNV12(
+					Vout->Ybuff, Vout->UVbuff, Vin->Ybuff,
+					Ctx->HWOutPicWidth, Vin->PicInfo.width, dstHeightInPixels, lDestStrideY, lDestStrideUV
+				);
+				break;
+			default:
+				Sts = BC_STS_INV_ARG;
+				break;
+		}
+	}else{
+		// input is 420 (NV12)
+		switch (Vout->b422Mode) {
+			case OUTPUT_MODE422_YUY2:
+				Sts = DtsCopy420ToYUY2(
+					Vout->Ybuff, Vout->UVbuff, Vin->Ybuff, Vin->UVbuff,
+					Ctx->HWOutPicWidth, Vin->PicInfo.width, dstHeightInPixels, lDestStrideY, lDestStrideUV
+				);
+				break;
+			case OUTPUT_MODE422_UYVY:
+				Sts = DtsCopy420ToUYVY(
+					Vout->Ybuff, Vout->UVbuff, Vin->Ybuff, Vin->UVbuff,
+					Ctx->HWOutPicWidth, Vin->PicInfo.width, dstHeightInPixels, lDestStrideY, lDestStrideUV
+				);
+				break;
+			case OUTPUT_MODE420_NV12:
+				Sts = DtsCopy420ToNV12(
+					Vout->Ybuff, Vout->UVbuff, Vin->Ybuff, Vin->UVbuff,
+					Ctx->HWOutPicWidth, Vin->PicInfo.width, dstHeightInPixels, lDestStrideY, lDestStrideUV
+				);
+				break;
+			default:
+				Sts = BC_STS_INV_ARG;
+				break;
+		}
+	}
+
+	return Sts;
+}
+
+
+
 
 DRVIFLIB_INT_API BC_STATUS
 DtsPushFwBinToLink(
