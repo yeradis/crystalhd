@@ -788,15 +788,20 @@ static BC_STATUS bc_cproc_get_stats(struct crystalhd_cmd *ctx,
 		pic_width = stats->DrvNextMDataPLD & 0xffff;
 		stats->DrvNextMDataPLD = 0;
 		if (pic_width <= 1920) {
+			// get fetch lock to make sure that fetch is not in progress as wel peek
+			if(down_interruptible(&ctx->hw_ctx->fetch_sem))
+				goto get_out;
 			if(ctx->hw_ctx->pfnPeekNextDeodedFr(ctx->hw_ctx,&stats->DrvNextMDataPLD, &stats->picNumFlags, pic_width)) {
 				// Check in case we dropped a picture here
 				crystalhd_hw_stats(ctx->hw_ctx, &hw_stats);
 				stats->drvRLL = hw_stats.rdyq_count;
 				stats->drvFLL = hw_stats.freeq_count;
 			}
+			up(&ctx->hw_ctx->fetch_sem);
 		}
 	}
 
+get_out:
 	return BC_STS_SUCCESS;
 }
 

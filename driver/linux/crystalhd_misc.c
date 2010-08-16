@@ -506,10 +506,13 @@ void *crystalhd_dioq_fetch_wait(struct crystalhd_hw *hw, uint32_t to_secs, uint3
 		if (rc == 0) {
 			// Found a packet. Check if it is a repeated picture or not
 			// Drop the picture if it is a repeated picture
+			// Lock against checks from get status calls
+			if(down_interruptible(&hw->fetch_sem))
+				goto sem_error;
 			r_pkt = crystalhd_dioq_fetch(ioq);
 			// If format change packet, then return with out checking anything
 			if (r_pkt->flags & (COMP_FLAG_PIB_VALID | COMP_FLAG_FMT_CHANGE))
-				return r_pkt;
+				goto sem_rel_return;
 			if (hw->adp->pdev->device == BC_PCI_DEVID_LINK) {
 				picYcomp = link_GetRptDropParam(hw, hw->PICHeight, hw->PICWidth, (void *)r_pkt);
 			}
@@ -520,7 +523,7 @@ void *crystalhd_dioq_fetch_wait(struct crystalhd_hw *hw, uint32_t to_secs, uint3
 				picYcomp = flea_GetRptDropParam(hw, (void *)r_pkt);
 				// For flea it is the above function that indicated format change
 				if(r_pkt->flags & (COMP_FLAG_PIB_VALID | COMP_FLAG_FMT_CHANGE))
-					return r_pkt;
+					goto sem_rel_return;
 			}
 			if(!picYcomp || (picYcomp == hw->LastPicNo) ||
 				(picYcomp == hw->LastTwoPicNo)) {
@@ -531,6 +534,7 @@ void *crystalhd_dioq_fetch_wait(struct crystalhd_hw *hw, uint32_t to_secs, uint3
 				}
 				crystalhd_dioq_add(hw->rx_freeq, r_pkt, false, r_pkt->pkt_tag);
 				r_pkt = NULL;
+				up(&hw->fetch_sem);
 			} else {
 				if(hw->adp->pdev->device == BC_PCI_DEVID_LINK) {
 					if((picYcomp - hw->LastPicNo) > 1) {
@@ -539,7 +543,7 @@ void *crystalhd_dioq_fetch_wait(struct crystalhd_hw *hw, uint32_t to_secs, uint3
 				}
 				hw->LastTwoPicNo = hw->LastPicNo;
 				hw->LastPicNo = picYcomp;
-				return r_pkt;
+				goto sem_rel_return;
 			}
 		} else if (rc == -EINTR) {
 			*sig_pend = 1;
@@ -549,6 +553,11 @@ void *crystalhd_dioq_fetch_wait(struct crystalhd_hw *hw, uint32_t to_secs, uint3
 	}
 	dev_info(dev, "FETCH TIMEOUT\n");
 	spin_unlock_irqrestore(&ioq->lock, flags);
+	return r_pkt;
+sem_error:
+	return NULL;
+sem_rel_return:
+	up(&hw->fetch_sem);
 	return r_pkt;
 }
 

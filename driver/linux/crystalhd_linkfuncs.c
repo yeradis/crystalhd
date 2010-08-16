@@ -643,8 +643,8 @@ bool link_GetPictureInfo(struct crystalhd_hw *hw, uint32_t picHeight, uint32_t p
 	if (!dio || !picWidth)
 		goto getpictureinfo_err_nosem;
 
-	if(down_interruptible(&hw->fetch_sem))
-		goto getpictureinfo_err_nosem;
+// 	if(down_interruptible(&hw->fetch_sem))
+// 		goto getpictureinfo_err_nosem;
 
 	dio->pib_va = kmalloc(2 * sizeof(BC_PIC_INFO_BLOCK) + 16, GFP_KERNEL); // since copy_from_user can sleep anyway
 	if(dio->pib_va == NULL)
@@ -753,12 +753,12 @@ bool link_GetPictureInfo(struct crystalhd_hw *hw, uint32_t picHeight, uint32_t p
 	if(dio->pib_va)
 		kfree(dio->pib_va);
 
-	up(&hw->fetch_sem);
+// 	up(&hw->fetch_sem);
 
 	return true;
 
 getpictureinfo_err:
-	up(&hw->fetch_sem);
+// 	up(&hw->fetch_sem);
 
 getpictureinfo_err_nosem:
 	if(dio->pib_va)
@@ -827,16 +827,18 @@ bool crystalhd_link_peek_next_decoded_frame(struct crystalhd_hw *hw,
 					rpkt = NULL;
 					*meta_payload = 0;
 				}
+				return true;
 				// Do not update the picture numbers here since they will be updated on the actual fetch of a valid picture
 			}
 			else
 				return false; // don't use the meta_payload information
 		}
-		return true;
+		else
+			return false;
 	}
 	spin_unlock_irqrestore(&ioq->lock, flags);
 
-	return true;
+	return false;
 }
 
 bool crystalhd_link_check_input_full(struct crystalhd_hw *hw,
