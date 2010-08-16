@@ -821,7 +821,7 @@ static gboolean bcmdec_process_play(GstBcmDec *bcmdec)
 	bcInputFormat.OptFlags = 0x80000000 | vdecFrameRate23_97;
 
 	// ENABLE the Following lines if HW Scaling is desired
-//	bcInputFormat.bEnableScaling = true;
+	bcInputFormat.bEnableScaling = false;
 //	bcInputFormat.ScalingParams.sWidth = 800;
 
 	sts = decif_setinputformat(&bcmdec->decif, bcInputFormat);
