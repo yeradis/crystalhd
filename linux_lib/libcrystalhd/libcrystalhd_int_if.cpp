@@ -2172,7 +2172,7 @@ BC_STATUS DtsCopyFormat(DTS_LIB_CONTEXT	*Ctx, BC_DTS_PROC_OUT *Vout, BC_DTS_PROC
 	if (Ctx->HWOutPicWidth > Vin->PicInfo.width)
 		return BC_STS_IO_XFR_ERROR;
 
-	DebugLog_Trace(LDIL_DBG,"Copying from %d to %d\n", Ctx->b422Mode, Vout->b422Mode);
+	//DebugLog_Trace(LDIL_DBG,"Copying from %d to %d\n", Ctx->b422Mode, Vout->b422Mode);
 
 	if (Ctx->b422Mode) {
 		// input is 422 (YUY2)
