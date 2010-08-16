@@ -1518,6 +1518,7 @@ BC_STATUS DtsInitInterface(int hDevice,HANDLE *RetCtx, uint32_t mode)
 	DTS_LIB_CONTEXT *Ctx = NULL;
 	BC_STATUS	sts = BC_STS_SUCCESS;
 	pthread_attr_t thread_attr;
+	int ret = 0;
 
 	Ctx = (DTS_LIB_CONTEXT*)malloc(sizeof(*Ctx));
 	if(!Ctx){
@@ -1571,7 +1572,11 @@ BC_STATUS DtsInitInterface(int hDevice,HANDLE *RetCtx, uint32_t mode)
 	pthread_create(&Ctx->htxThread, &thread_attr, txThreadProc, Ctx);
 	pthread_attr_destroy(&thread_attr);
 
-	posix_memalign((void**)&Ctx->alignBuf, 128, ALIGN_BUF_SIZE);
+	ret = posix_memalign((void**)&Ctx->alignBuf, 128, ALIGN_BUF_SIZE);
+	if(ret) {
+		DtsReleaseInterface(Ctx);
+		return BC_STS_INSUFF_RES;
+	}
 
 	*RetCtx = (HANDLE)Ctx;
 
@@ -1687,7 +1692,8 @@ BC_STATUS DtsReleaseInterface(DTS_LIB_CONTEXT *Ctx)
 	// de-Allocate circular buffer
 	txBufFree(&Ctx->circBuf);
 	Ctx->htxThread = 0;
-	free(Ctx->alignBuf);
+	if(Ctx->alignBuf)
+		free(Ctx->alignBuf);
 
 	free(Ctx);
 
@@ -2300,9 +2306,12 @@ void DtsUpdateOutStats(DTS_LIB_CONTEXT	*Ctx, BC_DTS_PROC_OUT *pOut)
 BC_STATUS txBufInit(pTXBUFFER txBuf, uint32_t sizeInit)
 {
 	BC_STATUS sts = BC_STS_SUCCESS;
+	int ret = 0;
 	if(txBuf->buffer != NULL)
 		return BC_STS_INV_ARG;
-	posix_memalign((void**)&txBuf->buffer, 128, sizeInit);
+	ret = posix_memalign((void**)&txBuf->buffer, 128, sizeInit);
+	if(ret)
+		return BC_STS_INSUFF_RES;
 	if(txBuf->buffer != NULL)
 	{
 		txBuf->basePointer = txBuf->buffer;
@@ -2458,8 +2467,11 @@ void * txThreadProc(void *ctx)
 	uint8_t encrypted = 0;
 	HANDLE hDevice = (HANDLE)Ctx;
 	BC_DTS_STATUS pStat;
+	int ret = 0;
 
-	posix_memalign((void**)&localBuffer, 128, CIRC_TX_BUF_SIZE);
+	ret = posix_memalign((void**)&localBuffer, 128, CIRC_TX_BUF_SIZE);
+	if(ret)
+		return FALSE;
 
 	while(!Ctx->txThreadExit)
 	{
@@ -2533,7 +2545,11 @@ DRVIFLIB_INT_API BC_STATUS DtsGetHWFeatures(uint32_t *pciids)
 	}
 
 	if(pIo.RetSts == BC_STS_SUCCESS) {
-		*pciids = *(uint32_t*)pIo.u.pciCfg.pci_cfg_space;
+		*pciids = pIo.u.pciCfg.pci_cfg_space[0] |
+					(pIo.u.pciCfg.pci_cfg_space[0] << 8) |
+					(pIo.u.pciCfg.pci_cfg_space[0] << 16) |
+					(pIo.u.pciCfg.pci_cfg_space[0] << 24);
+		//*pciids = *(uint32_t*)pIo.u.pciCfg.pci_cfg_space;
 		close(drvHandle);
 		return BC_STS_SUCCESS;
 	}
