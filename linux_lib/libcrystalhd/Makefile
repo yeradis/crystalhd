@@ -24,7 +24,7 @@ CPPFLAGS = -D__LINUX_USER__
 # -D_USE_SHMEM_
 
 CPPFLAGS += ${INCLUDES}
-CPPFLAGS += -O2 -Wall -fPIC -shared -fstrict-aliasing
+CPPFLAGS += -O2 -Wall -fPIC -shared -fstrict-aliasing -msse2
 LDFLAGS = -Wl,-soname,${BCLIB_SL} -pthread
 
 SRCFILES = 	libcrystalhd_if.cpp \
