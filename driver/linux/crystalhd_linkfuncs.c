@@ -818,13 +818,15 @@ bool crystalhd_link_peek_next_decoded_frame(struct crystalhd_hw *hw,
 									&PicNumber, meta_payload);
 				if(!PicNumber || (PicNumber == hw->LastPicNo) || (PicNumber == hw->LastTwoPicNo)) {
 					// discard picture
-					rpkt = crystalhd_dioq_fetch(hw->rx_rdyq);
 					if(PicNumber != 0) {
 						hw->LastTwoPicNo = hw->LastPicNo;
 						hw->LastPicNo = PicNumber;
 					}
-					crystalhd_dioq_add(hw->rx_freeq, rpkt, false, rpkt->pkt_tag);
-					rpkt = NULL;
+					rpkt = crystalhd_dioq_fetch(hw->rx_rdyq);
+					if (rpkt) {
+						crystalhd_dioq_add(hw->rx_freeq, rpkt, false, rpkt->pkt_tag);
+						rpkt = NULL;
+					}
 					*meta_payload = 0;
 				}
 				return true;
