@@ -1611,7 +1611,7 @@ static BC_STATUS DtsCopy422ToYUY2(uint8_t *dstY, uint8_t *dstUV, const uint8_t *
 static BC_STATUS DtsCopy422ToUYVY(uint8_t *dstY, uint8_t *dstUV, const uint8_t *srcY, uint32_t srcWidth, uint32_t dstWidth, uint32_t height, uint32_t strideY, uint32_t strideUV)
 {
 	// TODO, test this
-	uint32_t x, __y;
+	uint32_t x = 0, __y;
 
 	strideY += dstWidth*2;
 
