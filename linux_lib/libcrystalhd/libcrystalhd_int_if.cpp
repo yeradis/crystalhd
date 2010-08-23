@@ -741,28 +741,25 @@ DtsDevRegisterWr(
 	BC_STATUS	sts = BC_STS_SUCCESS;
 
 
-	DTS_GET_CTX(hDevice,Ctx);
+	DTS_GET_CTX(hDevice, Ctx);
 
-	if(!(pIocData = DtsAllocIoctlData(Ctx)))
+	if (!(pIocData = DtsAllocIoctlData(Ctx)))
 		return BC_STS_INSUFF_RES;
 
 	reg_acc_wr = (BC_CMD_REG_ACC *) &pIocData->u.regAcc;
 
-	//
 	// Prepare the command here.
-	//
 	reg_acc_wr->Offset		= offset;
 	reg_acc_wr->Value		= Value;
 
-	if( (sts=DtsDrvCmd(Ctx,BCM_IOC_REG_WR,0,pIocData,FALSE)) != BC_STS_SUCCESS){
-		DtsRelIoctlData(Ctx,pIocData);
-		DebugLog_Trace(LDIL_DBG,"DtsDevRegisterWr: Ioctl failed: %d\n",sts);
-		return sts;
-	}
+	sts = DtsDrvCmd(Ctx, BCM_IOC_REG_WR, 0, pIocData, FALSE);
+
+	if (sts != BC_STS_SUCCESS)
+		DebugLog_Trace(LDIL_DBG,"DtsDevRegisterWr: Ioctl failed: %d\n", sts);
 
 	DtsRelIoctlData(Ctx,pIocData);
 
-	return BC_STS_SUCCESS;
+	return sts;
 }
 
 DRVIFLIB_INT_API BC_STATUS
