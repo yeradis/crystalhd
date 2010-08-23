@@ -538,7 +538,15 @@ DtsDeviceOpen(
 	// set Ctx->DevId early, other depend on it
 	DtsGetContext(*hDevice)->DevId = DeviceID;
 
-	DtsSetCoreClock(*hDevice, 200);
+	/*
+	 * Old layout link cards have issues w/a core clock of 200, so we use
+	 * 180 for all link cards, as we have no way to tell old layout from
+	 * new layout cards. All flea cards should be fine with 200 though.
+	 */
+	if (DeviceID == BC_PCI_DEVID_LINK)
+		DtsSetCoreClock(*hDevice, 180);
+	else
+		DtsSetCoreClock(*hDevice, 200);
 
 	/*
 	 * We have to specify the mode to the driver.
