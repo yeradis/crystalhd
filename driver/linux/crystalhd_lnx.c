@@ -595,8 +595,9 @@ static int __devinit chd_dec_pci_probe(struct pci_dev *pdev,
 
 	rc = chd_pci_reserve_mem(pinfo);
 	if (rc) {
-		dev_err(dev, "%s: Failed to setup memory regions.\n",
+		dev_err(dev, "%s: Failed to set up memory regions.\n",
 			__func__);
+		pci_disable_device(pdev);
 		return -ENOMEM;
 	}
 
