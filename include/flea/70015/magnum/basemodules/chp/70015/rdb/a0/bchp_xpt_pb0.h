@@ -1,12 +1,21 @@
 /***************************************************************************
  *     Copyright (c) 1999-2009, Broadcom Corporation
- *     All Rights Reserved
- *     Confidential Property of Broadcom Corporation
  *
+ **********************************************************************
+ * This file is part of the crystalhd device driver.
  *
- * THIS SOFTWARE MAY ONLY BE USED SUBJECT TO AN EXECUTED SOFTWARE LICENSE
- * AGREEMENT  BETWEEN THE USER AND BROADCOM.  YOU HAVE NO RIGHT TO USE OR
- * EXPLOIT THIS MATERIAL EXCEPT SUBJECT TO THE TERMS OF SUCH AN AGREEMENT.
+ * This driver is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, version 2 of the License.
+ *
+ * This driver is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this driver.  If not, see <http://www.gnu.org/licenses/>.
+ **********************************************************************
  *
  * $brcm_Workfile: bchp_xpt_pb0.h $
  * $brcm_Revision: Hydra_Software_Devel/1 $
