@@ -468,7 +468,7 @@ Description:
     Sets input video's various parameters that would be used by a subsequent call
     to DtsStartDecoder.
 
-    DtsSetInputFormat must always be called before DtsStartDecoder for the
+    DtsSetInputFormat must always be called before DtsOpenDecoder for the
     decoder to start processing input data. The device must have been
     previously opened for this call to succeed.
 
