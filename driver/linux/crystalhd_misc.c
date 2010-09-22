@@ -138,7 +138,7 @@ static inline void crystalhd_init_sg(struct scatterlist *sg, unsigned int entrie
  * Return:
  *	Status.
  *
- * Get value from Link's PCIe config space.
+ * Get value from PCIe config space.
  */
 BC_STATUS crystalhd_pci_cfg_rd(struct crystalhd_adp *adp, uint32_t off,
 			     uint32_t len, uint32_t *val)
