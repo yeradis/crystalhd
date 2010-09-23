@@ -320,6 +320,8 @@ BC_STATUS DtsSetSpsPps(HANDLE hDevice)
 			}
 		}
 		Ctx->PESConvParams.m_iSpsPpsLen = iSHSize + (BRCM_START_CODE_SIZE - iStartSize) * (iPktIdx);
+		if(Ctx->PESConvParams.m_pSpsPpsBuf)
+			free(Ctx->PESConvParams.m_pSpsPpsBuf);
 		if(!posix_memalign((void**)&Ctx->PESConvParams.m_pSpsPpsBuf, 8, Ctx->PESConvParams.m_iSpsPpsLen))
 		{
 			memset(Ctx->PESConvParams.m_pSpsPpsBuf, 0, Ctx->PESConvParams.m_iSpsPpsLen);
@@ -363,6 +365,8 @@ BC_STATUS DtsSetSpsPps(HANDLE hDevice)
 				pSrc += iSize;
 			}
 		}
+		else
+			return BC_STS_INSUFF_RES;
 	}
 	return BC_STS_SUCCESS;
 }

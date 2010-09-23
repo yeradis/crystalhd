@@ -252,7 +252,7 @@ DtsSetCoreClock(
 	DTS_GET_CTX(hDevice,Ctx);
 	if(Ctx->DevId != BC_PCI_DEVID_LINK)
 	{
-		DebugLog_Trace(LDIL_DBG,"DtsSetCoreClock is not supported in this device\n");
+		//DebugLog_Trace(LDIL_DBG,"DtsSetCoreClock is not supported in this device\n");
 		return BC_STS_ERROR;
 	}
 
@@ -1349,7 +1349,7 @@ DtsCopyRawDataToOutBuff(DTS_LIB_CONTEXT	*Ctx,
 			return BC_STS_IO_XFR_ERROR;
 		}
 #endif
-	srcWidthInPixels = Ctx->HWOutPicWidth;
+		srcWidthInPixels = Ctx->HWOutPicWidth;
 		srcHeightInPixels = dstHeightInPixels;
 	} else {
 		dstWidthInPixels = Vin->PicInfo.width;

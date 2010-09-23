@@ -39,12 +39,6 @@
 #include "libcrystalhd_int_if.h"
 #include "libcrystalhd_priv.h"
 
-#define	 BC_EOS_DETECTED		0xffffffff
-
-uint32_t	g_nRefNum = 0;
-
-uint32_t	g_nDrvHandleCnt = 0;
-
 /*============== Global shared area usage ======================*/
 /* Global mode settings */
 /*
@@ -55,16 +49,9 @@ uint32_t	g_nDrvHandleCnt = 0;
 	bit 5       - Hwsetup in progress
 */
 
-/* struct _bc_dil_glob_s{
-	uint32_t gDilOpMode;
-	uint32_t gHwInitSts;
-	BC_DTS_STATS stats;
-} bc_dil_glob = {0,0,{0,0}};*/
-
-#ifdef _USE_SHMEM_
 bc_dil_glob_s *bc_dil_glob_ptr=NULL;
+bool glob_mode_valid=TRUE;
 
-BOOL glob_mode_valid=TRUE;
 BC_STATUS DtsCreateShMem(int *shmem_id)
 {
 	int shmid=-1;
@@ -82,7 +69,7 @@ BC_STATUS DtsCreateShMem(int *shmem_id)
 	//First Try to create it.
 	if((shmid= shmget(shmkey, 1024, 0644|IPC_CREAT|IPC_EXCL))== -1 ) {
 		if(errno==EEXIST) {
-			DebugLog_Trace(LDIL_DBG,"DtsCreateShMem:shmem lareday exists :%d\n",errno);
+			//DebugLog_Trace(LDIL_DBG,"DtsCreateShMem:shmem already exists :%d\n",errno);
 			//shmem segment already exists so get the shmid
 			if((shmid= shmget(shmkey, 1024, 0644))== -1 ) {
 				DebugLog_Trace(LDIL_DBG,"DtsCreateShMem:unable to get shmid :%d\n",errno);
@@ -134,22 +121,23 @@ BC_STATUS DtsCreateShMem(int *shmem_id)
 		DtsGetDilShMem(shmid);
 	}
 
-		*shmem_id =shmid;
+	*shmem_id =shmid;
 
-		return BC_STS_SUCCESS;
+	return BC_STS_SUCCESS;
 }
 
 BC_STATUS DtsGetDilShMem(uint32_t shmid)
 {
-
 	bc_dil_glob_ptr=(bc_dil_glob_s *)shmat(shmid,(void *)0,0);
-	if((int)bc_dil_glob_ptr==-1) {
+
+	if((long)bc_dil_glob_ptr==-1) {
 		DebugLog_Trace(LDIL_DBG,"Unable to open shared memory ...\n");
 		return BC_STS_ERROR;
 	}
 
 	return BC_STS_SUCCESS;
 }
+
 BC_STATUS DtsDelDilShMem()
 {
 	int shmid =0;
@@ -177,7 +165,7 @@ BC_STATUS DtsDelDilShMem()
 	if(buf.shm_nattch ==0) {
 		//No process is currently attached to the shmem seg. go ahead and delete it
 		if(-1!=shmctl(shmid,IPC_RMID,NULL)){
-				DebugLog_Trace(LDIL_DBG,"DtsDelDilShMem:deleted shmem segment ...\n");
+				// DebugLog_Trace(LDIL_DBG,"DtsDelDilShMem:deleted shmem segment ...\n");
 				return BC_STS_ERROR;
 
 		} else{
@@ -189,77 +177,81 @@ BC_STATUS DtsDelDilShMem()
 
 
 }
-#else
-struct _bc_dil_glob_s{
-	uint32_t gDilOpMode;
-	uint32_t gHwInitSts;
-	BC_DTS_STATS stats;
-} bc_dil_glob = {0,0,{0,0}};
-#endif
 
+uint32_t DtsGetgDevID(void)
+{
+	if(bc_dil_glob_ptr == NULL)
+		return BC_PCI_DEVID_INVALID;
+	else
+		return bc_dil_glob_ptr->DevID;
+}
+
+void DtsSetgDevID(uint32_t DevID)
+{
+	bc_dil_glob_ptr->DevID = DevID;
+}
 
 uint32_t DtsGetOPMode( void )
 {
-#ifdef _USE_SHMEM_
 	return  bc_dil_glob_ptr->gDilOpMode;
-#else
-	return bc_dil_glob.gDilOpMode;
-#endif
-
-
 }
 
 void DtsSetOPMode( uint32_t value )
 {
-#ifdef _USE_SHMEM_
 	bc_dil_glob_ptr->gDilOpMode = value;
-#else
-	bc_dil_glob.gDilOpMode = value;
-#endif
 }
 
 uint32_t DtsGetHwInitSts( void )
 {
-#ifdef _USE_SHMEM_
 	return bc_dil_glob_ptr->gHwInitSts;
-#else
-	return bc_dil_glob.gHwInitSts;
-#endif
 }
 
 void DtsSetHwInitSts( uint32_t value )
 {
-#ifdef _USE_SHMEM_
 	bc_dil_glob_ptr->gHwInitSts = value;
-#else
-	bc_dil_glob.gHwInitSts = value;
-#endif
 }
+
 void DtsRstStats( void )
 {
-#ifdef _USE_SHMEM_
 	memset(&bc_dil_glob_ptr->stats, 0, sizeof(bc_dil_glob_ptr->stats));
-#else
-	memset(&bc_dil_glob.stats, 0, sizeof(bc_dil_glob.stats));
-#endif
 }
 
 BC_DTS_STATS * DtsGetgStats ( void )
 {
-#ifdef _USE_SHMEM_
 	return &bc_dil_glob_ptr->stats;
-#else
-	return &bc_dil_glob.stats;
-#endif
-
 }
 
-uint32_t DtsGetRefNum()
+bool DtsIsDecOpened(pid_t nNewPID)
 {
-	return g_nRefNum++;
+	if(bc_dil_glob_ptr == NULL)
+		return false;
+
+	if (nNewPID == 0)
+		return bc_dil_glob_ptr->g_bDecOpened;
+
+	if (nNewPID == bc_dil_glob_ptr->g_nProcID)
+		return false;
+
+	return bc_dil_glob_ptr->g_bDecOpened;
 }
 
+bool DtsChkPID(pid_t nCurPID)
+{
+	if (bc_dil_glob_ptr->g_nProcID == 0)
+		return true;
 
+	return (nCurPID == bc_dil_glob_ptr->g_nProcID);
+}
+
+void DtsSetDecStat(bool bDecOpen, pid_t PID)
+{
+	if (bDecOpen == true)
+		bc_dil_glob_ptr->g_nProcID = PID;
+	else
+		bc_dil_glob_ptr->g_nProcID = 0;
+
+	bc_dil_glob_ptr->g_bDecOpened = bDecOpen;
+}
 /*============== Global shared area usage End.. ======================*/
 
 #define TOP_FIELD_FLAG				0x01
@@ -1028,6 +1020,7 @@ BOOL DtsDrvIoctl
 
 	DTS_LIB_CONTEXT	*	Ctx = DtsGetContext(userHandle);
 	//unused DWORD	dwTimeout = 0;
+	BC_STATUS sts;
 
 	if( !Ctx )
 		return FALSE;
@@ -1040,8 +1033,11 @@ BOOL DtsDrvIoctl
 	// WILL need to take care of lb bytes returned.
 	// Check the existing code.
 	//
-	if(BC_STS_SUCCESS != DtsDrvCmd(Ctx,dwIoControlCode,Async,(BC_IOCTL_DATA *)lpInBuffer,FALSE))
+	if(BC_STS_SUCCESS != (sts = DtsDrvCmd(Ctx,dwIoControlCode,Async,(BC_IOCTL_DATA *)lpInBuffer,FALSE)))
+	{
+		DebugLog_Trace(LDIL_DBG, "DtsDrvCmd Failed with status %d\n", sts);
 		return FALSE;
+	}
 
 	return TRUE;
 }
@@ -1512,7 +1508,7 @@ BC_STATUS DtsMapYUVBuffs(DTS_LIB_CONTEXT *Ctx)
 // Name: DtsInitInterface
 // Description: Do application specific allocation and other initialization.
 //------------------------------------------------------------------------
-BC_STATUS DtsInitInterface(int hDevice,HANDLE *RetCtx, uint32_t mode)
+BC_STATUS DtsInitInterface(int hDevice, HANDLE *RetCtx, uint32_t mode)
 {
 
 	DTS_LIB_CONTEXT *Ctx = NULL;
@@ -1552,6 +1548,7 @@ BC_STATUS DtsInitInterface(int hDevice,HANDLE *RetCtx, uint32_t mode)
 	sts = DtsAllocMemPools(Ctx);
 	if(sts != BC_STS_SUCCESS){
 		DebugLog_Trace(LDIL_DBG,"DtsAllocMemPools failed Sts:%d\n",sts);
+		*RetCtx = (HANDLE)Ctx;
 		return sts;
 	}
 
@@ -1559,6 +1556,7 @@ BC_STATUS DtsInitInterface(int hDevice,HANDLE *RetCtx, uint32_t mode)
 		sts = DtsMapYUVBuffs(Ctx);
 		if(sts != BC_STS_SUCCESS){
 			DebugLog_Trace(LDIL_DBG,"DtsMapYUVBuffs failed Sts:%d\n",sts);
+			*RetCtx = (HANDLE)Ctx;
 			return sts;
 		}
 	}
@@ -1573,14 +1571,49 @@ BC_STATUS DtsInitInterface(int hDevice,HANDLE *RetCtx, uint32_t mode)
 	pthread_attr_destroy(&thread_attr);
 
 	ret = posix_memalign((void**)&Ctx->alignBuf, 128, ALIGN_BUF_SIZE);
-	if(ret) {
-		DtsReleaseInterface(Ctx);
-		return BC_STS_INSUFF_RES;
-	}
+	if(ret)
+		sts = BC_STS_INSUFF_RES;
 
 	*RetCtx = (HANDLE)Ctx;
 
 	return sts;
+}
+
+//------------------------------------------------------------------------
+// Name: DtsReleaseInterface
+// Description: Do application specific Release and other initialization.
+//------------------------------------------------------------------------
+BC_STATUS DtsReleaseInterface(DTS_LIB_CONTEXT *Ctx)
+{
+
+	if(!Ctx)
+		return BC_STS_INV_ARG;
+
+	DtsReleaseMemPools(Ctx);
+
+	if((Ctx->DevHandle != 0) && close(Ctx->DevHandle)!=0) //Zero if success
+	{
+		DebugLog_Trace(LDIL_DBG,"DtsDeviceClose: Close Handle Failed with error %d\n",errno);
+	}
+
+	DtsSetHwInitSts(BC_DIL_HWINIT_NOT_YET);
+
+	DtsDelDilShMem();
+
+	// Exit TX thread
+	Ctx->txThreadExit = true;
+	// wait to make sure the thread exited
+	pthread_join(Ctx->htxThread, NULL);
+	// de-Allocate circular buffer
+	txBufFree(&Ctx->circBuf);
+	Ctx->htxThread = 0;
+	if(Ctx->alignBuf)
+		free(Ctx->alignBuf);
+
+	free(Ctx);
+
+	return BC_STS_SUCCESS;
+
 }
 
 //------------------------------------------------------------------------
@@ -1661,45 +1694,6 @@ BC_STATUS DtsSetupConfig(DTS_LIB_CONTEXT *Ctx, uint32_t did, uint32_t rid, uint3
 	return BC_STS_SUCCESS;
 }
 
-//------------------------------------------------------------------------
-// Name: DtsReleaseInterface
-// Description: Do application specific Release and other initialization.
-//------------------------------------------------------------------------
-BC_STATUS DtsReleaseInterface(DTS_LIB_CONTEXT *Ctx)
-{
-
-	if(!Ctx)
-		return BC_STS_INV_ARG;
-
-	DtsReleaseMemPools(Ctx);
-
-	if(close(Ctx->DevHandle)!=0) //Zero if success
-	{
-		DebugLog_Trace(LDIL_DBG,"DtsDeviceClose: Close Handle Failed with error %d\n",errno);
-
-	}
-
-	DtsSetHwInitSts(BC_DIL_HWINIT_NOT_YET);
-
-#ifdef _USE_SHMEM_
-	DtsDelDilShMem();
-#endif
-
-	// Exit TX thread
-	Ctx->txThreadExit = true;
-	// wait to make sure the thread exited
-	pthread_join(Ctx->htxThread, NULL);
-	// de-Allocate circular buffer
-	txBufFree(&Ctx->circBuf);
-	Ctx->htxThread = 0;
-	if(Ctx->alignBuf)
-		free(Ctx->alignBuf);
-
-	free(Ctx);
-
-	return BC_STS_SUCCESS;
-
-}
 //------------------------------------------------------------------------
 // Name: DtsGetBCRegConfig
 // Description: Setup Register Sub-Key values.
@@ -2389,10 +2383,11 @@ BC_STATUS txBufPop(pTXBUFFER txBuf, uint8_t* bufToPop, uint32_t sizeToPop)
 	if(txBuf == NULL)
 		return BC_STS_INV_ARG;
 
+	pthread_mutex_lock(&txBuf->flushLock);
+
 	if(sizeToPop > txBuf->busySize)
 		return BC_STS_INV_ARG;
 
-	pthread_mutex_lock(&txBuf->flushLock);
 	sizeTop = (uint32_t)(txBuf->endPointer - (txBuf->basePointer + txBuf->readPointer) + 1);
 	if(sizeToPop <= sizeTop)
 		popSz = sizeToPop;
@@ -2499,11 +2494,13 @@ void * txThreadProc(void *ctx)
 				szDataToSend = Ctx->circBuf.busySize;
 			else
 				szDataToSend = pStat.cpbEmptySize;
-			txBufPop(&Ctx->circBuf, localBuffer, szDataToSend);
+			if(BC_STS_SUCCESS != txBufPop(&Ctx->circBuf, localBuffer, szDataToSend)) {
+				usleep(5 * 1000);
+				continue;
+			}
 			if(Ctx->VidParams.VideoAlgo == BC_VID_ALGO_VC1MP)
 				encrypted |= 0x2;
 			sts = DtsTxDmaText(hDevice, localBuffer, szDataToSend, &dramOff, encrypted);
-
 			if(sts == BC_STS_SUCCESS)
 				DtsUpdateInStats(Ctx, szDataToSend);
 			else

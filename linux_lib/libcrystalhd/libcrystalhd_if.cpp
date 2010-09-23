@@ -273,37 +273,6 @@ static __attribute__((aligned(4))) uint8_t btp_video_plunge_es[] =
 static __attribute__((aligned(4))) uint8_t ExtData[] =
 { 0x00, 0x00};
 
-pid_t		g_nProcID = 0;
-uint8_t		g_bDecOpened = 0;
-
-uint8_t DtsIsDecOpened(pid_t nNewPID)
-{
-	if (nNewPID == 0)
-		return g_bDecOpened;
-
-	if (nNewPID == g_nProcID)
-		return false;
-
-	return g_bDecOpened;
-}
-
-bool DtsChkPID(pid_t nCurPID)
-{
-	if (!g_nProcID)
-		return true;
-
-	return (nCurPID == g_nProcID);
-}
-
-void DtsSetDecStat(bool bDecOpen, pid_t PID)
-{
-	if (bDecOpen == true)
-		g_nProcID = PID;
-	else
-		g_nProcID = 0;
-
-	g_bDecOpened = bDecOpen;
-}
 
 static BC_STATUS DtsSetupHardware(HANDLE hDevice, BOOL IgnClkChk)
 {
@@ -327,6 +296,10 @@ static BC_STATUS DtsSetupHardware(HANDLE hDevice, BOOL IgnClkChk)
         sts = DtsPushAuthFwToLink(hDevice,NULL);
 	else if (Ctx->DevId == BC_PCI_DEVID_FLEA)
 		sts = DtsPushFwToFlea(hDevice,NULL);
+	else {
+		DebugLog_Trace(LDIL_DBG,"HW Type not found\n");
+		return BC_STS_ERROR;
+	}
 
 	if(sts != BC_STS_SUCCESS){
 		return sts;
@@ -418,9 +391,7 @@ static BC_STATUS DtsRecoverableDecOpen(HANDLE  hDevice,uint32_t StreamType)
 }
 
 //===================================Externs ============================================
-#ifdef _USE_SHMEM_
 extern BOOL glob_mode_valid;
-#endif
 
 DRVIFLIB_API BC_STATUS
 DtsDeviceOpen(
@@ -436,9 +407,7 @@ DtsDeviceOpen(
 	uint32_t		drvVer, dilVer;
 	uint32_t		fwVer, decVer, hwVer;
 	pid_t	processID;
-#ifdef _USE_SHMEM_
 	int shmid=0;
-#endif
 
 	DebugLog_Trace(LDIL_DBG,"Running DIL (%d.%d.%d) Version\n",
 		DIL_MAJOR_VERSION,DIL_MINOR_VERSION,DIL_REVISION );
@@ -448,10 +417,15 @@ DtsDeviceOpen(
 	FixFlags = mode;
 	mode &= 0xFF;
 
+	Sts = DtsCreateShMem(&shmid);
+	if(BC_STS_SUCCESS !=Sts)
+		return Sts;
+
 	if (mode != DTS_MONITOR_MODE && DtsIsDecOpened(processID))
 	{
 		DebugLog_Trace(LDIL_DBG, "DtsDeviceOpen: Decoder is already opened\n");
-		return BC_STS_ERROR;
+		DtsDelDilShMem();
+		return BC_STS_DEC_EXIST_OPEN;
 	}
 
 	DebugLog_Trace(LDIL_DBG,"DtsDeviceOpen: Opening HW in mode %x\n", mode);
@@ -459,58 +433,20 @@ DtsDeviceOpen(
 	/* For External API case, we support only Plyaback mode. */
 	if( !(BC_DTS_DEF_CFG & BC_EN_DIAG_MODE) && (mode != DTS_PLAYBACK_MODE) ){
 		DebugLog_Trace(LDIL_ERR,"DtsDeviceOpen: mode %d not supported\n",mode);
+		DtsDelDilShMem();
 		return BC_STS_INV_ARG;
 	}
-
-#ifdef _USE_SHMEM_
-	Sts = DtsCreateShMem(&shmid);
-	if(BC_STS_SUCCESS !=Sts)
-		return Sts;
-
-
-/*	Sts = DtsGetDilShMem(shmid);
-	if(BC_STS_SUCCESS !=Sts)
-		return Sts;
-*/
 
 	if(!glob_mode_valid) {
 		globMode = DtsGetOPMode();
 		if(globMode&4) {
 			globMode&=4;
 		}
-		DebugLog_Trace(LDIL_DBG,"DtsDeviceOpen:New  globmode is %d \n",globMode);
+		DebugLog_Trace(LDIL_DBG,"DtsDeviceOpen: New globmode is %d \n",globMode);
 	}
 	else{
 		globMode = DtsGetOPMode();
 	}
-#else
-	globMode = DtsGetOPMode();
-#endif
-
-#if 0
-	if(((globMode & 0x3) && (mode != DTS_MONITOR_MODE)) ||
-	   ((globMode & 0x4) && (mode == DTS_MONITOR_MODE)) ||
-	   ((globMode & 0x8) && (mode == DTS_HWINIT_MODE))){
-		DebugLog_Trace(LDIL_DBG,"DtsDeviceOpen: mode %d already opened\n",mode);
-#ifdef _USE_SHMEM_
-		DtsDelDilShMem();
-#endif
-		return BC_STS_DEC_EXIST_OPEN;
-	}
-
-	if(mode == DTS_PLAYBACK_MODE){
-		while(cnt--){
-			if(DtsGetHwInitSts() != BC_DIL_HWINIT_IN_PROGRESS)
-				break;
-			bc_sleep_ms(100);
-		}
-		if(!cnt){
-			return BC_STS_TIMEOUT;
-		}
-	}else if(mode == DTS_HWINIT_MODE){
-		DtsSetHwInitSts(BC_DIL_HWINIT_IN_PROGRESS);
-	}
-#endif
 
 	if (mode == DTS_HWINIT_MODE)
 		DtsSetHwInitSts(BC_DIL_HWINIT_IN_PROGRESS);
@@ -519,6 +455,7 @@ DtsDeviceOpen(
 	if(drvHandle < 0)
 	{
 		DebugLog_Trace(LDIL_ERR,"DtsDeviceOpen: Create File Failed\n");
+		DtsDelDilShMem();
 		return BC_STS_ERROR;
 	}
 
@@ -527,29 +464,28 @@ DtsDeviceOpen(
 	if( (Sts = DtsInitInterface(drvHandle,hDevice, mode)) != BC_STS_SUCCESS){
 		DebugLog_Trace(LDIL_ERR,"DtsDeviceOpen: Interface Init Failed:%x\n",Sts);
 		close(drvHandle);
+		DtsReleaseInterface(DtsGetContext(*hDevice));
+		DtsDelDilShMem();
 		return Sts;
 	}
 	if( (Sts = DtsGetHwType(*hDevice,&DeviceID,&VendorID,&RevID))!=BC_STS_SUCCESS){
 		DebugLog_Trace(LDIL_DBG,"Get Hardware Type Failed\n");
 		close(drvHandle);
+		DtsReleaseInterface(DtsGetContext(*hDevice));
+		DtsDelDilShMem();
 		return Sts;
 	}
 
 	// set Ctx->DevId early, other depend on it
 	DtsGetContext(*hDevice)->DevId = DeviceID;
+	DtsSetgDevID(DeviceID);
 
 	/*
 	 * Old layout link cards have issues w/a core clock of 200, so we use
 	 * 180 for all link cards, as we have no way to tell old layout from
 	 * new layout cards.
 	 */
-	if (DeviceID == BC_PCI_DEVID_LINK)
-		DtsSetCoreClock(*hDevice, 180);
-#if 0
-	/* flea cards don't actually support setting core clock at all */
-	else
-		DtsSetCoreClock(*hDevice, 200);
-#endif
+	DtsSetCoreClock(*hDevice, 180);
 
 	/*
 	 * We have to specify the mode to the driver.
@@ -559,6 +495,8 @@ DtsDeviceOpen(
 	if ((Sts = DtsGetVersion(*hDevice, &drvVer, &dilVer)) != BC_STS_SUCCESS) {
 		DebugLog_Trace(LDIL_DBG,"Get drv ver failed\n");
 		close(drvHandle);
+		DtsReleaseInterface(DtsGetContext(*hDevice));
+		DtsDelDilShMem();
 		return Sts;
 	}
 	/* If driver minor version is more than 13, enable DTS_SKIP_TX_CHK_CPB feature */
@@ -596,6 +534,9 @@ DtsDeviceOpen(
 
 	if( (Sts = DtsNotifyOperatingMode(*hDevice,drvMode)) != BC_STS_SUCCESS){
 		DebugLog_Trace(LDIL_DBG,"Notify Operating Mode Failed\n");
+		DtsReleaseInterface(DtsGetContext(*hDevice));
+		close(drvHandle);
+		DtsDelDilShMem();
 		return Sts;
 	}
 
@@ -638,13 +579,15 @@ DtsDeviceOpen(
 			}
 			else
 			{
-				DebugLog_Trace(LDIL_DBG,"DtsSetupHardware: Failed\n");
+				DebugLog_Trace(LDIL_DBG,"DtsSetupHardware: Failed from Open\n");
 				bc_sleep_ms(100);
 			}
 		}
 		if(Sts != BC_STS_SUCCESS )
 		{
 			DtsReleaseInterface(DtsGetContext(*hDevice));
+			close(drvHandle);
+			DtsDelDilShMem();
 			goto exit;
 		}
 	}
@@ -658,6 +601,8 @@ DtsDeviceOpen(
 		DtsRstDrvStat(*hDevice);
 	}
 
+	DtsGetContext(*hDevice)->ProcessID = processID;
+
 	//DtsDevRegisterWr( hDevice,UartSelectA, 3);
 exit:
 	return Sts;
@@ -670,6 +615,9 @@ DtsDeviceClose(
 {
 	DTS_LIB_CONTEXT		*Ctx;
 	uint32_t globMode = 0;
+
+	if(hDevice == NULL)
+		return BC_STS_SUCCESS;
 
 	DTS_GET_CTX(hDevice,Ctx);
 
@@ -1063,8 +1011,6 @@ DtsCloseDecoder(
 	/* Close the Input dump File */
 	DumpInputSampleToFile(NULL,0);
 
-
-
 	return sts;
 }
 
@@ -1167,6 +1113,10 @@ DtsSetInputFormat(
 
 	if(Ctx->DevId == BC_PCI_DEVID_FLEA)
 	{
+		if(Ctx->SingleThreadedAppMode) {
+			pInputFormat->bEnableScaling = true;
+			pInputFormat->ScalingParams.sWidth = 1280;
+		}
 		if(pInputFormat->bEnableScaling) {
 			if((pInputFormat->ScalingParams.sWidth > 1920)||
 			   (pInputFormat->ScalingParams.sWidth < 128))
@@ -1255,6 +1205,14 @@ DtsStopDecoder(
 	sts = DtsFlushRxCapture(hDevice, false);
 
 	Ctx->State = BC_DEC_STATE_STOP;
+
+	if (Ctx->PESConvParams.m_pSpsPpsBuf)
+		free(Ctx->PESConvParams.m_pSpsPpsBuf);
+	Ctx->PESConvParams.m_pSpsPpsBuf = NULL;
+
+	if (Ctx->PESConvParams.pStartcodePendBuff)
+		free(Ctx->PESConvParams.pStartcodePendBuff);
+	Ctx->PESConvParams.pStartcodePendBuff = NULL;
 
 	return sts;
 }
@@ -1384,7 +1342,7 @@ DtsStartCaptureImmidiate(HANDLE		hDevice,
 		}
 	}
 
-	DebugLog_Trace(LDIL_DBG,"DbgOptions=%x\n", Ctx->RegCfg.DbgOptions);
+//	DebugLog_Trace(LDIL_DBG,"DbgOptions=%x\n", Ctx->RegCfg.DbgOptions);
 
 	pIocData->u.RxCap.Rsrd = ST_CAP_IMMIDIATE;
 	pIocData->u.RxCap.StartDeliveryThsh = RX_START_DELIVERY_THRESHOLD;
@@ -1437,7 +1395,7 @@ DtsStartCapture(HANDLE  hDevice)
 		}
 	}
 
-	DebugLog_Trace(LDIL_DBG,"DbgOptions=%x\n", Ctx->RegCfg.DbgOptions);
+//	DebugLog_Trace(LDIL_DBG,"DbgOptions=%x\n", Ctx->RegCfg.DbgOptions);
 
 	pIocData->u.RxCap.Rsrd = NO_PARAM;
 	pIocData->u.RxCap.StartDeliveryThsh = RX_START_DELIVERY_THRESHOLD;
@@ -1684,7 +1642,7 @@ DtsProcOutput(
 			}
 		}
 	}
-	
+
 	if(pOut->PoutFlags & BC_POUT_FLAGS_PIB_VALID){
 		pOut->PicInfo = OutBuffs.PicInfo;
 	}
@@ -2203,6 +2161,7 @@ DtsProcInput( HANDLE  hDevice ,
 			return BC_STS_SUCCESS;
 		return BC_STS_ERROR;
 	}
+
 	if (Ctx->VidParams.StreamType == BC_STREAM_TYPE_PES || timeStamp == 0)
 	{
 		return DtsAlignSendData(hDevice, pUserData, ulSizeInBytes, timeStamp, encrypted);
@@ -2981,7 +2940,6 @@ DtsGetDriverStatus( HANDLE  hDevice,
 			}
 		}
 	}
-
 	// For LINK Pause HW if the RLL is too full. Prevent overflows
 	// Hard coded values for now
 	if(Ctx->DevId == BC_PCI_DEVID_LINK && Ctx->SingleThreadedAppMode) {
@@ -3003,6 +2961,9 @@ DRVIFLIB_API BC_STATUS DtsGetCapabilities (HANDLE  hDevice, PBC_HW_CAPS	pCapsBuf
 	DTS_LIB_CONTEXT *Ctx;
 	BC_STATUS sts = BC_STS_SUCCESS;
 	uint32_t pciids = 0;
+	int shmid = 0;
+
+//	DebugLog_Trace(LDIL_DBG,"DtsGetCapabilities: Called\n");
 
 	if(hDevice != NULL) {
 		DTS_GET_CTX(hDevice,Ctx); // Called after the HW has been opened
@@ -3010,10 +2971,19 @@ DRVIFLIB_API BC_STATUS DtsGetCapabilities (HANDLE  hDevice, PBC_HW_CAPS	pCapsBuf
 	}
 	else {
 		// called before HW has been opened
-		sts = DtsGetHWFeatures(&pciids);
-		pciids >>= 16;
-		if(sts != BC_STS_SUCCESS)
-			return sts;
+		// First make sure no one else has the HW open already
+		if(BC_STS_SUCCESS == DtsCreateShMem(&shmid)) {
+			pciids = DtsGetgDevID();
+			DtsDelDilShMem();
+			if(pciids == BC_PCI_DEVID_INVALID) {
+				sts = DtsGetHWFeatures(&pciids);
+				pciids >>= 16;
+				if(sts != BC_STS_SUCCESS)
+					return sts;
+			}
+		}
+		else
+			return BC_STS_INSUFF_RES;
 	}
 
 	if (pciids == BC_PCI_DEVID_INVALID)
