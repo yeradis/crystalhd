@@ -1508,6 +1508,30 @@ DtsCrystalHDVersion(
     PBC_INFO_CRYSTAL bCrystalInfo
 );
 
+/*****************************************************************************
+
+Function name:
+
+    DtsTxFreeSize
+
+Description:
+
+    This API returns the amount of free space in the tx circular buffer
+Parameters:
+
+    hDevice     Handle to device. This is obtained via a prior call to
+                    DtsDeviceOpen.
+
+Return:
+
+    uint32_t value of number of free bytes in the tx circular buffer
+
+*****************************************************************************/
+DRVIFLIB_API uint32_t
+DtsTxFreeSize(
+    HANDLE  hDevice
+);
+
 #ifdef __cplusplus
 }
 #endif

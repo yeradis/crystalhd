@@ -1794,6 +1794,16 @@ DtsSendData( HANDLE  hDevice ,
 	return txBufPush(&Ctx->circBuf, pUserData, ulSizeInBytes);
 }
 
+DRVIFLIB_API uint32_t
+DtsTxFreeSize( HANDLE hDevice )
+{
+	DTS_LIB_CONTEXT                *Ctx = NULL;
+
+	DTS_GET_CTX(hDevice,Ctx);
+
+	return Ctx->circBuf.freeSize;
+}
+
 DRVIFLIB_API BC_STATUS
 DtsSendSPESPkt(HANDLE  hDevice ,
 			   uint64_t timeStamp,
