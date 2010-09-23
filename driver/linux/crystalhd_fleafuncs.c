@@ -1131,7 +1131,7 @@ BC_STATUS crystalhd_flea_download_fw(struct crystalhd_hw *hw, uint8_t *pBuffer, 
 
 	bool bRetVal = true;
 
-	printk("[crystalhd_flea_download_fw]: Sz:%d\n", buffSz);
+	dev_dbg(&hw->adp->pdev->dev, "[%s]: Sz:%d\n", __func__, buffSz);
 
 ///*
 //-- Step 1. Enable the SRCUBBING and DRAM SCRAMBLING
@@ -1274,7 +1274,7 @@ BCHP_SCRUB_CTRL_BI_CMAC_127_96		0x000f6018			CMAC Bits[127:96]
 
 		if(regVal & BOOT_VER_DONE_BIT)
 		{
-			dev_err(&hw->adp->pdev->dev,"[crystalhd_flea_download_fw]: step 7. Done  RetVal:%x\n", regVal);
+			dev_dbg(&hw->adp->pdev->dev,"[crystalhd_flea_download_fw]: step 7. Done  RetVal:%x\n", regVal);
 
 			bRetVal = true; /*This is the only place we return TRUE from*/
 			break;
@@ -1342,7 +1342,7 @@ BCHP_SCRUB_CTRL_BI_CMAC_127_96		0x000f6018			CMAC Bits[127:96]
 		}
 	}*/
 
-	dev_dbg(&hw->adp->pdev->dev,"[crystalhd_flea_download_fw]: ..... Complete.\n");
+	dev_info(&hw->adp->pdev->dev, "[%s]: Complete.\n", __func__);
 	return BC_STS_SUCCESS;
 }
 
@@ -2742,6 +2742,7 @@ bool crystalhd_flea_hw_interrupt_handle(struct crystalhd_adp *adp, struct crysta
 bool flea_GetPictureInfo(struct crystalhd_hw *hw, crystalhd_rx_dma_pkt * rx_pkt,
 							uint32_t *PicNumber, uint64_t *PicMetaData)
 {
+	struct device *dev = &hw->adp->pdev->dev;
 	uint32_t PicInfoLineNum = 0, offset = 0, size = 0;
 	PBC_PIC_INFO_BLOCK pPicInfoLine = NULL;
 	uint32_t tmpYBuffData;
@@ -2773,7 +2774,8 @@ bool flea_GetPictureInfo(struct crystalhd_hw *hw, crystalhd_rx_dma_pkt * rx_pkt,
 		goto getpictureinfo_err;
 	PicInfoLineNum = *(uint32_t*)(dio->pib_va);
 	if (PicInfoLineNum > 1092) {
-		printk("Invalid Line Number[%x], DoneSz:0x%x Bytes\n", (int)PicInfoLineNum, rx_pkt->dio_req->uinfo.y_done_sz * 4);
+		dev_err(dev, "Invalid Line Number[%x], DoneSz:0x%x Bytes\n",
+			(int)PicInfoLineNum, rx_pkt->dio_req->uinfo.y_done_sz * 4);
 		goto getpictureinfo_err;
 	}
 
@@ -2785,7 +2787,7 @@ bool flea_GetPictureInfo(struct crystalhd_hw *hw, crystalhd_rx_dma_pkt * rx_pkt,
 
 	hw->PICWidth = widthField & 0x3FFFFFFF; // bit 31 is FMT Change, bit 30 is EOS
 	if (hw->PICWidth > 2048) {
-		printk("Invalid width [%d]\n", hw->PICWidth);
+		dev_err(dev, "Invalid width [%d]\n", hw->PICWidth);
 		goto getpictureinfo_err;
 	}
 
@@ -2808,7 +2810,7 @@ bool flea_GetPictureInfo(struct crystalhd_hw *hw, crystalhd_rx_dma_pkt * rx_pkt,
 
 	if(widthField & PIB_EOS_DETECTED_BIT)
 	{
-		printk("Got EOS flag.\n");
+		dev_dbg(dev, "Got EOS flag.\n");
 		hw->DrvEosDetected = 1;
 		*(uint32_t *)(dio->pib_va) = 0xFFFFFFFF;
 		res = copy_to_user((void *)(dio->uinfo.xfr_buff), dio->pib_va, 4);
@@ -2865,7 +2867,7 @@ bool flea_GetPictureInfo(struct crystalhd_hw *hw, crystalhd_rx_dma_pkt * rx_pkt,
 		hw->TickSpentInPD = 0;
 		rdtscll(hw->TickCntDecodePU);
 
-		printk("[FMT CH] DoneSz:0x%x, PIB:%x %x %x %x %x %x %x %x %x %x\n",
+		dev_dbg(dev, "[FMT CH] DoneSz:0x%x, PIB:%x %x %x %x %x %x %x %x %x %x\n",
 			rx_pkt->dio_req->uinfo.y_done_sz * 4,
 				 rx_pkt->pib.picture_number,
 				 rx_pkt->pib.aspect_ratio,

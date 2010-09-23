@@ -360,7 +360,7 @@ static BC_STATUS bc_cproc_do_fw_cmd(struct crystalhd_cmd *ctx, crystalhd_ioctl_d
 			ctx->hw_ctx->pfnIssuePause(ctx->hw_ctx, false);
 		}
 	} else if (cmd[0] == eCMD_C011_DEC_CHAN_FLUSH) {
-		dev_info(dev, "Flush issued\n");
+		dev_dbg(dev, "Flush issued\n");
 		if (cmd[3])
 			ctx->cin_wait_exit = 1;
 	}
@@ -669,7 +669,7 @@ static BC_STATUS bc_cproc_start_capture(struct crystalhd_cmd *ctx,
 	else
 		ctx->hw_ctx->ResumeThreshold = HW_RESUME_THRESHOLD;
 
-	printk("start_capture: pause_th:%d, resume_th:%d\n", ctx->hw_ctx->PauseThreshold, ctx->hw_ctx->ResumeThreshold);
+	printk(KERN_DEBUG "start_capture: pause_th:%d, resume_th:%d\n", ctx->hw_ctx->PauseThreshold, ctx->hw_ctx->ResumeThreshold);
 
 	ctx->hw_ctx->DrvTotalFrmCaptured = 0;
 
@@ -701,7 +701,7 @@ static BC_STATUS bc_cproc_flush_cap_buffs(struct crystalhd_cmd *ctx,
 // 	if (!(ctx->state & BC_LINK_READY))
 // 		return crystalhd_hw_stop_capture(&ctx->hw_ctx);
 
-	dev_info(dev, "number of rx success %u and failure %u\n", ctx->hw_ctx->stats.rx_success, ctx->hw_ctx->stats.rx_errors);
+	dev_dbg(dev, "number of rx success %u and failure %u\n", ctx->hw_ctx->stats.rx_success, ctx->hw_ctx->stats.rx_errors);
 	if(idata->udata.u.FlushRxCap.bDiscardOnly) {
 		// just flush without unmapping and then resume
 		crystalhd_hw_stop_capture(ctx->hw_ctx, false);

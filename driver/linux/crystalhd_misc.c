@@ -85,8 +85,6 @@ static crystalhd_elem_t *crystalhd_alloc_elem(struct crystalhd_adp *adp)
 		adp->elem_pool_head = adp->elem_pool_head->flink;
 		memset(temp, 0, sizeof(*temp));
 	}
-	else
-		printk(KERN_ERR "no element found\n");
 
 	spin_unlock_irqrestore(&adp->lock, flags);
 
