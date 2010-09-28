@@ -26,6 +26,8 @@
 
 #ifndef _CRYSTALHD_HW_H_
 #define _CRYSTALHD_HW_H_
+#define DEBUG 1
+
 #include <linux/device.h>
 #include <linux/version.h>
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 24)
@@ -386,7 +388,7 @@ struct crystalhd_hw {
 
 	struct semaphore fetch_sem; // semaphore between fetch and probe of the next picture information, since both will be in process context
 
-	bool RxCaptureState;
+	uint32_t	RxCaptureState; // 0 if capture is not enabled, 1 if capture is enabled, 2 if stop rxdma is pending
 
 	// BCM70015 mods
 	uint32_t	PicQSts;		/* This is the bitmap given by PiCQSts Interrupt*/
@@ -498,7 +500,7 @@ void crystalhd_rx_pkt_rel_call_back(void *context, void *data);
 void crystalhd_hw_delete_ioqs(struct crystalhd_hw *hw);
 BC_STATUS crystalhd_hw_create_ioqs(struct crystalhd_hw *hw);
 BC_STATUS crystalhd_hw_open(struct crystalhd_hw *hw, struct crystalhd_adp *adp);
-BC_STATUS crystalhd_hw_close(struct crystalhd_hw *hw);
+BC_STATUS crystalhd_hw_close(struct crystalhd_hw *hw, struct crystalhd_adp *adp);
 BC_STATUS crystalhd_hw_setup_dma_rings(struct crystalhd_hw *hw);
 BC_STATUS crystalhd_hw_free_dma_rings(struct crystalhd_hw *hw);
 BC_STATUS crystalhd_hw_tx_req_complete(struct crystalhd_hw *hw, uint32_t list_id, BC_STATUS cs);

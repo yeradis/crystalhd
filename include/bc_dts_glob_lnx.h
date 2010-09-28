@@ -317,10 +317,9 @@ typedef struct _crystalhd_ioctl_data {
 
 enum _crystalhd_kmod_ver{
 	crystalhd_kmod_major	= 3,
-	crystalhd_kmod_minor	= 5,
+	crystalhd_kmod_minor	= 8,
 	crystalhd_kmod_rev	= 0,
 };
-
 
 
 #endif

@@ -124,6 +124,9 @@ enum _DtsAppSpecificCfgFlags {
 
 #define ALIGN_BUF_SIZE	(512*1024)
 #define CIRC_TX_BUF_SIZE (4096*1024)
+
+#define	 BC_EOS_DETECTED		0xffffffff
+
 typedef struct _DTS_MPOOL_TYPE {
 	uint32_t	type;
 	uint32_t	sz;
@@ -359,26 +362,51 @@ BC_STATUS DtsGetHWFeatures(uint32_t *pciids);
 /* Internal helper function */
 uint32_t DtsGetWidthfromResolution(DTS_LIB_CONTEXT *Ctx, uint32_t Resolution);
 
-#ifdef _DYNAMIC_BUFFERS_
-BC_STATUS DtsAddBuffsWithFmtChInfo(DTS_LIB_CONTEXT *Ctx);
-
-BC_STATUS DtsAllocNewRxBuffs(DTS_LIB_CONTEXT *Ctx, uint32_t BuffSz, uint32_t BuffCnt);
-
-BC_STATUS DtsFreeRxBuffs(DTS_LIB_CONTEXT *Ctx);
-
-void DtsGetMaxSize(DTS_LIB_CONTEXT *Ctx, U32 *Sz);
-
-BC_STATUS DtsHandleTimingMrkr(DTS_LIB_CONTEXT *Ctx);
-
-#if 0
-BC_STATUS DtsWaitForFlushDone(DTS_LIB_CONTEXT *Ctx, HANDLE hDevice, uint8_t *EOSDetected);
-#endif
-
-#endif
 
 /*====================== Performance Counter Routines ============================*/
 void DtsUpdateInStats(DTS_LIB_CONTEXT	*Ctx, uint32_t	size);
 void DtsUpdateOutStats(DTS_LIB_CONTEXT	*Ctx, BC_DTS_PROC_OUT *pOut);
+
+/*============== Global shared area usage ======================*/
+#define BC_DIL_HWINIT_NOT_YET		0
+#define BC_DIL_HWINIT_IN_PROGRESS	1
+#define BC_DIL_HWINIT_DONE		2
+
+#define BC_DIL_SHMEM_KEY 0xBABEFACE
+
+typedef struct _bc_dil_glob_s{
+	uint32_t 		gDilOpMode;
+	uint32_t 		gHwInitSts;
+	BC_DTS_STATS 	stats;
+	pid_t			g_nProcID;
+	bool			g_bDecOpened;
+	uint32_t 		DevID;
+} bc_dil_glob_s;
+
+
+BC_STATUS DtsGetDilShMem(uint32_t shmid);
+BC_STATUS DtsDelDilShMem(void);
+BC_STATUS DtsCreateShMem(int *shmem_id);
+
+/* DTS Global Parameters Utility functions */
+uint32_t 		DtsGetOPMode(void);
+void 			DtsSetOPMode(uint32_t value);
+uint32_t 		DtsGetHwInitSts(void);
+void 			DtsSetHwInitSts(uint32_t value);
+void 			DtsRstStats(void);
+BC_DTS_STATS * 	DtsGetgStats (void);
+uint32_t		DtsGetgDevID(void);
+void DtsSetgDevID(uint32_t DevID);
+
+BC_STATUS DtsGetDevType(uint32_t *pDevID, uint32_t *pVendID, uint32_t *pRevID);
+uint32_t DtsGetDevID();
+
+bool DtsIsDecOpened(pid_t nNewPID);
+void DtsSetDecStat(bool bDecOpen, pid_t PID);
+bool DtsChkPID(pid_t nCurPID);
+
+void DtsLock(DTS_LIB_CONTEXT	*Ctx);
+void DtsUnLock(DTS_LIB_CONTEXT	*Ctx);
 
 /*====================== Debug Routines ========================================*/
 void DtsTestMdata(DTS_LIB_CONTEXT	*gCtx);
@@ -386,45 +414,6 @@ BOOL DtsDbgCheckPointers(DTS_LIB_CONTEXT *Ctx,BC_IOCTL_DATA *pIo);
 
 BOOL DtsCheckRptPic(DTS_LIB_CONTEXT *Ctx, BC_DTS_PROC_OUT *pOut);
 BC_STATUS DtsUpdateVidParams(DTS_LIB_CONTEXT *Ctx, BC_DTS_PROC_OUT *pOut);
-
-/*============== Global shared area usage ======================*/
-
-#define BC_DIL_HWINIT_NOT_YET		0
-#define BC_DIL_HWINIT_IN_PROGRESS	1
-#define BC_DIL_HWINIT_DONE		2
-
-#ifdef _USE_SHMEM_
-#define BC_DIL_SHMEM_KEY 0xBABEFACE
-
-typedef struct _bc_dil_glob_s{
-	uint32_t gDilOpMode;
-	uint32_t gHwInitSts;
-	BC_DTS_STATS stats;
-} bc_dil_glob_s;
-
-
-BC_STATUS DtsGetDilShMem(uint32_t shmid);
-BC_STATUS DtsDelDilShMem(void);
-BC_STATUS DtsCreateShMem(int *shmem_id);
-#endif
-/* DTS Global Parameters Utility functions */
-uint32_t DtsGetOPMode( void );
-void DtsSetOPMode( uint32_t value );
-uint32_t DtsGetHwInitSts( void );
-void DtsSetHwInitSts( uint32_t value );
-void DtsRstStats( void ) ;
-BC_DTS_STATS * DtsGetgStats ( void );
-
-uint32_t DtsGetRefNum();
-BC_STATUS DtsGetDevType(uint32_t *pDevID, uint32_t *pVendID, uint32_t *pRevID);
-uint32_t DtsGetDevID();
-
-uint8_t DtsIsDecOpened(pid_t nNewPID);
-void DtsSetDecStat(bool bDecOpen, pid_t PID);
-bool DtsChkPID(pid_t nCurPID);
-
-void DtsLock(DTS_LIB_CONTEXT	*Ctx);
-void DtsUnLock(DTS_LIB_CONTEXT	*Ctx);
 
 #ifdef __cplusplus
 }

@@ -303,6 +303,8 @@ static BC_STATUS bc_cproc_download_fw(struct crystalhd_cmd *ctx,
 {
 	BC_STATUS sts = BC_STS_SUCCESS;
 
+	dev_dbg(chddev(), "Downloading FW\n");
+
 	if (!ctx || !idata || !idata->add_cdata || !idata->add_cdata_sz) {
 		dev_err(chddev(), "%s: Invalid Arg\n", __func__);
 		return BC_STS_INV_ARG;
@@ -317,7 +319,7 @@ static BC_STATUS bc_cproc_download_fw(struct crystalhd_cmd *ctx,
 				  idata->add_cdata_sz);
 
 	if (sts != BC_STS_SUCCESS) {
-		dev_err(chddev(), "Firmware Download Failure!! - %d\n", sts);
+		dev_info(chddev(), "Firmware Download Failure!! - %d\n", sts);
 	} else
 		ctx->state |= BC_LINK_INIT;
 
@@ -358,7 +360,7 @@ static BC_STATUS bc_cproc_do_fw_cmd(struct crystalhd_cmd *ctx, crystalhd_ioctl_d
 			ctx->hw_ctx->pfnIssuePause(ctx->hw_ctx, false);
 		}
 	} else if (cmd[0] == eCMD_C011_DEC_CHAN_FLUSH) {
-		dev_info(dev, "Flush issued\n");
+		dev_dbg(dev, "Flush issued\n");
 		if (cmd[3])
 			ctx->cin_wait_exit = 1;
 	}
@@ -667,7 +669,7 @@ static BC_STATUS bc_cproc_start_capture(struct crystalhd_cmd *ctx,
 	else
 		ctx->hw_ctx->ResumeThreshold = HW_RESUME_THRESHOLD;
 
-	printk("start_capture: pause_th:%d, resume_th:%d\n", ctx->hw_ctx->PauseThreshold, ctx->hw_ctx->ResumeThreshold);
+	printk(KERN_DEBUG "start_capture: pause_th:%d, resume_th:%d\n", ctx->hw_ctx->PauseThreshold, ctx->hw_ctx->ResumeThreshold);
 
 	ctx->hw_ctx->DrvTotalFrmCaptured = 0;
 
@@ -699,7 +701,7 @@ static BC_STATUS bc_cproc_flush_cap_buffs(struct crystalhd_cmd *ctx,
 // 	if (!(ctx->state & BC_LINK_READY))
 // 		return crystalhd_hw_stop_capture(&ctx->hw_ctx);
 
-	dev_info(dev, "number of rx success %u and failure %u\n", ctx->hw_ctx->stats.rx_success, ctx->hw_ctx->stats.rx_errors);
+	dev_dbg(dev, "number of rx success %u and failure %u\n", ctx->hw_ctx->stats.rx_success, ctx->hw_ctx->stats.rx_errors);
 	if(idata->udata.u.FlushRxCap.bDiscardOnly) {
 		// just flush without unmapping and then resume
 		crystalhd_hw_stop_capture(ctx->hw_ctx, false);
@@ -789,7 +791,7 @@ static BC_STATUS bc_cproc_get_stats(struct crystalhd_cmd *ctx,
 		stats->DrvNextMDataPLD = 0;
 		if (pic_width <= 1920) {
 			// get fetch lock to make sure that fetch is not in progress as wel peek
-			if(down_interruptible(&ctx->hw_ctx->fetch_sem))
+ 			if(down_interruptible(&ctx->hw_ctx->fetch_sem))
 				goto get_out;
 			if(ctx->hw_ctx->pfnPeekNextDeodedFr(ctx->hw_ctx,&stats->DrvNextMDataPLD, &stats->picNumFlags, pic_width)) {
 				// Check in case we dropped a picture here
@@ -899,7 +901,7 @@ BC_STATUS crystalhd_suspend(struct crystalhd_cmd *ctx, crystalhd_ioctl_data *ida
 	if (sts != BC_STS_SUCCESS)
 		return sts;
 
-	dev_dbg(dev, "Crystal HD suspend success\n");
+	dev_info(dev, "Crystal HD suspend success\n");
 
 	return BC_STS_SUCCESS;
 }
@@ -922,7 +924,7 @@ BC_STATUS crystalhd_suspend(struct crystalhd_cmd *ctx, crystalhd_ioctl_data *ida
  */
 BC_STATUS crystalhd_resume(struct crystalhd_cmd *ctx)
 {
-	dev_dbg(chddev(), "crystalhd_resume Success %x\n", ctx->state);
+	dev_info(chddev(), "crystalhd_resume Success %x\n", ctx->state);
 
 	bc_cproc_mark_pwr_state(ctx);
 
@@ -960,13 +962,18 @@ BC_STATUS crystalhd_user_open(struct crystalhd_cmd *ctx,
 
 	dev_info(dev, "Opening new user[%x] handle\n", uc->uid);
 
-	ctx->hw_ctx = (struct crystalhd_hw*)kmalloc(sizeof(struct crystalhd_hw), GFP_KERNEL);
-	if(ctx->hw_ctx != NULL)
-		memset(ctx->hw_ctx, 0, sizeof(struct crystalhd_hw));
-	else
-		return BC_STS_ERROR;
+	uc->mode = DTS_MODE_INV;
+	uc->in_use = 0;
 
-	crystalhd_hw_open(ctx->hw_ctx, ctx->adp);
+	if(ctx->hw_ctx == NULL) {
+		ctx->hw_ctx = (struct crystalhd_hw*)kmalloc(sizeof(struct crystalhd_hw), GFP_KERNEL);
+		if(ctx->hw_ctx != NULL)
+			memset(ctx->hw_ctx, 0, sizeof(struct crystalhd_hw));
+		else
+			return BC_STS_ERROR;
+
+		crystalhd_hw_open(ctx->hw_ctx, ctx->adp);
+	}
 
 	uc->in_use = 1;
 
@@ -992,26 +999,26 @@ BC_STATUS crystalhd_user_close(struct crystalhd_cmd *ctx, struct crystalhd_user 
 
 	ctx->user[uc->uid].mode = DTS_MODE_INV;
 	ctx->user[uc->uid].in_use = 0;
-	ctx->cin_wait_exit = 1;
-	ctx->pwr_state_change = 0;
 
-	dev_info(chddev(), "Closing user[%x] handle\n", uc->uid);
+	dev_info(chddev(), "Closing user[%x] handle with mode %x\n", uc->uid, mode);
 
-	if (((mode & 0xFF) == DTS_DIAG_MODE) || ((mode & 0xFF) == DTS_PLAYBACK_MODE)) {
+	if (((mode & 0xFF) == DTS_DIAG_MODE) ||
+		((mode & 0xFF) == DTS_PLAYBACK_MODE) ||
+		((bc_cproc_get_user_count(ctx) == 0) && (ctx->hw_ctx != NULL))) {
+		ctx->cin_wait_exit = 1;
+		ctx->pwr_state_change = 0;
 		// Stop the HW Capture just in case flush did not get called before stop
 		crystalhd_hw_stop_capture(ctx->hw_ctx, true);
 		crystalhd_hw_free_dma_rings(ctx->hw_ctx);
 		crystalhd_destroy_dio_pool(ctx->adp);
 		crystalhd_delete_elem_pool(ctx->adp);
-	} else if (bc_cproc_get_user_count(ctx)) {
+		ctx->state = BC_LINK_INVALID;
+		crystalhd_hw_close(ctx->hw_ctx, ctx->adp);
+		kfree(ctx->hw_ctx);
+		ctx->hw_ctx = NULL;
+	} /*else if (bc_cproc_get_user_count(ctx)) {
 		return BC_STS_SUCCESS;
-	}
-
-	crystalhd_hw_close(ctx->hw_ctx);
-	kfree(ctx->hw_ctx);
-	ctx->hw_ctx = NULL;
-
-	ctx->state = BC_LINK_INVALID;
+	}*/
 
 	return BC_STS_SUCCESS;
 }
@@ -1053,7 +1060,7 @@ BC_STATUS __devinit crystalhd_setup_cmd_context(struct crystalhd_cmd *ctx,
 
 	/*Open and Close the Hardware to put it in to sleep state*/
 	crystalhd_hw_open(ctx->hw_ctx, ctx->adp);
-	crystalhd_hw_close(ctx->hw_ctx);
+	crystalhd_hw_close(ctx->hw_ctx, ctx->adp);
 	kfree(ctx->hw_ctx);
 	ctx->hw_ctx = NULL;
 

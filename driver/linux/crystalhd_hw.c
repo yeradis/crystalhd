@@ -119,7 +119,7 @@ BC_STATUS crystalhd_hw_open(struct crystalhd_hw *hw, struct crystalhd_adp *adp)
 	return BC_STS_SUCCESS;
 }
 
-BC_STATUS crystalhd_hw_close(struct crystalhd_hw *hw)
+BC_STATUS crystalhd_hw_close(struct crystalhd_hw *hw, struct crystalhd_adp *adp)
 {
 	if (!hw) {
 		printk(KERN_ERR "%s: Invalid Arguments\n", __func__);
@@ -130,7 +130,10 @@ BC_STATUS crystalhd_hw_close(struct crystalhd_hw *hw)
 		return BC_STS_SUCCESS;
 
 	/* Stop and DDR sleep will happen in here */
-	crystalhd_hw_suspend(hw);
+	// Only stop the HW if we are the last user
+	if(adp->cfg_users == 1)
+		crystalhd_hw_suspend(hw);
+
 	hw->dev_started = false;
 
 	return BC_STS_SUCCESS;

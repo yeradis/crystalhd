@@ -675,7 +675,7 @@ static GstFlowReturn gst_bcmdec_chain(GstPad *pad, GstBuffer *buf)
 	} else if (!bcmdec->streaming) {
 		GST_DEBUG_OBJECT(bcmdec, "input while streaming is false");
 		gst_buffer_unref(buf);
-		return GST_FLOW_OK;
+		return GST_FLOW_WRONG_STATE;
 	}
 
 	pbuffer = GST_BUFFER_DATA (buf);
@@ -872,6 +872,7 @@ static GstStateChangeReturn gst_bcmdec_change_state(GstElement *element, GstStat
 	BC_STATUS sts = BC_STS_SUCCESS;
 	GstClockTime clock_time;
 	GstClockTime base_clock_time;
+	int ret = 0;
 
 	switch (transition) {
 	case GST_STATE_CHANGE_NULL_TO_READY:
@@ -891,6 +892,9 @@ static GstStateChangeReturn gst_bcmdec_change_state(GstElement *element, GstStat
 			return GST_STATE_CHANGE_FAILURE;
 		}
 
+		break;
+
+	case GST_STATE_CHANGE_READY_TO_PAUSED:
 		if (!bcmdec_start_recv_thread(bcmdec)) {
 			GST_ERROR_OBJECT(bcmdec, "GST_STATE_CHANGE_NULL_TO_READY -failed");
 			return GST_STATE_CHANGE_FAILURE;
@@ -904,9 +908,6 @@ static GstStateChangeReturn gst_bcmdec_change_state(GstElement *element, GstStat
 			return GST_STATE_CHANGE_FAILURE;
 		}
 
-		break;
-
-	case GST_STATE_CHANGE_READY_TO_PAUSED:
 		bcmdec->play_pending = TRUE;
 		GST_DEBUG_OBJECT(bcmdec, "GST_STATE_CHANGE_READY_TO_PAUSED");
 		break;
@@ -925,25 +926,12 @@ static GstStateChangeReturn gst_bcmdec_change_state(GstElement *element, GstStat
 	case GST_STATE_CHANGE_PAUSED_TO_READY:
 		GST_DEBUG_OBJECT(bcmdec, "GST_STATE_CHANGE_PAUSED_TO_READY");
 		bcmdec->streaming = FALSE;
+		GST_DEBUG_OBJECT(bcmdec, "Flushing\n");
 		sts = decif_flush_dec(&bcmdec->decif, 2);
 		if (sts != BC_STS_SUCCESS)
 			GST_ERROR_OBJECT(bcmdec, "Dec flush failed %d",sts);
-		break;
-
-	default:
-		GST_DEBUG_OBJECT(bcmdec, "default %d", transition);
-		break;
-	}
-	result = GST_ELEMENT_CLASS(parent_class)->change_state(element, transition);
-	if (result == GST_STATE_CHANGE_FAILURE) {
-		GST_ERROR_OBJECT(bcmdec, "parent calss state change failed");
-		return result;
-	}
-
-	switch (transition) {
-
-	case GST_STATE_CHANGE_PAUSED_TO_READY:
 		if (!bcmdec->play_pending) {
+			GST_DEBUG_OBJECT(bcmdec, "Stopping\n");
 			sts = decif_stop(&bcmdec->decif);
 			if (sts == BC_STS_SUCCESS) {
 				if (!bcmdec->silent)
@@ -956,16 +944,36 @@ static GstStateChangeReturn gst_bcmdec_change_state(GstElement *element, GstStat
 				GST_ERROR_OBJECT(bcmdec, "stop play failed %d", sts);
 			}
 		}
+		GST_DEBUG_OBJECT(bcmdec, "Stopping threads\n");
+		if (bcmdec->get_rbuf_thread) {
+			GST_DEBUG_OBJECT(bcmdec, "rbuf stop event");
+			if (sem_post(&bcmdec->rbuf_stop_event) == -1)
+				GST_ERROR_OBJECT(bcmdec, "sem_post failed");
+			GST_DEBUG_OBJECT(bcmdec, "waiting for get_rbuf_thread exit");
+			ret = pthread_join(bcmdec->get_rbuf_thread, NULL);
+			GST_DEBUG_OBJECT(bcmdec, "get_rbuf_thread exit - %d errno = %d", ret, errno);
+			bcmdec->get_rbuf_thread = 0;
+		}
+
+		if (bcmdec->recv_thread) {
+			GST_DEBUG_OBJECT(bcmdec, "quit event");
+			if (sem_post(&bcmdec->quit_event) == -1)
+				GST_ERROR_OBJECT(bcmdec, "sem_post failed");
+			GST_DEBUG_OBJECT(bcmdec, "waiting for rec_thread exit");
+			ret = pthread_join(bcmdec->recv_thread, NULL);
+			GST_DEBUG_OBJECT(bcmdec, "thread exit - %d errno = %d", ret, errno);
+			bcmdec->recv_thread = 0;
+		}
+
+		if (bcmdec->push_thread) {
+			GST_DEBUG_OBJECT(bcmdec, "waiting for push_thread exit");
+			ret = pthread_join(bcmdec->push_thread, NULL);
+			GST_DEBUG_OBJECT(bcmdec, "push_thread exit - %d errno = %d", ret, errno);
+			bcmdec->push_thread = 0;
+		}
+
 		break;
 
-	case GST_STATE_CHANGE_READY_TO_NULL:
-		GST_DEBUG_OBJECT(bcmdec, "GST_STATE_CHANGE_READY_TO_NULL");
-		sts = gst_bcmdec_cleanup(bcmdec);
-		if (sts == BC_STS_SUCCESS)
-			GST_DEBUG_OBJECT(bcmdec, "dev close success");
-		else
-			GST_ERROR_OBJECT(bcmdec, "dev close failed %d", sts);
-		break;
 	case GST_STATE_CHANGE_PLAYING_TO_PAUSED:
 		GST_DEBUG_OBJECT(bcmdec, "GST_STATE_CHANGE_PLAYING_TO_PAUSED");
 		break;
@@ -973,6 +981,20 @@ static GstStateChangeReturn gst_bcmdec_change_state(GstElement *element, GstStat
 	default:
 		GST_DEBUG_OBJECT(bcmdec, "default %d", transition);
 		break;
+	}
+	result = GST_ELEMENT_CLASS(parent_class)->change_state(element, transition);
+	if (result == GST_STATE_CHANGE_FAILURE) {
+		GST_ERROR_OBJECT(bcmdec, "parent class state change failed");
+		return result;
+	}
+
+	if(transition == GST_STATE_CHANGE_READY_TO_NULL) {
+		GST_DEBUG_OBJECT(bcmdec, "GST_STATE_CHANGE_READY_TO_NULL");
+		sts = gst_bcmdec_cleanup(bcmdec);
+		if (sts == BC_STS_SUCCESS)
+			GST_DEBUG_OBJECT(bcmdec, "dev close success");
+		else
+			GST_ERROR_OBJECT(bcmdec, "dev close failed %d", sts);
 	}
 
 	return result;
@@ -1218,6 +1240,8 @@ static int bcmdec_wait_for_event(GstBcmDec *bcmdec)
 	int ret = 0, i = 0;
 	sem_t *event_list[] = { &bcmdec->play_event, &bcmdec->quit_event };
 
+	GST_DEBUG_OBJECT(bcmdec, "Waiting for event\n");
+
 	while (1) {
 		for (i = 0; i < 2; i++) {
 
@@ -1397,6 +1421,7 @@ static void * bcmdec_process_output(void *ctx)
 
 		GST_DEBUG_OBJECT(bcmdec, "wait over streaming = %d", bcmdec->streaming);
 		while (bcmdec->streaming && !bcmdec->last_picture_set) {
+			GST_DEBUG_OBJECT(bcmdec, "Getting Status\n");
 			// NAREN FIXME - This is HARDCODED right now till we get HW PAUSE and RESUME working from the driver
 			uint32_t rll;
 			gboolean tmp;
@@ -1651,16 +1676,17 @@ static void * bcmdec_process_output(void *ctx)
 		}
 		if (rx_flush) {
 			if (!bcmdec->flushing) {
-				GST_DEBUG_OBJECT(bcmdec, "DtsFlushRxCapture called");
-				sts = decif_flush_rxbuf(&bcmdec->decif, FALSE);
-				if (sts != BC_STS_SUCCESS)
-					GST_DEBUG_OBJECT(bcmdec, "DtsFlushRxCapture failed");
+// 				GST_DEBUG_OBJECT(bcmdec, "DtsFlushRxCapture called");
+// 				sts = decif_flush_rxbuf(&bcmdec->decif, FALSE);
+// 				if (sts != BC_STS_SUCCESS)
+// 					GST_DEBUG_OBJECT(bcmdec, "DtsFlushRxCapture failed");
 			}
 			rx_flush = FALSE;
 			if (bcmdec->flushing) {
 				if (sem_post(&bcmdec->recv_stop_event) == -1)
 					GST_ERROR_OBJECT(bcmdec, "recv_stop sem_post failed");
 			}
+			GST_DEBUG_OBJECT(bcmdec, "DtsFlushRxCapture Done");
 		}
 	}
 	GST_DEBUG_OBJECT(bcmdec, "Rx thread exiting ..");
@@ -1794,6 +1820,8 @@ static void bcmdec_process_flush_stop(GstBcmDec *bcmdec)
 	bcmdec->streaming   = TRUE;
 	bcmdec->rpt_pic_cnt = 0;
 
+	GST_DEBUG_OBJECT(bcmdec, "flush stop started");
+
 	if (sem_post(&bcmdec->play_event) == -1)
 		GST_ERROR_OBJECT(bcmdec, "sem_post failed");
 
@@ -1857,37 +1885,9 @@ static void bcmdec_process_flush_start(GstBcmDec *bcmdec)
 static BC_STATUS gst_bcmdec_cleanup(GstBcmDec *bcmdec)
 {
 	BC_STATUS sts = BC_STS_SUCCESS;
-	int ret = 1;
 
 	GST_DEBUG_OBJECT(bcmdec, "gst_bcmdec_cleanup - enter");
 	bcmdec->streaming = FALSE;
-
-	if (bcmdec->get_rbuf_thread) {
-		GST_DEBUG_OBJECT(bcmdec, "gst_bcmdec_cleanup - post quit_event");
-		if (sem_post(&bcmdec->rbuf_stop_event) == -1)
-			GST_ERROR_OBJECT(bcmdec, "sem_post failed");
-		GST_DEBUG_OBJECT(bcmdec, "waiting for get_rbuf_thread exit");
-		ret = pthread_join(bcmdec->get_rbuf_thread, NULL);
-		GST_DEBUG_OBJECT(bcmdec, "get_rbuf_thread exit - %d errno = %d", ret, errno);
-		bcmdec->get_rbuf_thread = 0;
-	}
-
-	if (bcmdec->recv_thread) {
-		GST_DEBUG_OBJECT(bcmdec, "gst_bcmdec_cleanup - post quit_event");
-		if (sem_post(&bcmdec->quit_event) == -1)
-			GST_ERROR_OBJECT(bcmdec, "sem_post failed");
-		GST_DEBUG_OBJECT(bcmdec, "waiting for rec_thread exit");
-		ret = pthread_join(bcmdec->recv_thread, NULL);
-		GST_DEBUG_OBJECT(bcmdec, "thread exit - %d errno = %d", ret, errno);
-		bcmdec->recv_thread = 0;
-	}
-
-	if (bcmdec->push_thread) {
-		GST_DEBUG_OBJECT(bcmdec, "waiting for push_thread exit");
-		ret = pthread_join(bcmdec->push_thread, NULL);
-		GST_DEBUG_OBJECT(bcmdec, "push_thread exit - %d errno = %d", ret, errno);
-		bcmdec->push_thread = 0;
-	}
 
 	bcmdec_release_mem_buf_que_pool(bcmdec);
 //	bcmdec_release_mem_rbuf_que_pool(bcmdec);

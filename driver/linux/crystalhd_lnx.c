@@ -14,7 +14,7 @@
   You should have received a copy of the GNU General Public License
   along with this driver.  If not, see <http://www.gnu.org/licenses/>.
 ***************************************************************************/
-#define DEBUG
+
 #include <linux/version.h>
 
 #include "crystalhd_lnx.h"
@@ -573,7 +573,7 @@ static int __devinit chd_dec_pci_probe(struct pci_dev *pdev,
 	int rc;
 	BC_STATUS sts = BC_STS_SUCCESS;
 
-	dev_dbg(dev, "Starting Device:0x%04x\n", pdev->device);
+	dev_info(dev, "Starting Device:0x%04x\n", pdev->device);
 
 	pinfo = kzalloc(sizeof(struct crystalhd_adp), GFP_KERNEL);
 	if (!pinfo) {
