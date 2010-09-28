@@ -1047,7 +1047,7 @@ DtsTxDmaText( HANDLE  hDevice ,
 
 	*dramOff = pIocData->u.ProcInput.DramOffset;
 
-	if( BC_STS_SUCCESS != status)
+	if( BC_STS_SUCCESS != status && BC_STS_IO_USER_ABORT != status)
 	{
 		DebugLog_Trace(LDIL_DBG,"DtsTxDmaText: DeviceIoControl Failed with Sts %d\n", status);
 	}
