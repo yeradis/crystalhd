@@ -1589,6 +1589,16 @@ BC_STATUS DtsReleaseInterface(DTS_LIB_CONTEXT *Ctx)
 	if(!Ctx)
 		return BC_STS_INV_ARG;
 
+	// Exit TX thread
+	Ctx->txThreadExit = true;
+	// wait to make sure the thread exited
+	pthread_join(Ctx->htxThread, NULL);
+	// de-Allocate circular buffer
+	txBufFree(&Ctx->circBuf);
+	Ctx->htxThread = 0;
+	if(Ctx->alignBuf)
+		free(Ctx->alignBuf);
+
 	DtsReleaseMemPools(Ctx);
 
 	if((Ctx->DevHandle != 0) && close(Ctx->DevHandle)!=0) //Zero if success
@@ -1599,16 +1609,6 @@ BC_STATUS DtsReleaseInterface(DTS_LIB_CONTEXT *Ctx)
 	DtsSetHwInitSts(BC_DIL_HWINIT_NOT_YET);
 
 	DtsDelDilShMem();
-
-	// Exit TX thread
-	Ctx->txThreadExit = true;
-	// wait to make sure the thread exited
-	pthread_join(Ctx->htxThread, NULL);
-	// de-Allocate circular buffer
-	txBufFree(&Ctx->circBuf);
-	Ctx->htxThread = 0;
-	if(Ctx->alignBuf)
-		free(Ctx->alignBuf);
 
 	free(Ctx);
 
