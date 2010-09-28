@@ -1206,14 +1206,6 @@ DtsStopDecoder(
 
 	Ctx->State = BC_DEC_STATE_STOP;
 
-	if (Ctx->PESConvParams.m_pSpsPpsBuf)
-		free(Ctx->PESConvParams.m_pSpsPpsBuf);
-	Ctx->PESConvParams.m_pSpsPpsBuf = NULL;
-
-	if (Ctx->PESConvParams.pStartcodePendBuff)
-		free(Ctx->PESConvParams.pStartcodePendBuff);
-	Ctx->PESConvParams.pStartcodePendBuff = NULL;
-
 	return sts;
 }
 
