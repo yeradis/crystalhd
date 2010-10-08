@@ -65,7 +65,7 @@ struct crystalhd_cmd {
 	spinlock_t		ctx_lock;
 	uint32_t		tx_list_id;
 	uint32_t		cin_wait_exit;
-	uint32_t		pwr_state_change;
+	uint32_t		pwr_state_change; // 0 is running, 1 is going to suspend, 2 is going to resume
 	struct crystalhd_hw		*hw_ctx;
 };
 

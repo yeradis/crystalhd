@@ -323,27 +323,6 @@ DtsSetCoreClock(
 	}
 
 	return BC_STS_CLK_NOCHG;
-
-#if 0
-	DtsDevRegisterWr( hDevice, DecHt_PllBCtl, clkRate);
-	cnt = 0;
-	do{
-		bc_sleep_ms(20);
-
-		DtsDevRegisterRead( hDevice, DecHt_PllBCtl, &Val);
-		if(Val == clkRate)
-			break;
-		cnt++;
-	}while(cnt < 50);
-
-
-	if(Val != clkRate){
-		DebugLog_Trace(LDIL_DBG,"DtsSetCoreClock: Failed to change PLL_B_CTL\n");
-		return BC_STS_NO_ACCESS;
-	}
-
-	return BC_STS_SUCCESS;
-#endif
 }
 
 DRVIFLIB_INT_API BC_STATUS

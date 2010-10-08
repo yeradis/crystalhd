@@ -2074,7 +2074,7 @@ BC_STATUS crystalhd_flea_hw_fire_rxdma(struct crystalhd_hw *hw,
 	}
 
 	if(hw->RxCaptureState != 1) {
-		printk("Capture not enabled\n");
+		dev_err(dev, "Capture not enabled\n");
 		return BC_STS_BUSY;
 	}
 

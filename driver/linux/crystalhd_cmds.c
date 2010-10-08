@@ -53,7 +53,7 @@ static int bc_cproc_get_user_count(struct crystalhd_cmd *ctx)
 	return count;
 }
 
-static void bc_cproc_mark_pwr_state(struct crystalhd_cmd *ctx)
+static void bc_cproc_mark_pwr_state(struct crystalhd_cmd *ctx, uint32_t state)
 {
 	int i;
 
@@ -62,7 +62,7 @@ static void bc_cproc_mark_pwr_state(struct crystalhd_cmd *ctx)
 			continue;
 		if ((ctx->user[i].mode & 0xFF) == DTS_DIAG_MODE ||
 		    (ctx->user[i].mode & 0xFF) == DTS_PLAYBACK_MODE) {
-			ctx->pwr_state_change = 1;
+			ctx->pwr_state_change = state;
 			break;
 		}
 	}
@@ -529,6 +529,9 @@ static BC_STATUS bc_cproc_proc_input(struct crystalhd_cmd *ctx, crystalhd_ioctl_
 		return BC_STS_INV_ARG;
 	}
 
+	if (ctx->state & BC_LINK_SUSPEND)
+		return BC_STS_IO_USER_ABORT;
+
 	ubuff = idata->udata.u.ProcInput.pDmaBuff;
 	ub_sz = idata->udata.u.ProcInput.BuffSz;
 
@@ -624,6 +627,9 @@ static BC_STATUS bc_cproc_fetch_frame(struct crystalhd_cmd *ctx,
 		dev_err(dev, "%s: Invalid Arg\n", __func__);
 		return BC_STS_INV_ARG;
 	}
+
+	if (ctx->state & BC_LINK_SUSPEND)
+		return BC_STS_IO_USER_ABORT;
 
 	if (!(ctx->state & BC_LINK_CAP_EN)) {
 		dev_dbg(dev, "Capture not enabled..%x\n", ctx->state);
@@ -766,8 +772,8 @@ static BC_STATUS bc_cproc_get_stats(struct crystalhd_cmd *ctx,
 	/* because eveentually the RX thread will wake up the HW when needed */
 	flags |= 0x04;
 
-	if (ctx->pwr_state_change)
-		stats->pwr_state_change = 1;
+	stats->pwr_state_change = ctx->pwr_state_change;
+
 	if (ctx->state & BC_LINK_PAUSED)
 		stats->DrvPauseTime = 1;
 
@@ -882,7 +888,7 @@ BC_STATUS crystalhd_suspend(struct crystalhd_cmd *ctx, crystalhd_ioctl_data *ida
 
 	ctx->state |= BC_LINK_SUSPEND;
 
-	bc_cproc_mark_pwr_state(ctx);
+	bc_cproc_mark_pwr_state(ctx, 1); // going to suspend
 
 	if (ctx->state & BC_LINK_CAP_EN) {
 		idata->udata.u.FlushRxCap.bDiscardOnly = true;
@@ -926,7 +932,9 @@ BC_STATUS crystalhd_resume(struct crystalhd_cmd *ctx)
 {
 	dev_info(chddev(), "crystalhd_resume Success %x\n", ctx->state);
 
-	bc_cproc_mark_pwr_state(ctx);
+	bc_cproc_mark_pwr_state(ctx, 2); // Starting resume
+
+// 	ctx->state &= ~BC_LINK_SUSPEND;
 
 	return BC_STS_SUCCESS;
 }
@@ -978,6 +986,8 @@ BC_STATUS crystalhd_user_open(struct crystalhd_cmd *ctx,
 	uc->in_use = 1;
 
 	*user_ctx = uc;
+
+	ctx->pwr_state_change = 0;
 
 	return BC_STS_SUCCESS;
 }
@@ -1111,7 +1121,7 @@ crystalhd_cmd_proc crystalhd_get_cmd_proc(struct crystalhd_cmd *ctx, uint32_t cm
 	}
 
 	if ((cmd != BCM_IOC_GET_DRV_STAT) && (ctx->state & BC_LINK_SUSPEND)) {
-		dev_err(dev, "Invalid State [suspend Set].. Cmd[%d]\n", cmd);
+		dev_err(dev, "Invalid State [suspend Set].. Cmd[%x]\n", cmd);
 		return NULL;
 	}
 

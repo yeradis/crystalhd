@@ -153,7 +153,7 @@ typedef struct _BC_DTS_STATS {
 	uint8_t			drvRLL;
 	uint8_t			drvFLL;
 	uint8_t			eosDetected;
-	uint8_t			pwr_state_change;
+	uint8_t			pwr_state_change; // 0 is Default (running/stopped), 1 is going to suspend, 2 is going to resume
 
 	/* Stats from App */
 	uint32_t		opFrameDropped;
@@ -318,7 +318,7 @@ typedef struct _crystalhd_ioctl_data {
 enum _crystalhd_kmod_ver{
 	crystalhd_kmod_major	= 3,
 	crystalhd_kmod_minor	= 8,
-	crystalhd_kmod_rev	= 0,
+	crystalhd_kmod_rev	= 1,
 };
 
 

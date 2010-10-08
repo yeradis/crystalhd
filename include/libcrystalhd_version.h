@@ -57,14 +57,14 @@
 // version information (which should match) stored in bc_dts_glob_lnx.h
 #define DRIVER_MAJOR_VERSION        BRCM_MAJOR_VERSION
 #define DRIVER_MINOR_VERSION        8
-#define DRIVER_REVISION             0
+#define DRIVER_REVISION             1
 
 #define RC_FILE_VERSION             STRINGIFY_VERSION(DRIVER_MAJOR_VERSION,DRIVER_MINOR_VERSION,DRIVER_REVISION) ".0"
 
 /*======================= Device Interface Library ========================*/
 #define DIL_MAJOR_VERSION	BRCM_MAJOR_VERSION
 #define DIL_MINOR_VERSION	20
-#define DIL_REVISION		0
+#define DIL_REVISION		1
 
 #define DIL_RC_FILE_VERSION	STRINGIFY_VERSION(DIL_MAJOR_VERSION,DIL_MINOR_VERSION,DIL_REVISION)
 

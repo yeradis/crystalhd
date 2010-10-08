@@ -401,6 +401,10 @@ void *crystalhd_dioq_fetch(crystalhd_dioq_t *ioq)
 
 	if (!ioq || (ioq->sig != BC_LINK_DIOQ_SIG)) {
 		dev_err(chddev(), "%s: Invalid arg\n", __func__);
+		if(!ioq)
+			dev_err(chddev(), "ioq not initialized\n");
+		else
+			dev_err(chddev(), "ioq invalid signature\n");
 		return data;
 	}
 

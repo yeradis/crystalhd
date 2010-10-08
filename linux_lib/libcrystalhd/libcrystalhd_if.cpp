@@ -2897,6 +2897,7 @@ DtsGetDriverStatus( HANDLE  hDevice,
 	pStatus->InputTotalSize     = temp.ipTotalSize;
 	pStatus->cpbEmptySize		= temp.DrvcpbEmptySize;
 	pStatus->picNumFlags		= temp.picNumFlags;
+	pStatus->PowerStateChange	= temp.pwr_state_change;
 
 	if(temp.eosDetected)
 	{

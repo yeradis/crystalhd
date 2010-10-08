@@ -263,7 +263,10 @@ static int chd_dec_api_cmd(struct crystalhd_adp *adp, unsigned long ua,
 
 	rc = chd_dec_proc_user_data(adp, temp, ua, 0);
 	if (!rc) {
-		sts = func(&adp->cmds, temp);
+		if(func == NULL)
+			sts = BC_STS_IO_USER_ABORT; // Can only happen when we are in suspend state
+		else
+			sts = func(&adp->cmds, temp);
 		if (sts == BC_STS_PENDING)
 			sts = BC_STS_NOT_IMPL;
 		temp->udata.RetSts = sts;
@@ -303,7 +306,7 @@ static long chd_dec_ioctl(struct file *fd,
 	}
 
 	cproc = crystalhd_get_cmd_proc(&adp->cmds, cmd, uc);
-	if (!cproc) {
+	if (!cproc && !(adp->cmds.state & BC_LINK_SUSPEND)) {
 		dev_err(chddev(), "Unhandled command: %d\n", cmd);
 		return -EINVAL;
 	}
@@ -654,7 +657,6 @@ static int __devinit chd_dec_pci_probe(struct pci_dev *pdev,
 	return 0;
 }
 
-#ifdef CONFIG_PM
 int chd_dec_pci_suspend(struct pci_dev *pdev, pm_message_t state)
 {
 	struct crystalhd_adp *adp;
@@ -730,7 +732,6 @@ int chd_dec_pci_resume(struct pci_dev *pdev)
 
 	return 0;
 }
-#endif
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 24)
 static DEFINE_PCI_DEVICE_TABLE(chd_dec_pci_id_table) = {
@@ -753,10 +754,8 @@ static struct pci_driver bc_chd_driver = {
 	.probe    = chd_dec_pci_probe,
 	.remove   = __devexit_p(chd_dec_pci_remove),
 	.id_table = chd_dec_pci_id_table,
-#ifdef CONFIG_PM
 	.suspend  = chd_dec_pci_suspend,
 	.resume   = chd_dec_pci_resume
-#endif
 };
 
 struct crystalhd_adp *chd_get_adp(void)
