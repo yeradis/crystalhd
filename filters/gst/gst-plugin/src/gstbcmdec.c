@@ -76,7 +76,7 @@ static GstFlowReturn bcmdec_send_buff_detect_error(GstBcmDec *bcmdec, GstBuffer 
 				 GST_BUFFER_TIMESTAMP(buf), GST_BUFFER_SIZE(buf),
 				 GST_BUFFER_DATA (buf));
 		if ((sts == BC_STS_IO_USER_ABORT) || (sts == BC_STS_ERROR)) {
-			suspend_sts = decif_get_drv_status(&bcmdec->decif,&suspended, &rll, &nextPicNumFlags);
+			suspend_sts = decif_get_drv_status(&bcmdec->decif, &suspended, &rll, &nextPicNumFlags);
 			if (suspend_sts == BC_STS_SUCCESS) {
 				if (suspended) {
 					GST_DEBUG_OBJECT(bcmdec, "suspend status recv");
@@ -586,7 +586,13 @@ static gboolean gst_bcmdec_sink_set_caps(GstPad *pad, GstCaps *caps)
 						return FALSE;
 					}
 				}
-			} else {
+			}
+			else if(bcmdec->input_format == BC_MSUBTYPE_MPEG2VIDEO)
+			{
+				// FOR MPEG-2 don't need any additional codec_data is most cases
+				GST_DEBUG_OBJECT(bcmdec, "no codec_data for MPEG-2. Trying to decode anyway");
+			}
+			else {
 				GST_DEBUG_OBJECT(bcmdec, "no codec_data. Don't know how to handle");
 				gst_object_unref(bcmdec);
 				return FALSE;
@@ -802,8 +808,8 @@ static gboolean bcmdec_process_play(GstBcmDec *bcmdec)
 	bcInputFormat.Progressive =  !(bcmdec->interlace);
 	bcInputFormat.mSubtype= bcmdec->input_format;
 
-	//Use Demux Image Size for VC-1 Simple/Main
-	if(bcInputFormat.mSubtype == BC_MSUBTYPE_WMV3)
+	//Use Demux Image Size for VC-1 Simple/Main and for DIVX311
+	if(bcInputFormat.mSubtype == BC_MSUBTYPE_WMV3 || bcInputFormat.mSubtype == BC_MSUBTYPE_DIVX311)
 	{
 		//VC-1 Simple/Main
 		bcInputFormat.width = bcmdec->frame_width;
@@ -2259,7 +2265,7 @@ static BC_STATUS bcmdec_resume_callback(GstBcmDec *bcmdec)
 	bcInputFormat.mSubtype= bcmdec->input_format;
 
 	//Use Demux Image Size for VC-1 Simple/Main
-	if(bcInputFormat.mSubtype == BC_MSUBTYPE_WMV3)
+	if(bcInputFormat.mSubtype == BC_MSUBTYPE_WMV3 || bcInputFormat.mSubtype == BC_MSUBTYPE_DIVX311)
 	{
 		//VC-1 Simple/Main
 		bcInputFormat.width = bcmdec->frame_width;
