@@ -834,7 +834,7 @@ void crystalhd_flea_notify_fll_change(struct crystalhd_hw *hw, bool bCleanupCont
 static
 void crystalhd_flea_init_power_state(struct crystalhd_hw *hw)
 {
-	hw->FleaEnablePWM = false;	// disable by default
+	hw->FleaEnablePWM = true;	// enable by default
 	hw->FleaPowerState = FLEA_PS_NONE;
 }
 
@@ -1288,7 +1288,7 @@ BCHP_SCRUB_CTRL_BI_CMAC_127_96		0x000f6018			CMAC Bits[127:96]
 			break;
 		}
 
-		msleep_interruptible(1); /*1 Milli Sec delay*/
+		msleep_interruptible(5); /*5 Milli Sec delay*/
 	}
 
 	if( !bRetVal )
