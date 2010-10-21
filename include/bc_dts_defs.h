@@ -90,8 +90,8 @@ typedef struct _BC_REG_CONFIG{
 	uint32_t		DbgOptions;
 } BC_REG_CONFIG;
 
-#if defined(__KERNEL__) || defined(__LINUX_USER__)
-#else
+//#if defined(__KERNEL__) || defined(__LINUX_USER__)
+#if defined(_WIN32) || defined(_WIN64)
 /* Align data structures */
 #define ALIGN(x)	__declspec(align(x))
 #endif
@@ -243,7 +243,7 @@ typedef struct _BC_PIB_EXT_VC1 {
 /*------------------------------------------------------*
  *    Picture Information Block				*
  *------------------------------------------------------*/
-#if defined(__LINUX_USER__)
+#if !defined(__KERNEL__)
 /* Values for 'pulldown' field.  '0' means no pulldown information
  * was present for this picture. */
 enum {
@@ -365,7 +365,7 @@ enum {
 
 #define VDEC_FLAG_PICTURE_META_DATA_PRESENT	(0x40000)
 
-#endif /* __LINUX_USER__ */
+#endif /* __KERNEL__ */
 
 typedef struct _BC_PIC_INFO_BLOCK {
 	/* Common fields. */
@@ -424,7 +424,7 @@ enum DECODER_CAP_FLAGS
 	BC_DEC_FLAGS_M4P2		= 0x08,	//MPEG-4 Part 2: Divx, Xvid etc.
 };
 
-#if defined(__KERNEL__) || defined(__LINUX_USER__)
+#if defined(__KERNEL__) || defined(__LINUX_USER__) || defined(__LINUX__)
 typedef BC_STATUS(*dts_pout_callback)(void  *shnd, uint32_t width, uint32_t height, uint32_t stride, void *pOut);
 #else
 typedef BC_STATUS(*dts_pout_callback)(void  *shnd, uint32_t width, uint32_t height, uint32_t stride, struct _BC_DTS_PROC_OUT *pOut);

@@ -28,7 +28,7 @@
 #ifndef _BC_DTS_GLOB_LNX_H_
 #define _BC_DTS_GLOB_LNX_H_
 
-#ifdef __LINUX_USER__
+#if !defined(__KERNEL__)
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
