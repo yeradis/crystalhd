@@ -1342,7 +1342,7 @@ BCHP_SCRUB_CTRL_BI_CMAC_127_96		0x000f6018			CMAC Bits[127:96]
 		}
 	}*/
 
-	dev_info(&hw->adp->pdev->dev, "[%s]: Complete.\n", __func__);
+	dev_dbg(&hw->adp->pdev->dev, "[%s]: Complete.\n", __func__);
 	return BC_STS_SUCCESS;
 }
 

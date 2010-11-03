@@ -1601,9 +1601,12 @@ BC_STATUS DtsReleaseInterface(DTS_LIB_CONTEXT *Ctx)
 
 	DtsReleaseMemPools(Ctx);
 
-	if((Ctx->DevHandle != 0) && close(Ctx->DevHandle)!=0) //Zero if success
+	if(Ctx->DevHandle != 0) //Zero if success
 	{
-		DebugLog_Trace(LDIL_DBG,"DtsDeviceClose: Close Handle Failed with error %d\n",errno);
+		DtsReleaseUserHandle(Ctx);
+
+		if(0 != close(Ctx->DevHandle))
+			DebugLog_Trace(LDIL_DBG,"DtsDeviceClose: Close Handle Failed with error %d\n",errno);
 	}
 
 	DtsSetHwInitSts(BC_DIL_HWINIT_NOT_YET);
@@ -1614,6 +1617,26 @@ BC_STATUS DtsReleaseInterface(DTS_LIB_CONTEXT *Ctx)
 
 	return BC_STS_SUCCESS;
 
+}
+
+//------------------------------------------------------------------------
+// Name: DtsReleaseUserHandle
+// Description: Notfiy the driver to release the user handle
+// Should be called right before close
+//------------------------------------------------------------------------
+BC_STATUS DtsReleaseUserHandle(DTS_LIB_CONTEXT* Ctx)
+{
+	BC_IOCTL_DATA	pIo;
+	BC_STATUS		sts = BC_STS_SUCCESS;
+
+	memset(&pIo, 0, sizeof(BC_IOCTL_DATA));
+
+	if( (sts=DtsDrvCmd(Ctx,BCM_IOC_RELEASE,0,&pIo,FALSE)) != BC_STS_SUCCESS){
+		DebugLog_Trace(LDIL_DBG,"DtsReleaseUserHandle: Ioctl failed: %d\n",sts);
+		return sts;
+	}
+
+	return sts;
 }
 
 //------------------------------------------------------------------------

@@ -41,7 +41,7 @@ static struct crystalhd_user *bc_cproc_get_uid(struct crystalhd_cmd *ctx)
 	return user;
 }
 
-static int bc_cproc_get_user_count(struct crystalhd_cmd *ctx)
+int bc_get_userhandle_count(struct crystalhd_cmd *ctx)
 {
 	int i, count = 0;
 
@@ -821,6 +821,68 @@ static BC_STATUS bc_cproc_reset_stats(struct crystalhd_cmd *ctx,
 	return BC_STS_SUCCESS;
 }
 
+/**
+ *
+ * bc_cproc_release_user - Close Application Handle
+ *
+ * Used to be crystalhd_user_close
+ *
+ * @ctx: Command layer contextx.
+ * @uc: User ID context.
+ *
+ * Return:
+ *	status
+ *
+ * Closer aplication handle and release app specific
+ * resources.
+ *
+ * Move to IOCTL based implementation called from the RELEASE IOCTL
+ */
+BC_STATUS bc_cproc_release_user(struct crystalhd_cmd *ctx, crystalhd_ioctl_data *idata)
+{
+
+	struct device *dev = chddev();
+	uint32_t mode;
+
+	if (!ctx || !idata) {
+		dev_err(dev, "%s: Invalid Arg\n", __func__);
+		return BC_STS_INV_ARG;
+	}
+
+	if (ctx->user[idata->u_id].mode == DTS_MODE_INV) {
+		dev_err(dev, "Handle is already closed\n");
+		return BC_STS_ERR_USAGE;
+	}
+
+	mode = ctx->user[idata->u_id].mode;
+
+	ctx->user[idata->u_id].mode = DTS_MODE_INV;
+	ctx->user[idata->u_id].in_use = 0;
+
+	dev_dbg(chddev(), "Closing user[%x] handle via ioctl with mode %x\n", idata->u_id, mode);
+
+	if (((mode & 0xFF) == DTS_DIAG_MODE) ||
+		((mode & 0xFF) == DTS_PLAYBACK_MODE) ||
+		((bc_get_userhandle_count(ctx) == 0) && (ctx->hw_ctx != NULL))) {
+		ctx->cin_wait_exit = 1;
+		ctx->pwr_state_change = 0;
+		// Stop the HW Capture just in case flush did not get called before stop
+		crystalhd_hw_stop_capture(ctx->hw_ctx, true);
+		crystalhd_hw_free_dma_rings(ctx->hw_ctx);
+		crystalhd_destroy_dio_pool(ctx->adp);
+		crystalhd_delete_elem_pool(ctx->adp);
+		ctx->state = BC_LINK_INVALID;
+		crystalhd_hw_close(ctx->hw_ctx, ctx->adp);
+		kfree(ctx->hw_ctx);
+		ctx->hw_ctx = NULL;
+	}
+
+	if(ctx->adp->cfg_users > 0)
+		ctx->adp->cfg_users--;
+
+	return BC_STS_SUCCESS;
+}
+
 /*=============== Cmd Proc Table.. ======================================*/
 static const crystalhd_cmd_tbl_t	g_crystalhd_cproc_tbl[] = {
 	{ BCM_IOC_GET_VERSION,		bc_cproc_get_version,	0},
@@ -843,6 +905,7 @@ static const crystalhd_cmd_tbl_t	g_crystalhd_cproc_tbl[] = {
 	{ BCM_IOC_GET_DRV_STAT,		bc_cproc_get_stats,	0},
 	{ BCM_IOC_RST_DRV_STAT,		bc_cproc_reset_stats,	0},
 	{ BCM_IOC_NOTIFY_MODE,		bc_cproc_notify_mode,	0},
+	{ BCM_IOC_RELEASE,			bc_cproc_release_user,  0},
 	{ BCM_IOC_END,				NULL},
 };
 
@@ -988,47 +1051,6 @@ BC_STATUS crystalhd_user_open(struct crystalhd_cmd *ctx,
 	*user_ctx = uc;
 
 	ctx->pwr_state_change = 0;
-
-	return BC_STS_SUCCESS;
-}
-
-/**
- * crystalhd_user_close - Close application handle.
- * @ctx: Command layer contextx.
- * @uc: User ID context.
- *
- * Return:
- *	status
- *
- * Closer aplication handle and release app specific
- * resources.
- */
-BC_STATUS crystalhd_user_close(struct crystalhd_cmd *ctx, struct crystalhd_user *uc)
-{
-	uint32_t mode = uc->mode;
-
-	ctx->user[uc->uid].mode = DTS_MODE_INV;
-	ctx->user[uc->uid].in_use = 0;
-
-	dev_info(chddev(), "Closing user[%x] handle with mode %x\n", uc->uid, mode);
-
-	if (((mode & 0xFF) == DTS_DIAG_MODE) ||
-		((mode & 0xFF) == DTS_PLAYBACK_MODE) ||
-		((bc_cproc_get_user_count(ctx) == 0) && (ctx->hw_ctx != NULL))) {
-		ctx->cin_wait_exit = 1;
-		ctx->pwr_state_change = 0;
-		// Stop the HW Capture just in case flush did not get called before stop
-		crystalhd_hw_stop_capture(ctx->hw_ctx, true);
-		crystalhd_hw_free_dma_rings(ctx->hw_ctx);
-		crystalhd_destroy_dio_pool(ctx->adp);
-		crystalhd_delete_elem_pool(ctx->adp);
-		ctx->state = BC_LINK_INVALID;
-		crystalhd_hw_close(ctx->hw_ctx, ctx->adp);
-		kfree(ctx->hw_ctx);
-		ctx->hw_ctx = NULL;
-	} /*else if (bc_cproc_get_user_count(ctx)) {
-		return BC_STS_SUCCESS;
-	}*/
 
 	return BC_STS_SUCCESS;
 }

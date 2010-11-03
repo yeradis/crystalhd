@@ -463,14 +463,12 @@ DtsDeviceOpen(
 	/* Initialize Internal Driver interfaces.. */
 	if( (Sts = DtsInitInterface(drvHandle,hDevice, mode)) != BC_STS_SUCCESS){
 		DebugLog_Trace(LDIL_ERR,"DtsDeviceOpen: Interface Init Failed:%x\n",Sts);
-		close(drvHandle);
 		DtsReleaseInterface(DtsGetContext(*hDevice));
 		DtsDelDilShMem();
 		return Sts;
 	}
 	if( (Sts = DtsGetHwType(*hDevice,&DeviceID,&VendorID,&RevID))!=BC_STS_SUCCESS){
 		DebugLog_Trace(LDIL_DBG,"Get Hardware Type Failed\n");
-		close(drvHandle);
 		DtsReleaseInterface(DtsGetContext(*hDevice));
 		DtsDelDilShMem();
 		return Sts;
@@ -494,7 +492,6 @@ DtsDeviceOpen(
 	 */
 	if ((Sts = DtsGetVersion(*hDevice, &drvVer, &dilVer)) != BC_STS_SUCCESS) {
 		DebugLog_Trace(LDIL_DBG,"Get drv ver failed\n");
-		close(drvHandle);
 		DtsReleaseInterface(DtsGetContext(*hDevice));
 		DtsDelDilShMem();
 		return Sts;
@@ -535,7 +532,6 @@ DtsDeviceOpen(
 	if( (Sts = DtsNotifyOperatingMode(*hDevice,drvMode)) != BC_STS_SUCCESS){
 		DebugLog_Trace(LDIL_DBG,"Notify Operating Mode Failed\n");
 		DtsReleaseInterface(DtsGetContext(*hDevice));
-		close(drvHandle);
 		DtsDelDilShMem();
 		return Sts;
 	}
@@ -586,7 +582,6 @@ DtsDeviceOpen(
 		if(Sts != BC_STS_SUCCESS )
 		{
 			DtsReleaseInterface(DtsGetContext(*hDevice));
-			close(drvHandle);
 			DtsDelDilShMem();
 			goto exit;
 		}
@@ -651,6 +646,7 @@ DtsDeviceClose(
 	}
 	DtsSetOPMode(globMode);
 	DtsReleasePESConverter(hDevice);
+
 	return DtsReleaseInterface(Ctx);
 
 }

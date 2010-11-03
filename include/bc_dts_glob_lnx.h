@@ -273,6 +273,7 @@ typedef enum _BC_DRV_CMD{
 	DRV_CMD_GET_DRV_STAT,	/* Get Driver Internal Statistics */
 	DRV_CMD_RST_DRV_STAT,	/* Reset Driver Internal Statistics */
 	DRV_CMD_NOTIFY_MODE,	/* Notify the Mode to driver in which the application is Operating*/
+	DRV_CMD_RELEASE,		/* Notify the driver to release user handle and application resources */
 
 	/* MUST be the last one.. */
 	DRV_CMD_END,			/* End of the List.. */
@@ -303,6 +304,7 @@ typedef enum _BC_DRV_CMD{
 #define BCM_IOC_RST_DRV_STAT	BC_IOC_IOWR(DRV_CMD_RST_DRV_STAT, BC_IOCTL_MB)
 #define BCM_IOC_NOTIFY_MODE		BC_IOC_IOWR(DRV_CMD_NOTIFY_MODE, BC_IOCTL_MB)
 #define	BCM_IOC_FW_DOWNLOAD		BC_IOC_IOWR(DRV_CMD_FW_DOWNLOAD, BC_IOCTL_MB)
+#define BCM_IOC_RELEASE			BC_IOC_IOWR(DRV_CMD_RELEASE, BC_IOCTL_MB)
 #define	BCM_IOC_END				BC_IOC_VOID
 
 /* Wrapper for main IOCTL data */
@@ -317,8 +319,8 @@ typedef struct _crystalhd_ioctl_data {
 
 enum _crystalhd_kmod_ver{
 	crystalhd_kmod_major	= 3,
-	crystalhd_kmod_minor	= 8,
-	crystalhd_kmod_rev	= 2,
+	crystalhd_kmod_minor	= 9,
+	crystalhd_kmod_rev		= 0,
 };
 
 

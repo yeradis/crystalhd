@@ -23,6 +23,8 @@ static struct class *crystalhd_class;
 
 static struct crystalhd_adp *g_adp_info;
 
+extern int bc_get_userhandle_count(struct crystalhd_cmd *ctx);
+
 struct device *chddev(void)
 {
 	return &g_adp_info->pdev->dev;
@@ -291,8 +293,11 @@ static long chd_dec_ioctl(struct file *fd,
 #endif
 {
 	struct crystalhd_adp *adp = chd_get_adp();
+	struct device *dev = &adp->pdev->dev;
 	crystalhd_cmd_proc cproc;
 	struct crystalhd_user *uc;
+
+	dev_dbg(dev, "Entering %s\n", __func__);
 
 	if (!adp || !fd) {
 		dev_err(chddev(), "Invalid adp\n");
@@ -350,7 +355,9 @@ static int chd_dec_close(struct inode *in, struct file *fd)
 {
 	struct crystalhd_adp *adp = chd_get_adp();
 	struct device *dev = &adp->pdev->dev;
+	struct crystalhd_cmd *ctx = &adp->cmds;
 	struct crystalhd_user *uc;
+	uint32_t mode;
 
 	dev_dbg(dev, "Entering %s\n", __func__);
 	if (!adp) {
@@ -364,9 +371,40 @@ static int chd_dec_close(struct inode *in, struct file *fd)
 		return -ENODATA;
 	}
 
-	crystalhd_user_close(&adp->cmds, uc);
+	/* Check and close only if we have not flush/closed before */
+	/* This is needed because release is not guarenteed to be called immediately on close,
+	 * if duplicate file handles exist due to fork etc. This causes problems with close and re-open
+	 of the device immediately */
 
-	adp->cfg_users--;
+	if(uc->in_use) {
+		mode = uc->mode;
+
+		ctx->user[uc->uid].mode = DTS_MODE_INV;
+		ctx->user[uc->uid].in_use = 0;
+
+		dev_dbg(chddev(), "Closing user[%x] handle with mode %x\n", uc->uid, mode);
+
+		if (((mode & 0xFF) == DTS_DIAG_MODE) ||
+			((mode & 0xFF) == DTS_PLAYBACK_MODE) ||
+			((bc_get_userhandle_count(ctx) == 0) && (ctx->hw_ctx != NULL))) {
+			ctx->cin_wait_exit = 1;
+			ctx->pwr_state_change = 0;
+			// Stop the HW Capture just in case flush did not get called before stop
+			crystalhd_hw_stop_capture(ctx->hw_ctx, true);
+			crystalhd_hw_free_dma_rings(ctx->hw_ctx);
+			crystalhd_destroy_dio_pool(ctx->adp);
+			crystalhd_delete_elem_pool(ctx->adp);
+			ctx->state = BC_LINK_INVALID;
+			crystalhd_hw_close(ctx->hw_ctx, ctx->adp);
+			kfree(ctx->hw_ctx);
+			ctx->hw_ctx = NULL;
+		}
+
+		uc->in_use = 0;
+
+		if(adp->cfg_users > 0)
+			adp->cfg_users--;
+	}
 
 	return 0;
 }
