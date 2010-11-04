@@ -279,8 +279,13 @@ static int chd_dec_api_cmd(struct crystalhd_adp *adp, unsigned long ua,
 }
 
 /* API interfaces */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 35)
 static int chd_dec_ioctl(struct inode *in, struct file *fd,
 			 unsigned int cmd, unsigned long ua)
+#else
+static long chd_dec_ioctl(struct file *fd,
+			  unsigned int cmd, unsigned long ua)
+#endif
 {
 	struct crystalhd_adp *adp = chd_get_adp();
 	crystalhd_cmd_proc cproc;
@@ -364,10 +369,14 @@ static int chd_dec_close(struct inode *in, struct file *fd)
 }
 
 static const struct file_operations chd_dec_fops = {
-	.owner   = THIS_MODULE,
-	.ioctl   = chd_dec_ioctl,
-	.open    = chd_dec_open,
-	.release = chd_dec_close,
+	.owner		= THIS_MODULE,
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 35)
+	.ioctl		= chd_dec_ioctl,
+#else
+	.unlocked_ioctl	= chd_dec_ioctl,
+#endif
+	.open		= chd_dec_open,
+	.release	= chd_dec_close,
 };
 
 static int __devinit chd_dec_init_chdev(struct crystalhd_adp *adp)
