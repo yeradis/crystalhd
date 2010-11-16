@@ -884,7 +884,7 @@ BC_STATUS bc_cproc_release_user(struct crystalhd_cmd *ctx, crystalhd_ioctl_data 
 }
 
 /*=============== Cmd Proc Table.. ======================================*/
-static const crystalhd_cmd_tbl_t	g_crystalhd_cproc_tbl[] = {
+static const struct crystalhd_cmd_tbl	g_crystalhd_cproc_tbl[] = {
 	{ BCM_IOC_GET_VERSION,		bc_cproc_get_version,	0},
 	{ BCM_IOC_GET_HWTYPE,		bc_cproc_get_hwtype,	0},
 	{ BCM_IOC_REG_RD,			bc_cproc_reg_rd,	0},
@@ -1147,7 +1147,7 @@ crystalhd_cmd_proc crystalhd_get_cmd_proc(struct crystalhd_cmd *ctx, uint32_t cm
 		return NULL;
 	}
 
-	tbl_sz = sizeof(g_crystalhd_cproc_tbl) / sizeof(crystalhd_cmd_tbl_t);
+	tbl_sz = sizeof(g_crystalhd_cproc_tbl) / sizeof(struct crystalhd_cmd_tbl);
 	for (i = 0; i < tbl_sz; i++) {
 		if (g_crystalhd_cproc_tbl[i].cmd_id == cmd) {
 			if ((uc->mode == DTS_MONITOR_MODE) &&

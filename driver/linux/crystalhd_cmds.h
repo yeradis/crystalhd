@@ -71,11 +71,11 @@ struct crystalhd_cmd {
 
 typedef BC_STATUS (*crystalhd_cmd_proc)(struct crystalhd_cmd *, crystalhd_ioctl_data *);
 
-typedef struct _crystalhd_cmd_tbl {
+struct crystalhd_cmd_tbl {
 	uint32_t		cmd_id;
 	const crystalhd_cmd_proc	cmd_proc;
 	uint32_t		block_mon;
-} crystalhd_cmd_tbl_t;
+};
 
 
 BC_STATUS crystalhd_suspend(struct crystalhd_cmd *ctx, crystalhd_ioctl_data *idata);
