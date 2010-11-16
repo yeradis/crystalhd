@@ -53,7 +53,7 @@
 #define NUMBER_OF_TRANSFERS_RX_SIDE				2
 
 struct BC_DRV_PIC_INFO {
-	C011_PIB			DecoPIB;
+	struct C011_PIB			DecoPIB;
 	struct BC_DRV_PIC_INFO		*Flink;
 };
 
@@ -519,7 +519,7 @@ BC_STATUS crystalhd_hw_post_tx(struct crystalhd_hw *hw, struct crystalhd_dio_req
 				uint8_t data_flags);
 BC_STATUS crystalhd_hw_cancel_tx(struct crystalhd_hw *hw, uint32_t list_id);
 BC_STATUS crystalhd_hw_add_cap_buffer(struct crystalhd_hw *hw,struct crystalhd_dio_req *ioreq, bool en_post);
-BC_STATUS crystalhd_hw_get_cap_buffer(struct crystalhd_hw *hw,C011_PIB *pib,struct crystalhd_dio_req **ioreq);
+BC_STATUS crystalhd_hw_get_cap_buffer(struct crystalhd_hw *hw,struct C011_PIB *pib,struct crystalhd_dio_req **ioreq);
 BC_STATUS crystalhd_hw_start_capture(struct crystalhd_hw *hw);
 BC_STATUS crystalhd_hw_stop_capture(struct crystalhd_hw *hw, bool unmap);
 BC_STATUS crystalhd_hw_suspend(struct crystalhd_hw *hw);

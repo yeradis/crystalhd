@@ -884,7 +884,7 @@ BC_STATUS crystalhd_hw_add_cap_buffer(struct crystalhd_hw *hw,
 }
 
 BC_STATUS crystalhd_hw_get_cap_buffer(struct crystalhd_hw *hw,
-										C011_PIB *pib,
+										struct C011_PIB *pib,
 										struct crystalhd_dio_req **ioreq)
 {
 	struct crystalhd_rx_dma_pkt *rpkt;

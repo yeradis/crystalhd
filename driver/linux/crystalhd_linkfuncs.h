@@ -205,7 +205,7 @@ BC_STATUS crystalhd_link_stop_tx_dma_engine(struct crystalhd_hw *hw);
 uint32_t crystalhd_link_get_pib_avail_cnt(struct crystalhd_hw *hw);
 uint32_t crystalhd_link_get_addr_from_pib_Q(struct crystalhd_hw *hw);
 bool crystalhd_link_rel_addr_to_pib_Q(struct crystalhd_hw *hw, uint32_t addr_to_rel);
-void link_cpy_pib_to_app(C011_PIB *src_pib, BC_PIC_INFO_BLOCK *dst_pib);
+void link_cpy_pib_to_app(struct C011_PIB *src_pib, BC_PIC_INFO_BLOCK *dst_pib);
 void crystalhd_link_proc_pib(struct crystalhd_hw *hw);
 void crystalhd_link_start_rx_dma_engine(struct crystalhd_hw *hw);
 void crystalhd_link_stop_rx_dma_engine(struct crystalhd_hw *hw);

@@ -1178,7 +1178,7 @@ bool crystalhd_link_rel_addr_to_pib_Q(struct crystalhd_hw *hw, uint32_t addr_to_
 	return true;
 }
 
-void link_cpy_pib_to_app(C011_PIB *src_pib, BC_PIC_INFO_BLOCK *dst_pib)
+void link_cpy_pib_to_app(struct C011_PIB *src_pib, BC_PIC_INFO_BLOCK *dst_pib)
 {
 	if (!src_pib || !dst_pib) {
 		printk(KERN_ERR "%s: Invalid Arguments\n", __func__);
@@ -1203,7 +1203,7 @@ void link_cpy_pib_to_app(C011_PIB *src_pib, BC_PIC_INFO_BLOCK *dst_pib)
 void crystalhd_link_proc_pib(struct crystalhd_hw *hw)
 {
 	unsigned int cnt;
-	C011_PIB src_pib;
+	struct C011_PIB src_pib;
 	uint32_t pib_addr, pib_cnt;
 	BC_PIC_INFO_BLOCK *AppPib;
 	struct crystalhd_rx_dma_pkt *rx_pkt = NULL;
@@ -1215,7 +1215,7 @@ void crystalhd_link_proc_pib(struct crystalhd_hw *hw)
 
 	for (cnt = 0; cnt < pib_cnt; cnt++) {
 		pib_addr = crystalhd_link_get_addr_from_pib_Q(hw);
-		crystalhd_link_mem_rd(hw, pib_addr, sizeof(C011_PIB) / 4,
+		crystalhd_link_mem_rd(hw, pib_addr, sizeof(struct C011_PIB) / 4,
 				 (uint32_t *)&src_pib);
 
 		if (src_pib.bFormatChange) {
@@ -1713,11 +1713,11 @@ BC_STATUS crystalhd_link_fw_cmd_post_proc(struct crystalhd_hw *hw,
 					  BC_FW_CMD *fw_cmd)
 {
 	BC_STATUS sts = BC_STS_SUCCESS;
-	DecRspChannelStartVideo *st_rsp = NULL;
+	struct DecRspChannelStartVideo *st_rsp = NULL;
 
 	switch (fw_cmd->cmd[0]) {
 	case eCMD_C011_DEC_CHAN_START_VIDEO:
-		st_rsp = (DecRspChannelStartVideo *)fw_cmd->rsp;
+		st_rsp = (struct DecRspChannelStartVideo *)fw_cmd->rsp;
 		hw->pib_del_Q_addr = st_rsp->picInfoDeliveryQ;
 		hw->pib_rel_Q_addr = st_rsp->picInfoReleaseQ;
 		dev_dbg(&hw->adp->pdev->dev, "DelQAddr:%x RelQAddr:%x\n",

@@ -1755,11 +1755,11 @@ bool crystalhd_flea_check_input_full(struct crystalhd_hw *hw, uint32_t needed_sz
 BC_STATUS crystalhd_flea_fw_cmd_post_proc(struct crystalhd_hw *hw, BC_FW_CMD *fw_cmd)
 {
 	BC_STATUS sts = BC_STS_SUCCESS;
-	DecRspChannelStartVideo *st_rsp = NULL;
-	C011_TS_RSP				*pGenRsp = NULL;
-	DecRspChannelChannelOpen *pRsp  = NULL;
+	struct DecRspChannelStartVideo *st_rsp = NULL;
+	struct C011_TS_CMD				*pGenRsp = NULL;
+	struct DecRspChannelChannelOpen *pRsp  = NULL;
 
-	pGenRsp = (C011_TS_RSP *) fw_cmd->rsp;
+	pGenRsp = (struct C011_TS_CMD *) fw_cmd->rsp;
 
 	switch (fw_cmd->cmd[0]) {
 		case eCMD_C011_DEC_CHAN_STREAM_OPEN:
@@ -1768,7 +1768,7 @@ BC_STATUS crystalhd_flea_fw_cmd_post_proc(struct crystalhd_hw *hw, BC_FW_CMD *fw
 			dev_dbg(&hw->adp->pdev->dev, "Snooped Stream Open Cmd For ChNo:%x\n", hw->channelNum);
 			break;
 		case eCMD_C011_DEC_CHAN_OPEN:
-			pRsp = (DecRspChannelChannelOpen *)pGenRsp;
+			pRsp = (struct DecRspChannelChannelOpen *)pGenRsp;
 			hw->channelNum = pRsp->ChannelID;
 
 			/* used in Flea to update the Tx Buffer stats */
@@ -1790,7 +1790,7 @@ BC_STATUS crystalhd_flea_fw_cmd_post_proc(struct crystalhd_hw *hw, BC_FW_CMD *fw
 					hw->TxBuffInfoAddr);
 			break;
 		case eCMD_C011_DEC_CHAN_START_VIDEO:
-			st_rsp = (DecRspChannelStartVideo *)fw_cmd->rsp;
+			st_rsp = (struct DecRspChannelStartVideo *)fw_cmd->rsp;
 			hw->pib_del_Q_addr = st_rsp->picInfoDeliveryQ;
 			hw->pib_rel_Q_addr = st_rsp->picInfoReleaseQ;
 

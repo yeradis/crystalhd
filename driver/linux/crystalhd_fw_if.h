@@ -32,18 +32,18 @@
 /* TBD: Pull in only required defs into this file.. */
 
 /* User Data Header */
-typedef struct user_data {
-   struct user_data	*next;
+struct UD_HDR {
+   struct UD_HDR	*next;
    uint32_t		type;
    uint32_t		size;
-} UD_HDR;
+};
 
 
 
 /*------------------------------------------------------*
  *    MPEG Extension to the PPB			 *
  *------------------------------------------------------*/
-typedef struct {
+struct PPB_MPEG {
    uint32_t		to_be_defined;
    uint32_t		valid;
 
@@ -61,15 +61,15 @@ typedef struct {
    /* MPEG_VALID_USERDATA
       User data is in the form of a linked list. */
    int32_t		userDataSize;
-   UD_HDR		*userData;
+   struct UD_HDR		*userData;
 
-} PPB_MPEG;
+};
 
 
 /*------------------------------------------------------*
  *    VC1 Extension to the PPB			  *
  *------------------------------------------------------*/
-typedef struct {
+struct PPB_VC1 {
    uint32_t		to_be_defined;
    uint32_t		valid;
 
@@ -88,9 +88,9 @@ typedef struct {
    /* VC1_VALID_USERDATA
       User data is in the form of a linked list. */
    int32_t		userDataSize;
-   UD_HDR		*userData;
+   struct UD_HDR		*userData;
 
-} PPB_VC1;
+};
 
 /*------------------------------------------------------*
  *    H.264 Extension to the PPB			*
@@ -108,7 +108,7 @@ typedef struct {
 /* maximum number of intervals(as many as 256 intervals?) */
 #define MAX_FGT_VALUE_INTERVAL	(256)
 
-typedef struct FGT_SEI {
+struct FGT_SEI {
     struct FGT_SEI *next;
     unsigned char model_values[3][MAX_FGT_VALUE_INTERVAL][MAX_FGT_MODEL_VALUE];
     unsigned char upper_bound[3][MAX_FGT_VALUE_INTERVAL];
@@ -134,9 +134,9 @@ typedef struct FGT_SEI {
     unsigned char num_model_values[3];	/* Number of model values. */
     uint16_t      repetition_period;	/* Repetition period (0-16384) */
 
-} FGT_SEI;
+};
 
-typedef struct {
+struct PPB_H264 {
    /* 'valid' specifies which fields (or sets of
     * fields) below are valid.  If the corresponding
     * bit in 'valid' is NOT set then that field(s)
@@ -170,14 +170,14 @@ typedef struct {
 
    /* H264_VALID_USER */
    uint32_t		user_data_size;
-   UD_HDR		*user_data;
+   struct UD_HDR		*user_data;
 
    /* H264 VALID FGT */
-   FGT_SEI		*pfgt;
+   struct FGT_SEI		*pfgt;
 
-} PPB_H264;
+};
 
-typedef struct {
+struct PPB {
    /* Common fields. */
    uint32_t	picture_number;	/* Ordinal display number */
    uint32_t	video_buffer;	/* Video (picbuf) number */
@@ -215,14 +215,14 @@ typedef struct {
 
    /* Protocol-specific extensions. */
    union {
-      PPB_H264	h264;
-      PPB_MPEG	mpeg;
-      PPB_VC1	 vc1;
+      struct PPB_H264	h264;
+      struct PPB_MPEG	mpeg;
+      struct PPB_VC1	 vc1;
    } other;
 
-} PPB;
+};
 
-typedef struct {
+struct C011_PIB {
    uint32_t	bFormatChange;
    uint32_t	resolution;
    uint32_t	channelId;
@@ -231,17 +231,16 @@ typedef struct {
    uint32_t	zeroPanscanValid;
    uint32_t	dramOutBufAddr;
    uint32_t	yComponent;
-   PPB			ppb;
+   struct PPB			ppb;
 
-} C011_PIB;
+};
 
-typedef struct
-{
+struct C011_TS_CMD {
 	uint32_t	eCmd; // eC011_TS_CMD
 	uint32_t	ulParams[63];
-} C011_TS_CMD, C011_TS_RSP;
+};
 
-typedef struct {
+struct DecRspChannelStartVideo {
     uint32_t	command;
     uint32_t	sequence;
     uint32_t	status;
@@ -255,10 +254,9 @@ typedef struct {
     uint32_t	transportStreamCaptureAddr;
     uint32_t	asyncEventQ;
 
-} DecRspChannelStartVideo;
+};
 
-typedef struct
-{
+struct DecRspChannelChannelOpen {
 	uint32_t command;
 	uint32_t sequence;
 	uint32_t status;
@@ -272,12 +270,12 @@ typedef struct
 	uint32_t userDataReleaseQ;
 	uint32_t transportStreamCaptureAddr;
 	uint32_t asyncEventQ;
-}DecRspChannelChannelOpen;
+};
 
 #define eCMD_C011_CMD_BASE	  (0x73763000)
 
 /* host commands */
-typedef enum {
+enum eC011_TS_CMD {
     eCMD_TS_GET_NEXT_PIC	= 0x7376F100, /* debug get next picture */
     eCMD_TS_GET_LAST_PIC	= 0x7376F102, /* debug get last pic status */
     eCMD_TS_READ_WRITE_MEM	= 0x7376F104, /* debug read write memory */
@@ -385,6 +383,6 @@ typedef enum {
 
     eNOTIFY_C011_ENC_CHAN_EVENT		= eCMD_C011_CMD_BASE + 0x210,
 
-} eC011_TS_CMD;
+};
 
 #endif
