@@ -98,7 +98,7 @@
 #define DecHt_HostSwReset	0x340000
 #define BC_DRAM_FW_CFG_ADDR	0x001c2000
 
-typedef union _link_intr_mask_reg_ {
+union intr_mask_reg {
 	struct {
 		uint32_t	mask_tx_done:1;
 		uint32_t	mask_tx_err:1;
@@ -112,9 +112,9 @@ typedef union _link_intr_mask_reg_ {
 
 	uint32_t	whole_reg;
 
-} intr_mask_reg;
+};
 
-typedef union _link_misc_perst_deco_ctrl_ {
+union link_misc_perst_deco_ctrl {
 	struct {
 		uint32_t	bcm7412_rst:1;		/* 1 -> BCM7412 is held in reset. Reset value 1.*/
 		uint32_t	reserved0:3;		/* Reserved.No Effect*/
@@ -124,9 +124,9 @@ typedef union _link_misc_perst_deco_ctrl_ {
 
 	uint32_t	whole_reg;
 
-} link_misc_perst_deco_ctrl;
+};
 
-typedef union _link_misc_perst_clk_ctrl_ {
+union link_misc_perst_clk_ctrl {
 	struct {
 		uint32_t	sel_alt_clk:1;	  /* When set, selects a 6.75MHz clock as the source of core_clk */
 		uint32_t	stop_core_clk:1;  /* When set, stops the branch of core_clk that is not needed for low power operation */
@@ -140,10 +140,10 @@ typedef union _link_misc_perst_clk_ctrl_ {
 
 	uint32_t	whole_reg;
 
-} link_misc_perst_clk_ctrl;
+};
 
 
-typedef union _link_misc_perst_decoder_ctrl_ {
+union link_misc_perst_decoder_ctrl {
 	struct {
 		uint32_t	bcm_7412_rst:1; /* 1 -> BCM7412 is held in reset. Reset value 1.*/
 		uint32_t	res0:3; /* Reserved.No Effect*/
@@ -153,7 +153,7 @@ typedef union _link_misc_perst_decoder_ctrl_ {
 
 	uint32_t	whole_reg;
 
-} link_misc_perst_decoder_ctrl;
+};
 
 /* DMA engine register BIT mask wrappers.. */
 #define DMA_START_BIT		MISC1_TX_SW_DESC_LIST_CTRL_STS_TX_DMA_RUN_STOP_MASK

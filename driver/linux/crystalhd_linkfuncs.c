@@ -250,8 +250,8 @@ void crystalhd_link_start_dram(struct crystalhd_hw *hw)
 
 bool crystalhd_link_bring_out_of_rst(struct crystalhd_hw *hw)
 {
-	link_misc_perst_deco_ctrl rst_deco_cntrl;
-	link_misc_perst_clk_ctrl rst_clk_cntrl;
+	union link_misc_perst_deco_ctrl rst_deco_cntrl;
+	union link_misc_perst_clk_ctrl rst_clk_cntrl;
 	uint32_t temp;
 
 	/*
@@ -309,8 +309,8 @@ bool crystalhd_link_bring_out_of_rst(struct crystalhd_hw *hw)
 
 bool crystalhd_link_put_in_reset(struct crystalhd_hw *hw)
 {
-	link_misc_perst_deco_ctrl rst_deco_cntrl;
-	link_misc_perst_clk_ctrl  rst_clk_cntrl;
+	union link_misc_perst_deco_ctrl rst_deco_cntrl;
+	union link_misc_perst_clk_ctrl  rst_clk_cntrl;
 	uint32_t                  temp;
 
 	/*
@@ -365,7 +365,7 @@ bool crystalhd_link_put_in_reset(struct crystalhd_hw *hw)
 
 void crystalhd_link_disable_interrupts(struct crystalhd_hw *hw)
 {
-	intr_mask_reg   intr_mask;
+	union intr_mask_reg   intr_mask;
 	intr_mask.whole_reg = hw->pfnReadFPGARegister(hw->adp, INTR_INTR_MSK_STS_REG);
 	intr_mask.mask_pcie_err = 1;
 	intr_mask.mask_pcie_rbusmast_err = 1;
@@ -381,7 +381,7 @@ void crystalhd_link_disable_interrupts(struct crystalhd_hw *hw)
 
 void crystalhd_link_enable_interrupts(struct crystalhd_hw *hw)
 {
-	intr_mask_reg   intr_mask;
+	union intr_mask_reg   intr_mask;
 	intr_mask.whole_reg = hw->pfnReadFPGARegister(hw->adp, INTR_INTR_MSK_STS_REG);
 	intr_mask.mask_pcie_err = 1;
 	intr_mask.mask_pcie_rbusmast_err = 1;
@@ -1738,7 +1738,7 @@ BC_STATUS crystalhd_link_fw_cmd_post_proc(struct crystalhd_hw *hw,
 BC_STATUS crystalhd_link_put_ddr2sleep(struct crystalhd_hw *hw)
 {
 	uint32_t reg;
-	link_misc_perst_decoder_ctrl rst_cntrl_reg;
+	union link_misc_perst_decoder_ctrl rst_cntrl_reg;
 
 	/* Pulse reset pin of 7412 (MISC_PERST_DECODER_CTRL) */
 	rst_cntrl_reg.whole_reg = hw->pfnReadDevRegister(hw->adp, MISC_PERST_DECODER_CTRL);
