@@ -122,9 +122,8 @@
 -- same as the interrupt status register. We will
 -- Use the following union for all the registers.
 */
-typedef
-union
-_FLEA_INTR_BITS_COMMON_
+
+union FLEA_INTR_BITS_COMMON
 {
 	struct
 	{
@@ -154,10 +153,7 @@ _FLEA_INTR_BITS_COMMON_
 	};
 
 	 uint32_t	WholeReg;
-}FLEA_INTR_BITS_COMMON;
-
-typedef FLEA_INTR_BITS_COMMON FLEA_INTR_STS_REG;
-typedef FLEA_INTR_BITS_COMMON FLEA_MASK_REG;
+};
 
 /*
 ================================================================
@@ -185,26 +181,23 @@ typedef FLEA_INTR_BITS_COMMON FLEA_MASK_REG;
 --  4. Enter this state when RX is not running, either before it is started or after it is stopped.
 =================================================================
 */
-typedef
-enum
-_FLEA_POWER_STATES_
-{
+
+enum FLEA_POWER_STATES {
 	FLEA_PS_NONE=0,
 	FLEA_PS_STOPPED,
 	FLEA_PS_ACTIVE,
 	FLEA_PS_LP_PENDING,
 	FLEA_PS_LP_COMPLETE
-}FLEA_POWER_STATES;
+};
 
-typedef enum _FLEA_STATE_CH_EVENT_
-{
+enum FLEA_STATE_CH_EVENT {
 	FLEA_EVT_NONE=0,
 	FLEA_EVT_START_DEVICE,
 	FLEA_EVT_STOP_DEVICE,
 	FLEA_EVT_FLL_CHANGE,
 	FLEA_EVT_FW_CMD_POST,
 	FLEA_EVT_CMD_COMP
-}FLEA_STATE_CH_EVENT;
+};
 
 #define TEST_BIT(_value_,_bit_number_)	(_value_ & (0x00000001 << _bit_number_))
 

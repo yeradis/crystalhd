@@ -414,7 +414,7 @@ struct crystalhd_hw {
 
 	uint32_t			FleaEnablePWM;
 	uint32_t			FleaWaitFirstPlaybackNotify;
-	FLEA_POWER_STATES	FleaPowerState;
+	enum FLEA_POWER_STATES	FleaPowerState;
 	uint32_t			EmptyCnt;
 	bool				SingleThreadAppFIFOEmpty;
 	bool				PwrDwnTxIntr; /* Got an TX FIFO status interrupt when in power down state */

@@ -80,7 +80,7 @@ void crystalhd_flea_core_reset(struct crystalhd_hw *hw)
 
 void crystalhd_flea_disable_interrupts(struct crystalhd_hw *hw)
 {
-	FLEA_MASK_REG IntrMaskReg;
+	union FLEA_INTR_BITS_COMMON IntrMaskReg;
 	/*
 	-- Mask everything except the reserved bits.
 	*/
@@ -97,7 +97,7 @@ void crystalhd_flea_disable_interrupts(struct crystalhd_hw *hw)
 
 void crystalhd_flea_enable_interrupts(struct crystalhd_hw *hw)
 {
-	FLEA_MASK_REG IntrMaskReg;
+	union FLEA_INTR_BITS_COMMON IntrMaskReg;
 	/*
 	-- Clear The Mask for everything except the reserved bits.
 	*/
@@ -114,7 +114,7 @@ void crystalhd_flea_enable_interrupts(struct crystalhd_hw *hw)
 
 void crystalhd_flea_clear_interrupts(struct crystalhd_hw *hw)
 {
-	FLEA_INTR_STS_REG	IntrStsValue;
+	union FLEA_INTR_BITS_COMMON	IntrStsValue;
 
 	IntrStsValue.WholeReg = hw->pfnReadDevRegister(hw->adp, BCHP_INTR_INTR_STATUS);
 
@@ -840,7 +840,7 @@ void crystalhd_flea_init_power_state(struct crystalhd_hw *hw)
 
 static
 bool crystalhd_flea_set_power_state(struct crystalhd_hw *hw,
-					FLEA_POWER_STATES	NewState)
+					enum FLEA_POWER_STATES	NewState)
 {
 	bool StChangeSuccess=false;
 	uint32_t tempFLL = 0;
@@ -953,9 +953,9 @@ bool crystalhd_flea_set_power_state(struct crystalhd_hw *hw,
 */
 static
 void crystalhd_flea_set_next_power_state(struct crystalhd_hw *hw,
-						FLEA_STATE_CH_EVENT		PowerEvt)
+						enum FLEA_STATE_CH_EVENT		PowerEvt)
 {
-	FLEA_POWER_STATES NextPS;
+	enum FLEA_POWER_STATES NextPS;
 	NextPS = hw->FleaPowerState;
 
 	if( hw->FleaEnablePWM == false )
@@ -1961,7 +1961,7 @@ void crystalhd_flea_clear_rx_errs_intrs(struct crystalhd_hw *hw)
 */
 {
 	uint32_t ulRegVal;
-	FLEA_INTR_STS_REG	IntrToClear,IntrSts;
+	union FLEA_INTR_BITS_COMMON	IntrToClear,IntrSts;
 
 	IntrToClear.WholeReg = 0;
 	IntrSts.WholeReg = 0;
@@ -1993,7 +1993,7 @@ void crystalhd_flea_clear_rx_errs_intrs(struct crystalhd_hw *hw)
 
 void crystalhd_flea_stop_rx_dma_engine(struct crystalhd_hw *hw)
 {
-	FLEA_INTR_STS_REG	IntrStsValue;
+	union FLEA_INTR_BITS_COMMON	IntrStsValue;
 	bool failedL0 = true, failedL1 = true;
 	uint32_t pollCnt = 0;
 
@@ -2343,7 +2343,7 @@ bool crystalhd_flea_tx_list1_handler(struct crystalhd_hw *hw, uint32_t err_sts)
 	return true;
 }
 
-void crystalhd_flea_tx_isr(struct crystalhd_hw *hw, FLEA_INTR_STS_REG int_sts)
+void crystalhd_flea_tx_isr(struct crystalhd_hw *hw, union FLEA_INTR_BITS_COMMON int_sts)
 {
 	uint32_t err_sts;
 
@@ -2374,7 +2374,7 @@ void crystalhd_flea_tx_isr(struct crystalhd_hw *hw, FLEA_INTR_STS_REG int_sts)
 }
 
 bool crystalhd_flea_rx_list0_handler(struct crystalhd_hw *hw,
-									 FLEA_INTR_STS_REG int_sts,
+									 union FLEA_INTR_BITS_COMMON int_sts,
 									 uint32_t y_err_sts,
 									 uint32_t uv_err_sts)
 {
@@ -2448,7 +2448,7 @@ bool crystalhd_flea_rx_list0_handler(struct crystalhd_hw *hw,
 }
 
 bool crystalhd_flea_rx_list1_handler(struct crystalhd_hw *hw,
-									 FLEA_INTR_STS_REG int_sts,
+									 union FLEA_INTR_BITS_COMMON int_sts,
 									 uint32_t y_err_sts,
 									 uint32_t uv_err_sts)
 {
@@ -2521,7 +2521,7 @@ bool crystalhd_flea_rx_list1_handler(struct crystalhd_hw *hw,
 	return (tmp_lsts != hw->rx_list_sts[1]);
 }
 
-void crystalhd_flea_rx_isr(struct crystalhd_hw *hw, FLEA_INTR_STS_REG intr_sts)
+void crystalhd_flea_rx_isr(struct crystalhd_hw *hw, union FLEA_INTR_BITS_COMMON intr_sts)
 {
 	unsigned long flags;
 	uint32_t i, list_avail = 0;
@@ -2592,7 +2592,7 @@ void crystalhd_flea_rx_isr(struct crystalhd_hw *hw, FLEA_INTR_STS_REG intr_sts)
 
 bool crystalhd_flea_hw_interrupt_handle(struct crystalhd_adp *adp, struct crystalhd_hw *hw)
 {
-	FLEA_INTR_STS_REG	IntrStsValue;
+	union FLEA_INTR_BITS_COMMON	IntrStsValue;
 	bool				bIntFound		= false;
 	bool				bPostRxBuff		= false;
 	bool				bSomeCmdDone	= false;

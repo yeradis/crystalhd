@@ -50,10 +50,10 @@ void crystalhd_flea_stop_rx_dma_engine(struct crystalhd_hw *hw);
 BC_STATUS crystalhd_flea_stop_tx_dma_engine(struct crystalhd_hw *hw);
 bool crystalhd_flea_tx_list0_handler(struct crystalhd_hw *hw, uint32_t err_sts);
 bool crystalhd_flea_tx_list1_handler(struct crystalhd_hw *hw, uint32_t err_sts);
-void crystalhd_flea_tx_isr(struct crystalhd_hw *hw, FLEA_INTR_STS_REG int_sts);
-bool crystalhd_flea_rx_list0_handler(struct crystalhd_hw *hw,FLEA_INTR_STS_REG int_sts,uint32_t y_err_sts,uint32_t uv_err_sts);
-bool crystalhd_flea_rx_list1_handler(struct crystalhd_hw *hw,FLEA_INTR_STS_REG int_sts,uint32_t y_err_sts,uint32_t uv_err_sts);
-void crystalhd_flea_rx_isr(struct crystalhd_hw *hw, FLEA_INTR_STS_REG intr_sts);
+void crystalhd_flea_tx_isr(struct crystalhd_hw *hw, union FLEA_INTR_BITS_COMMON int_sts);
+bool crystalhd_flea_rx_list0_handler(struct crystalhd_hw *hw,union FLEA_INTR_BITS_COMMON int_sts,uint32_t y_err_sts,uint32_t uv_err_sts);
+bool crystalhd_flea_rx_list1_handler(struct crystalhd_hw *hw,union FLEA_INTR_BITS_COMMON int_sts,uint32_t y_err_sts,uint32_t uv_err_sts);
+void crystalhd_flea_rx_isr(struct crystalhd_hw *hw, union FLEA_INTR_BITS_COMMON intr_sts);
 void crystalhd_flea_notify_fll_change(struct crystalhd_hw *hw, bool bCleanupContext);
 bool crystalhd_flea_notify_event(struct crystalhd_hw *hw, BRCM_EVENT EventCode);
 
