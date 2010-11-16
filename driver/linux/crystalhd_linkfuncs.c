@@ -776,7 +776,7 @@ uint32_t link_GetRptDropParam(struct crystalhd_hw *hw, uint32_t picHeight, uint3
 	uint32_t PicNumber = 0, result = 0;
 	uint64_t PicMetaData = 0;
 
-	if(link_GetPictureInfo(hw, picHeight, picWidth, ((crystalhd_rx_dma_pkt *)pRxDMAReq)->dio_req,
+	if(link_GetPictureInfo(hw, picHeight, picWidth, ((struct crystalhd_rx_dma_pkt *)pRxDMAReq)->dio_req,
 				&PicNumber, &PicMetaData))
 		result = PicNumber;
 
@@ -796,7 +796,7 @@ bool crystalhd_link_peek_next_decoded_frame(struct crystalhd_hw *hw,
 	unsigned long flags = 0;
 	struct crystalhd_dioq *ioq;
 	struct crystalhd_elem *tmp;
-	crystalhd_rx_dma_pkt *rpkt;
+	struct crystalhd_rx_dma_pkt *rpkt;
 
 	*meta_payload = 0;
 
@@ -806,7 +806,7 @@ bool crystalhd_link_peek_next_decoded_frame(struct crystalhd_hw *hw,
 	if ((ioq->count > 0) && (ioq->head != (struct crystalhd_elem *)&ioq->head)) {
 		tmp = ioq->head;
 		spin_unlock_irqrestore(&ioq->lock, flags);
-		rpkt = (crystalhd_rx_dma_pkt *)tmp->data;
+		rpkt = (struct crystalhd_rx_dma_pkt *)tmp->data;
 		if (rpkt) {
 			// We are in process context here and have to check if we have repeated pictures
 			// Drop repeated pictures or garbabge pictures here
@@ -1206,7 +1206,7 @@ void crystalhd_link_proc_pib(struct crystalhd_hw *hw)
 	C011_PIB src_pib;
 	uint32_t pib_addr, pib_cnt;
 	BC_PIC_INFO_BLOCK *AppPib;
-	crystalhd_rx_dma_pkt *rx_pkt = NULL;
+	struct crystalhd_rx_dma_pkt *rx_pkt = NULL;
 
 	pib_cnt = crystalhd_link_get_pib_avail_cnt(hw);
 
@@ -1219,7 +1219,7 @@ void crystalhd_link_proc_pib(struct crystalhd_hw *hw)
 				 (uint32_t *)&src_pib);
 
 		if (src_pib.bFormatChange) {
-			rx_pkt = (crystalhd_rx_dma_pkt *)
+			rx_pkt = (struct crystalhd_rx_dma_pkt *)
 					crystalhd_dioq_fetch(hw->rx_freeq);
 			if (!rx_pkt)
 				return;
@@ -1346,7 +1346,7 @@ void crystalhd_link_stop_rx_dma_engine(struct crystalhd_hw *hw)
 }
 
 BC_STATUS crystalhd_link_hw_prog_rxdma(struct crystalhd_hw *hw,
-					 crystalhd_rx_dma_pkt *rx_pkt)
+					 struct crystalhd_rx_dma_pkt *rx_pkt)
 {
 	struct device *dev;
 	uint32_t y_low_addr_reg, y_high_addr_reg;
@@ -1410,7 +1410,7 @@ BC_STATUS crystalhd_link_hw_prog_rxdma(struct crystalhd_hw *hw,
 }
 
 BC_STATUS crystalhd_link_hw_post_cap_buff(struct crystalhd_hw *hw,
-					  crystalhd_rx_dma_pkt *rx_pkt)
+					  struct crystalhd_rx_dma_pkt *rx_pkt)
 {
 	BC_STATUS sts = crystalhd_link_hw_prog_rxdma(hw, rx_pkt);
 
@@ -1476,7 +1476,7 @@ bool crystalhd_link_rx_list0_handler(struct crystalhd_hw *hw,
 				       uint32_t uv_err_sts)
 {
 	uint32_t tmp;
-	list_sts tmp_lsts;
+	enum list_sts tmp_lsts;
 
 	if (!(y_err_sts & GET_Y0_ERR_MSK) && !(uv_err_sts & GET_UV0_ERR_MSK))
 		return false;
@@ -1545,7 +1545,7 @@ bool crystalhd_link_rx_list1_handler(struct crystalhd_hw *hw,
 				       uint32_t uv_err_sts)
 {
 	uint32_t tmp;
-	list_sts tmp_lsts;
+	enum list_sts tmp_lsts;
 
 	if (!(y_err_sts & GET_Y1_ERR_MSK) && !(uv_err_sts & GET_UV1_ERR_MSK))
 		return false;
@@ -2050,7 +2050,7 @@ void crystalhd_link_notify_fll_change(struct crystalhd_hw *hw, bool bCleanupCont
 	return;
 }
 
-bool crystalhd_link_notify_event(struct crystalhd_hw *hw, BRCM_EVENT EventCode)
+bool crystalhd_link_notify_event(struct crystalhd_hw *hw, enum BRCM_EVENT EventCode)
 {
 	return true;
 }

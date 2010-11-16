@@ -209,8 +209,8 @@ void link_cpy_pib_to_app(C011_PIB *src_pib, BC_PIC_INFO_BLOCK *dst_pib);
 void crystalhd_link_proc_pib(struct crystalhd_hw *hw);
 void crystalhd_link_start_rx_dma_engine(struct crystalhd_hw *hw);
 void crystalhd_link_stop_rx_dma_engine(struct crystalhd_hw *hw);
-BC_STATUS crystalhd_link_hw_prog_rxdma(struct crystalhd_hw *hw, crystalhd_rx_dma_pkt *rx_pkt);
-BC_STATUS crystalhd_link_hw_post_cap_buff(struct crystalhd_hw *hw, crystalhd_rx_dma_pkt *rx_pkt);
+BC_STATUS crystalhd_link_hw_prog_rxdma(struct crystalhd_hw *hw, struct crystalhd_rx_dma_pkt *rx_pkt);
+BC_STATUS crystalhd_link_hw_post_cap_buff(struct crystalhd_hw *hw, struct crystalhd_rx_dma_pkt *rx_pkt);
 void crystalhd_link_get_dnsz(struct crystalhd_hw *hw, uint32_t list_index,
 									uint32_t *y_dw_dnsz, uint32_t *uv_dw_dnsz);
 void crystalhd_link_hw_finalize_pause(struct crystalhd_hw *hw);
@@ -224,5 +224,5 @@ BC_STATUS crystalhd_link_download_fw(struct crystalhd_hw* hw, uint8_t* buffer, u
 BC_STATUS crystalhd_link_do_fw_cmd(struct crystalhd_hw *hw, BC_FW_CMD *fw_cmd);
 bool crystalhd_link_hw_interrupt_handle(struct crystalhd_adp *adp, struct crystalhd_hw *hw);
 void crystalhd_link_notify_fll_change(struct crystalhd_hw *hw, bool bCleanupContext);
-bool crystalhd_link_notify_event(struct crystalhd_hw *hw, BRCM_EVENT EventCode);
+bool crystalhd_link_notify_event(struct crystalhd_hw *hw, enum BRCM_EVENT EventCode);
 #endif

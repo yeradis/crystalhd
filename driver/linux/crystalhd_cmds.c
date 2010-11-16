@@ -693,7 +693,7 @@ static BC_STATUS bc_cproc_flush_cap_buffs(struct crystalhd_cmd *ctx,
 					  crystalhd_ioctl_data *idata)
 {
 	struct device *dev = chddev();
-	crystalhd_rx_dma_pkt *rpkt;
+	struct crystalhd_rx_dma_pkt *rpkt;
 
 	if (!ctx || !idata) {
 		dev_err(dev, "%s: Invalid Arg\n", __func__);

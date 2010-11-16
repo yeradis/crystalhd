@@ -846,7 +846,7 @@ bool crystalhd_flea_set_power_state(struct crystalhd_hw *hw,
 	uint32_t tempFLL = 0;
 	uint32_t freeListLen = 0;
 	BC_STATUS sts;
-	crystalhd_rx_dma_pkt *rx_pkt = NULL;
+	struct crystalhd_rx_dma_pkt *rx_pkt = NULL;
 
 	freeListLen = crystalhd_dioq_count(hw->rx_freeq);
 
@@ -1932,7 +1932,7 @@ bool crystalhd_flea_peek_next_decoded_frame(struct crystalhd_hw *hw, uint64_t *m
 	unsigned long flags = 0;
 	struct crystalhd_dioq *ioq;
 	struct crystalhd_elem *tmp;
-	crystalhd_rx_dma_pkt *rpkt;
+	struct crystalhd_rx_dma_pkt *rpkt;
 
 	*meta_payload = 0;
 
@@ -1942,7 +1942,7 @@ bool crystalhd_flea_peek_next_decoded_frame(struct crystalhd_hw *hw, uint64_t *m
 	if ((ioq->count > 0) && (ioq->head != (struct crystalhd_elem *)&ioq->head)) {
 		tmp = ioq->head;
 		spin_unlock_irqrestore(&ioq->lock, flags);
-		rpkt = (crystalhd_rx_dma_pkt *)tmp->data;
+		rpkt = (struct crystalhd_rx_dma_pkt *)tmp->data;
 		if (rpkt) {
 			flea_GetPictureInfo(hw, rpkt, picNumFlags, meta_payload);
 			//printk("%s: flea_GetPictureInfo Pic#:%d\n", __func__, PicNumber);
@@ -2053,7 +2053,7 @@ void crystalhd_flea_stop_rx_dma_engine(struct crystalhd_hw *hw)
 }
 
 BC_STATUS crystalhd_flea_hw_fire_rxdma(struct crystalhd_hw *hw,
-									   crystalhd_rx_dma_pkt *rx_pkt)
+									   struct crystalhd_rx_dma_pkt *rx_pkt)
 {
 	struct device *dev;
 	addr_64 desc_addr;
@@ -2131,7 +2131,7 @@ BC_STATUS crystalhd_flea_hw_fire_rxdma(struct crystalhd_hw *hw,
 	return BC_STS_SUCCESS;
 }
 
-BC_STATUS crystalhd_flea_hw_post_cap_buff(struct crystalhd_hw *hw, crystalhd_rx_dma_pkt *rx_pkt)
+BC_STATUS crystalhd_flea_hw_post_cap_buff(struct crystalhd_hw *hw, struct crystalhd_rx_dma_pkt *rx_pkt)
 {
 	BC_STATUS sts = crystalhd_flea_hw_fire_rxdma(hw, rx_pkt);
 
@@ -2379,7 +2379,7 @@ bool crystalhd_flea_rx_list0_handler(struct crystalhd_hw *hw,
 									 uint32_t uv_err_sts)
 {
 	uint32_t tmp;
-	list_sts tmp_lsts;
+	enum list_sts tmp_lsts;
 
 	if (!(y_err_sts & GET_Y0_ERR_MSK) && !(uv_err_sts & GET_UV0_ERR_MSK))
 		return false;
@@ -2453,7 +2453,7 @@ bool crystalhd_flea_rx_list1_handler(struct crystalhd_hw *hw,
 									 uint32_t uv_err_sts)
 {
 	uint32_t tmp;
-	list_sts tmp_lsts;
+	enum list_sts tmp_lsts;
 
 	if (!(y_err_sts & GET_Y1_ERR_MSK) && !(uv_err_sts & GET_UV1_ERR_MSK))
 		return false;
@@ -2596,7 +2596,7 @@ bool crystalhd_flea_hw_interrupt_handle(struct crystalhd_adp *adp, struct crysta
 	bool				bIntFound		= false;
 	bool				bPostRxBuff		= false;
 	bool				bSomeCmdDone	= false;
-	crystalhd_rx_dma_pkt *rx_pkt;
+	struct crystalhd_rx_dma_pkt *rx_pkt;
 
 	bool	rc = false;
 
@@ -2739,7 +2739,7 @@ bool crystalhd_flea_hw_interrupt_handle(struct crystalhd_adp *adp, struct crysta
 }
 
 /* This function cannot be called from ISR context since it uses APIs that can sleep */
-bool flea_GetPictureInfo(struct crystalhd_hw *hw, crystalhd_rx_dma_pkt * rx_pkt,
+bool flea_GetPictureInfo(struct crystalhd_hw *hw, struct crystalhd_rx_dma_pkt * rx_pkt,
 							uint32_t *PicNumber, uint64_t *PicMetaData)
 {
 	struct device *dev = &hw->adp->pdev->dev;
@@ -2928,14 +2928,14 @@ uint32_t flea_GetRptDropParam(struct crystalhd_hw *hw, void* pRxDMAReq)
 	uint32_t PicNumber = 0,result = 0;
 	uint64_t PicMetaData = 0;
 
-	if(flea_GetPictureInfo(hw, (crystalhd_rx_dma_pkt *)pRxDMAReq,
+	if(flea_GetPictureInfo(hw, (struct crystalhd_rx_dma_pkt *)pRxDMAReq,
 		&PicNumber, &PicMetaData))
 		result = PicNumber;
 
 	return result;
 }
 
-bool crystalhd_flea_notify_event(struct crystalhd_hw *hw, BRCM_EVENT EventCode)
+bool crystalhd_flea_notify_event(struct crystalhd_hw *hw, enum BRCM_EVENT EventCode)
 {
 	switch(EventCode)
 	{

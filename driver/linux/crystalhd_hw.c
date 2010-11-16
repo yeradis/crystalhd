@@ -139,10 +139,10 @@ BC_STATUS crystalhd_hw_close(struct crystalhd_hw *hw, struct crystalhd_adp *adp)
 	return BC_STS_SUCCESS;
 }
 
-crystalhd_rx_dma_pkt *crystalhd_hw_alloc_rx_pkt(struct crystalhd_hw *hw)
+struct crystalhd_rx_dma_pkt *crystalhd_hw_alloc_rx_pkt(struct crystalhd_hw *hw)
 {
 	unsigned long flags = 0;
-	crystalhd_rx_dma_pkt *temp = NULL;
+	struct crystalhd_rx_dma_pkt *temp = NULL;
 
 	if (!hw)
 		return NULL;
@@ -161,7 +161,7 @@ crystalhd_rx_dma_pkt *crystalhd_hw_alloc_rx_pkt(struct crystalhd_hw *hw)
 }
 
 void crystalhd_hw_free_rx_pkt(struct crystalhd_hw *hw,
-				   crystalhd_rx_dma_pkt *pkt)
+				   struct crystalhd_rx_dma_pkt *pkt)
 {
 	unsigned long flags = 0;
 
@@ -197,7 +197,7 @@ void crystalhd_tx_desc_rel_call_back(void *context, void *data)
 void crystalhd_rx_pkt_rel_call_back(void *context, void *data)
 {
 	struct crystalhd_hw *hw = (struct crystalhd_hw *)context;
-	crystalhd_rx_dma_pkt *pkt = (crystalhd_rx_dma_pkt *)data;
+	struct crystalhd_rx_dma_pkt *pkt = (struct crystalhd_rx_dma_pkt *)data;
 
 	if (!pkt || !hw) {
 		printk(KERN_ERR "%s: Invalid arg - %p %p\n", __func__, hw, pkt);
@@ -278,7 +278,7 @@ BC_STATUS crystalhd_hw_setup_dma_rings(struct crystalhd_hw *hw)
 	size_t mem_len;
 	dma_addr_t phy_addr;
 	BC_STATUS sts = BC_STS_SUCCESS;
-	crystalhd_rx_dma_pkt *rpkt;
+	struct crystalhd_rx_dma_pkt *rpkt;
 
 	if (!hw || !hw->adp) {
 		printk(KERN_ERR "%s: Invalid Arguments\n", __func__);
@@ -293,7 +293,7 @@ BC_STATUS crystalhd_hw_setup_dma_rings(struct crystalhd_hw *hw)
 		return sts;
 	}
 
-	mem_len = BC_LINK_MAX_SGLS * sizeof(dma_descriptor);
+	mem_len = BC_LINK_MAX_SGLS * sizeof(struct dma_descriptor);
 
 	for (i = 0; i < BC_TX_LIST_CNT; i++) {
 		mem = bc_kern_dma_alloc(hw->adp, mem_len, &phy_addr);
@@ -308,7 +308,7 @@ BC_STATUS crystalhd_hw_setup_dma_rings(struct crystalhd_hw *hw)
 		hw->tx_pkt_pool[i].desc_mem.pdma_desc_start = mem;
 		hw->tx_pkt_pool[i].desc_mem.phy_addr = phy_addr;
 		hw->tx_pkt_pool[i].desc_mem.sz = BC_LINK_MAX_SGLS *
-						 sizeof(dma_descriptor);
+						 sizeof(struct dma_descriptor);
 		hw->tx_pkt_pool[i].list_tag = 0;
 
 		/* Add TX dma requests to Free Queue..*/
@@ -338,7 +338,7 @@ BC_STATUS crystalhd_hw_setup_dma_rings(struct crystalhd_hw *hw)
 		}
 		rpkt->desc_mem.pdma_desc_start = mem;
 		rpkt->desc_mem.phy_addr = phy_addr;
-		rpkt->desc_mem.sz  = BC_LINK_MAX_SGLS * sizeof(dma_descriptor);
+		rpkt->desc_mem.sz  = BC_LINK_MAX_SGLS * sizeof(struct dma_descriptor);
 		rpkt->pkt_tag = hw->rx_pkt_tag_seed + i;
 		crystalhd_hw_free_rx_pkt(hw, rpkt);
 	}
@@ -349,7 +349,7 @@ BC_STATUS crystalhd_hw_setup_dma_rings(struct crystalhd_hw *hw)
 BC_STATUS crystalhd_hw_free_dma_rings(struct crystalhd_hw *hw)
 {
 	unsigned int i;
-	crystalhd_rx_dma_pkt *rpkt = NULL;
+	struct crystalhd_rx_dma_pkt *rpkt = NULL;
 
 	if (!hw || !hw->adp) {
 		printk(KERN_ERR "%s: Invalid Arguments\n", __func__);
@@ -387,14 +387,14 @@ BC_STATUS crystalhd_hw_free_dma_rings(struct crystalhd_hw *hw)
 BC_STATUS crystalhd_hw_tx_req_complete(struct crystalhd_hw *hw,
 											  uint32_t list_id, BC_STATUS cs)
 {
-	tx_dma_pkt *tx_req;
+	struct tx_dma_pkt *tx_req;
 
 	if (!hw || !list_id) {
 		printk(KERN_ERR "%s: Invalid Arg!!\n", __func__);
 		return BC_STS_INV_ARG;
 	}
 
-	tx_req = (tx_dma_pkt *)crystalhd_dioq_find_and_fetch(hw->tx_actq, list_id);
+	tx_req = (struct tx_dma_pkt *)crystalhd_dioq_find_and_fetch(hw->tx_actq, list_id);
 	if (!tx_req) {
 		if (cs != BC_STS_IO_USER_ABORT)
 			dev_err(&hw->adp->pdev->dev, "Find/Fetch: no req!\n");
@@ -418,7 +418,7 @@ BC_STATUS crystalhd_hw_tx_req_complete(struct crystalhd_hw *hw,
 }
 
 BC_STATUS crystalhd_hw_fill_desc(struct crystalhd_dio_req *ioreq,
-										dma_descriptor *desc,
+										struct dma_descriptor *desc,
 										dma_addr_t desc_paddr_base,
 										uint32_t sg_cnt, uint32_t sg_st_ix,
 										uint32_t sg_st_off, uint32_t xfr_sz,
@@ -459,7 +459,7 @@ BC_STATUS crystalhd_hw_fill_desc(struct crystalhd_dio_req *ioreq,
 		desc[ix].dma_dir        = ioreq->uinfo.dir_tx; // RX dma_dir = 0, TX dma_dir = 1
 
 		/* Chain DMA descriptor.  */
-		addr_temp.full_addr = desc_phy_addr + sizeof(dma_descriptor);
+		addr_temp.full_addr = desc_phy_addr + sizeof(struct dma_descriptor);
 		desc[ix].next_desc_addr_low = addr_temp.low_part;
 		desc[ix].next_desc_addr_high = addr_temp.high_part;
 
@@ -484,7 +484,7 @@ BC_STATUS crystalhd_hw_fill_desc(struct crystalhd_dio_req *ioreq,
 		else
 			desc[ix].sdram_buff_addr = 0;
 
-		desc_phy_addr += sizeof(dma_descriptor);
+		desc_phy_addr += sizeof(struct dma_descriptor);
 	}
 
 	last_desc_ix = ix - 1;
@@ -524,11 +524,11 @@ BC_STATUS crystalhd_hw_fill_desc(struct crystalhd_dio_req *ioreq,
 }
 
 BC_STATUS crystalhd_xlat_sgl_to_dma_desc(struct crystalhd_dio_req *ioreq,
-												pdma_desc_mem pdesc_mem,
+												struct dma_desc_mem * pdesc_mem,
 												uint32_t *uv_desc_index,
 												struct device *dev, uint32_t destDRAMaddr)
 {
-	dma_descriptor *desc = NULL;
+	struct dma_descriptor *desc = NULL;
 	dma_addr_t desc_paddr_base = 0;
 	uint32_t sg_cnt = 0, sg_st_ix = 0, sg_st_off = 0;
 	uint32_t xfr_sz = 0;
@@ -572,7 +572,7 @@ BC_STATUS crystalhd_xlat_sgl_to_dma_desc(struct crystalhd_dio_req *ioreq,
 	/* Prepare for UV mapping.. */
 	desc = &pdesc_mem->pdma_desc_start[sg_cnt];
 	desc_paddr_base = pdesc_mem->phy_addr +
-	(sg_cnt * sizeof(dma_descriptor));
+	(sg_cnt * sizeof(struct dma_descriptor));
 
 	/* Done with desc addr.. now update sg stuff.*/
 	sg_cnt    = ioreq->sg_cnt - ioreq->uinfo.uv_sg_ix;
@@ -594,7 +594,7 @@ BC_STATUS crystalhd_rx_pkt_done(struct crystalhd_hw *hw,
 									   uint32_t list_index,
 									   BC_STATUS comp_sts)
 {
-	crystalhd_rx_dma_pkt *rx_pkt = NULL;
+	struct crystalhd_rx_dma_pkt *rx_pkt = NULL;
 	uint32_t y_dw_dnsz, uv_dw_dnsz;
 	BC_STATUS sts = BC_STS_SUCCESS;
 	uint64_t currTick;
@@ -713,7 +713,7 @@ BC_STATUS crystalhd_hw_post_tx(struct crystalhd_hw *hw, struct crystalhd_dio_req
 			     uint8_t data_flags)
 {
 	struct device *dev;
-	tx_dma_pkt *tx_dma_packet = NULL;
+	struct tx_dma_pkt *tx_dma_packet = NULL;
 	uint32_t low_addr, high_addr;
 	addr_64 desc_addr;
 	BC_STATUS sts, add_sts;
@@ -751,7 +751,7 @@ BC_STATUS crystalhd_hw_post_tx(struct crystalhd_hw *hw, struct crystalhd_dio_req
 		destDRAMaddr = hw->TxFwInputBuffInfo.DramBuffAdd;
 
 	/* Get a list from TxFreeQ */
-	tx_dma_packet = (tx_dma_pkt *)crystalhd_dioq_fetch(hw->tx_freeq);
+	tx_dma_packet = (struct tx_dma_pkt *)crystalhd_dioq_fetch(hw->tx_freeq);
 	if (!tx_dma_packet) {
 		dev_err(dev, "No empty elements..\n");
 		return BC_STS_ERR_USAGE;
@@ -842,7 +842,7 @@ BC_STATUS crystalhd_hw_cancel_tx(struct crystalhd_hw *hw, uint32_t list_id)
 BC_STATUS crystalhd_hw_add_cap_buffer(struct crystalhd_hw *hw,
 				    struct crystalhd_dio_req *ioreq, bool en_post)
 {
-	crystalhd_rx_dma_pkt *rpkt;
+	struct crystalhd_rx_dma_pkt *rpkt;
 	uint32_t tag, uv_desc_ix = 0;
 	BC_STATUS sts;
 
@@ -870,7 +870,7 @@ BC_STATUS crystalhd_hw_add_cap_buffer(struct crystalhd_hw *hw,
 	/* Store the address of UV in the rx packet for post*/
 	if (uv_desc_ix)
 		rpkt->uv_phy_addr = rpkt->desc_mem.phy_addr +
-				    (sizeof(dma_descriptor) * (uv_desc_ix + 1));
+				    (sizeof(struct dma_descriptor) * (uv_desc_ix + 1));
 
 	if (en_post && !hw->hw_pause_issued) {
 		sts = hw->pfnPostRxSideBuff(hw, rpkt);
@@ -887,7 +887,7 @@ BC_STATUS crystalhd_hw_get_cap_buffer(struct crystalhd_hw *hw,
 										C011_PIB *pib,
 										struct crystalhd_dio_req **ioreq)
 {
-	crystalhd_rx_dma_pkt *rpkt;
+	struct crystalhd_rx_dma_pkt *rpkt;
 	uint32_t timeout = BC_PROC_OUTPUT_TIMEOUT / 1000;
 	uint32_t sig_pending = 0;
 
@@ -954,7 +954,7 @@ BC_STATUS crystalhd_hw_get_cap_buffer(struct crystalhd_hw *hw,
 
 BC_STATUS crystalhd_hw_start_capture(struct crystalhd_hw *hw)
 {
-	crystalhd_rx_dma_pkt *rx_pkt;
+	struct crystalhd_rx_dma_pkt *rx_pkt;
 	BC_STATUS sts;
 	uint32_t i;
 

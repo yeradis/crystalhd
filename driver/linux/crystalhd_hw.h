@@ -52,12 +52,12 @@
 #define	NUMBER_OF_TRANSFERS_TX_SIDE				1
 #define NUMBER_OF_TRANSFERS_RX_SIDE				2
 
-typedef struct _BC_DRV_PIC_INFO_{
+struct BC_DRV_PIC_INFO {
 	C011_PIB			DecoPIB;
-	struct _BC_DRV_PIC_INFO_	*Flink;
-} BC_DRV_PIC_INFO, *PBC_DRV_PIC_INFO;
+	struct BC_DRV_PIC_INFO		*Flink;
+};
 
-typedef union _desc_low_addr_reg_ {
+union desc_low_addr_reg {
 	struct {
 #ifdef	__LITTLE_ENDIAN_BITFIELD
 		uint32_t	list_valid:1;
@@ -72,9 +72,9 @@ typedef union _desc_low_addr_reg_ {
 
 	uint32_t	whole_reg;
 
-} desc_low_addr_reg;
+};
 
-typedef struct _dma_descriptor_ {	/* 8 32-bit values */
+struct dma_descriptor {	/* 8 32-bit values */
 #ifdef	__LITTLE_ENDIAN_BITFIELD
 	/* 0th u32 */
 	uint32_t sdram_buff_addr:28;	/* bits 0-27:  SDRAM Address */
@@ -138,22 +138,22 @@ typedef struct _dma_descriptor_ {	/* 8 32-bit values */
 	/* 7th u32 */
 	uint32_t res8;			/* Last 32bits reserved */
 #endif
-} dma_descriptor, *pdma_descriptor;
+};
 
 /*
  * We will allocate the memory in 4K pages
  * the linked list will be a list of 32 byte descriptors.
  * The  virtual address will determine what should be freed.
  */
-typedef struct _dma_desc_mem_ {
-	pdma_descriptor		pdma_desc_start;	/* 32-bytes for dma descriptor. should be first element */
+struct dma_desc_mem {
+	struct dma_descriptor		*pdma_desc_start;	/* 32-bytes for dma descriptor. should be first element */
 	dma_addr_t		phy_addr;		/* physical address of each DMA desc */
 	uint32_t		sz;
-	struct _dma_desc_mem_	*Next;			/* points to Next Descriptor in chain */
+	struct dma_desc_mem	*Next;			/* points to Next Descriptor in chain */
 
-} dma_desc_mem, *pdma_desc_mem;
+};
 
-typedef enum _list_sts_ {
+enum list_sts {
 	sts_free 		= 0,
 
 	/* RX-Y Bits 0:7 */
@@ -170,11 +170,10 @@ typedef enum _list_sts_ {
 	rx_y_mask		= 0x000000FF,
 	rx_uv_mask		= 0x0000FF00,
 
-} list_sts;
+};
 
 
-typedef enum _INTERRUPT_STATUS_
-{
+enum INTERRUPT_STATUS {
 	NO_INTERRUPT					= 0x0000,
 	FPGA_RX_L0_DMA_DONE				= 0x0001, /*DONT CHANGE VALUES...SOME BITWIZE OPERATIONS WILL FAIL*/
 	FPGA_RX_L1_DMA_DONE				= 0x0002, /*DONT CHANGE VALUES...SOME BITWIZE OPERATIONS WILL FAIL*/
@@ -184,10 +183,9 @@ typedef enum _INTERRUPT_STATUS_
 	DECO_FMT_CHANGE					= 0x0020,
 	DECO_MBOX_RESP					= 0x0040,
 	DECO_RESUME_FRM_INTER_PAUSE		= 0x0080, /*Not Handled in DPC Need to Fire Rx cmds on resume from Pause*/
-}INTERRUPT_STATUS;
+};
 
-typedef enum _ERR_STATUS_
-{
+enum ERROR_STATUS {
 	NO_ERROR			=0,
 	RX_Y_DMA_ERR_L0		=0x0001,/*DONT CHANGE VALUES...SOME BITWIZE OPERATIONS WILL FAIL*/
 	RX_UV_DMA_ERR_L0	=0x0002,/*DONT CHANGE VALUES...SOME BITWIZE OPERATIONS WILL FAIL*/
@@ -201,18 +199,17 @@ typedef enum _ERR_STATUS_
 	DROP_DATA_ERROR		=0x0200,//We were not able to get the PIB correctly so drop the frame.
 	DROP_SIZE_ERROR		=0x0400,//We were not able to get the size properly from hardware.
 	FORCE_CANCEL		=0x8000
-}ERROR_STATUS;
+};
 
-typedef enum _LIST_STATUS_
-{
+enum LIST_STATUS {
 	ListStsFree=0,				// Initial state and state the buffer is moved to Ready Buffer list.
 	RxListWaitingForYIntr=1,	// When the Y Descriptor is posted.
 	RxListWaitingForUVIntr=2,	// When the UV descriptor is posted.
 	TxListWaitingForIntr =4,
-}LIST_STATUS;
+};
 
-typedef struct _RX_LIST_{
-	LIST_STATUS		ListSts;
+struct RX_DMA_LIST {
+	enum LIST_STATUS		ListSts;
 	//LIST_ENTRY		ActiveList;
 	uint32_t			ActiveListLen;
 	uint32_t			ListLockInd;					/* To Be Filled up During Init */
@@ -228,27 +225,27 @@ typedef struct _RX_LIST_{
 	uint32_t			RxUVCurDescLADDRReg;			/* Current Desc Low Addr UV		*/
 	uint32_t			RxUVCurDescUADDRReg;			/* Current Desc UPPER Addr UV	*/
 	uint32_t			RxUVCurByteCntRemReg;			/* Cur Byte Cnt Rem UV			*/
-}RX_DMA_LIST,*PRX_DMA_LIST;
+};
 
-typedef struct _tx_dma_pkt_ {
-	dma_desc_mem		desc_mem;
+struct tx_dma_pkt {
+	struct dma_desc_mem		desc_mem;
 	hw_comp_callback	call_back;
 	struct crystalhd_dio_req	*dio_req;
 	wait_queue_head_t	*cb_event;
 	uint32_t		list_tag;
 
-} tx_dma_pkt;
+};
 
-typedef struct _crystalhd_rx_dma_pkt {
-	dma_desc_mem			desc_mem;
+struct crystalhd_rx_dma_pkt {
+	struct dma_desc_mem			desc_mem;
 	struct crystalhd_dio_req		*dio_req;
 	uint32_t			pkt_tag;
 	uint32_t			flags;
 	BC_PIC_INFO_BLOCK		pib;
 	dma_addr_t			uv_phy_addr;
-	struct  _crystalhd_rx_dma_pkt	*next;
+	struct  crystalhd_rx_dma_pkt	*next;
 
-} crystalhd_rx_dma_pkt;
+};
 
 struct crystalhd_hw_stats{
 	uint32_t	rx_errors;
@@ -262,14 +259,13 @@ struct crystalhd_hw_stats{
 	uint32_t	rx_success;
 };
 
-typedef enum _DECODER_STATE_
-{
+enum DECO_STATE {
 	DECO_OPERATIONAL				= 0,			/* We start with this state.ST_FW_DWNLD,ST_CAPTURE,STOP_CAPTURE */
 	DECO_INTER_PAUSED				= 1,			/* Driver Issued Pause To Decoder */
 	DECO_INTER_PAUSE_IN_PROGRESS	= 2,			/* Pause CMD is pending with F/W  */
 	DECO_INTER_RESUME_IN_PROGRESS	= 3,			/* Resume CMD is pending with F/W */
 	DECO_STOPPED_BY_APP				= 4				/* After STOP Video I do not want to Throttle Decoder.So Special State */
-}DECO_STATE;
+};
 
 //
 // These events can be used to notify the hardware layer
@@ -277,7 +273,7 @@ typedef enum _DECODER_STATE_
 // purpose for that matter.
 // We will use this for intermediae events as defined below
 
-typedef enum _BRCM_EVENT_{
+enum BRCM_EVENT {
 	BC_EVENT_ADAPTER_INIT_FAILED	=0,
 	BC_EVENT_ADAPTER_INIT_SUCCESS	=1,
 	BC_EVENT_FW_DNLD_STARTED		=2,
@@ -289,7 +285,7 @@ typedef enum _BRCM_EVENT_{
 	BC_EVENT_STOP_CAPTURE			=8,		/* Stop Capturing the Rx buffers Stop the DMA engines UnMapBuffers Discard Free and Ready list */
 	BC_EVENT_DO_CLEANUP				=9,		/* Total Cleanup Rx And Tx side */
 	BC_DISCARD_RX_BUFFERS			=10		/* Move all the Ready buffers to free list. Stop RX DMA. Post Rx Side buffers. */
-}BRCM_EVENT,*PBRCM_EVENT;
+};
 
 struct crystalhd_hw; // forward declaration for the types
 
@@ -310,7 +306,7 @@ typedef BC_STATUS	(*HW_WRITE_DEV_MEM)(struct crystalhd_hw*,uint32_t,uint32_t,uin
 /* typedef bool		(*HW_INIT_DRAM)(struct crystalhd_adp*); */
 /* typedef bool		(*HW_DISABLE_INTR)(struct crystalhd_adp*); */
 /* typedef bool		(*HW_ENABLE_INTR)(struct crystalhd_adp*); */
-typedef BC_STATUS	(*HW_POST_RX_SIDE_BUFF)(struct crystalhd_hw*,crystalhd_rx_dma_pkt*);
+typedef BC_STATUS	(*HW_POST_RX_SIDE_BUFF)(struct crystalhd_hw*,struct crystalhd_rx_dma_pkt*);
 typedef bool		(*HW_CHECK_INPUT_FIFO)(struct crystalhd_hw*, uint32_t, uint32_t*,bool,uint8_t*);
 typedef void		(*HW_START_TX_DMA)(struct crystalhd_hw*, uint8_t, addr_64);
 typedef BC_STATUS	(*HW_STOP_TX_DMA)(struct crystalhd_hw*);
@@ -336,16 +332,16 @@ typedef BOOLEAN		(*HW_ISSUE_DECO_PAUSE)	(PHW_EXTENSION,BOOLEAN,BOOLEAN);
 typedef BOOLEAN		(*FIRE_TX_CMD_TO_HW)	(PCONTEXT_FOR_POST_TX);
 */
 typedef void		(*NOTIFY_FLL_CHANGE)(struct crystalhd_hw*,bool);
-typedef bool		(*HW_EVENT_NOTIFICATION)(struct crystalhd_hw*, BRCM_EVENT);
+typedef bool		(*HW_EVENT_NOTIFICATION)(struct crystalhd_hw*, enum BRCM_EVENT);
 
 struct crystalhd_hw {
-	tx_dma_pkt		tx_pkt_pool[DMA_ENGINE_CNT];
+	struct tx_dma_pkt		tx_pkt_pool[DMA_ENGINE_CNT];
 	spinlock_t		lock;
 
 	uint32_t		tx_ioq_tag_seed;
 	uint32_t		tx_list_post_index;
 
-	crystalhd_rx_dma_pkt	*rx_pkt_pool_head;
+	struct crystalhd_rx_dma_pkt	*rx_pkt_pool_head;
 	uint32_t		rx_pkt_tag_seed;
 
 	bool			dev_started;
@@ -364,7 +360,7 @@ struct crystalhd_hw {
 	/* Rx DMA Engine Specific Locks */
 	spinlock_t		rx_lock;
 	uint32_t		rx_list_post_index;
-	list_sts		rx_list_sts[DMA_ENGINE_CNT];
+	enum list_sts		rx_list_sts[DMA_ENGINE_CNT];
 	struct crystalhd_dioq	*rx_rdyq;
 	struct crystalhd_dioq	*rx_freeq;
 	struct crystalhd_dioq	*rx_actq;
@@ -404,13 +400,13 @@ struct crystalhd_hw {
 	uint32_t	TemperatureRegVal;
 	TX_INPUT_BUFFER_INFO	TxFwInputBuffInfo;
 
-	DECO_STATE			DecoderSt;				/* Weather the decoder is paused or not*/
+	enum DECO_STATE			DecoderSt;				/* Weather the decoder is paused or not*/
 	uint32_t			PauseThreshold;
 	uint32_t			ResumeThreshold;
 
 	uint32_t				RxListPointer;					/* Treat the Rx List As Circular List */
-	LIST_STATUS				TxList0Sts;
-	LIST_STATUS				TxList1Sts;
+	enum LIST_STATUS				TxList0Sts;
+	enum LIST_STATUS				TxList1Sts;
 
 	uint32_t			FleaEnablePWM;
 	uint32_t			FleaWaitFirstPlaybackNotify;
@@ -493,8 +489,8 @@ struct crystalhd_hw {
 	HW_EVENT_NOTIFICATION		pfnNotifyHardware;
 };
 
-crystalhd_rx_dma_pkt *crystalhd_hw_alloc_rx_pkt(struct crystalhd_hw *hw);
-void crystalhd_hw_free_rx_pkt(struct crystalhd_hw *hw, crystalhd_rx_dma_pkt *pkt);
+struct crystalhd_rx_dma_pkt *crystalhd_hw_alloc_rx_pkt(struct crystalhd_hw *hw);
+void crystalhd_hw_free_rx_pkt(struct crystalhd_hw *hw, struct crystalhd_rx_dma_pkt *pkt);
 void crystalhd_tx_desc_rel_call_back(void *context, void *data);
 void crystalhd_rx_pkt_rel_call_back(void *context, void *data);
 void crystalhd_hw_delete_ioqs(struct crystalhd_hw *hw);
@@ -505,13 +501,13 @@ BC_STATUS crystalhd_hw_setup_dma_rings(struct crystalhd_hw *hw);
 BC_STATUS crystalhd_hw_free_dma_rings(struct crystalhd_hw *hw);
 BC_STATUS crystalhd_hw_tx_req_complete(struct crystalhd_hw *hw, uint32_t list_id, BC_STATUS cs);
 BC_STATUS crystalhd_hw_fill_desc(struct crystalhd_dio_req *ioreq,
-				dma_descriptor *desc,
+				struct dma_descriptor *desc,
 				dma_addr_t desc_paddr_base,
 				uint32_t sg_cnt, uint32_t sg_st_ix,
 				uint32_t sg_st_off, uint32_t xfr_sz,
 				struct device *dev, uint32_t destDRAMaddr);
 BC_STATUS crystalhd_xlat_sgl_to_dma_desc(struct crystalhd_dio_req *ioreq,
-					pdma_desc_mem pdesc_mem,
+					struct dma_desc_mem * pdesc_mem,
 					uint32_t *uv_desc_index,
 					struct device *dev, uint32_t destDRAMaddr);
 BC_STATUS crystalhd_rx_pkt_done(struct crystalhd_hw *hw,

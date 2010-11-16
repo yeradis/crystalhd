@@ -485,7 +485,7 @@ void *crystalhd_dioq_fetch_wait(struct crystalhd_hw *hw, uint32_t to_secs, uint3
 	unsigned long flags = 0;
 	int rc = 0;
 
-	crystalhd_rx_dma_pkt *r_pkt = NULL;
+	struct crystalhd_rx_dma_pkt *r_pkt = NULL;
 	struct crystalhd_dioq *ioq = hw->rx_rdyq;
 	uint32_t picYcomp = 0;
 
