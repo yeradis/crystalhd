@@ -31,30 +31,30 @@
 
 //extern uint32_t rts_prog_vals[][5];
 
-typedef enum DDR2_SPEED_GRADE {
+enum eDDR2_SPEED_GRADE {
   DDR2_400MHZ = 0x0,
   DDR2_333MHZ = 0x1,
   DDR2_266MHZ = 0x2,
   DDR2_200MHZ = 0x3,
   DDR2_533MHZ = 0x4,
   DDR2_667MHZ = 0x5
-} eDDR2_SPEED_GRADE;
+};
 
-typedef enum SD_COL_SIZE {
+enum eSD_COL_SIZE {
   COL_BITS_9  = 0x0,
   COL_BITS_10 = 0x1,
   COL_BITS_11 = 0x2,
-} eSD_COL_SIZE;
+};
 
-typedef enum SD_BANK_SIZE {
+enum eSD_BANK_SIZE {
   BANK_SIZE_4  = 0x0,
   BANK_SIZE_8  = 0x1,
-} eSD_BANK_SIZE;
+};
 
-typedef enum SD_ROW_SIZE {
+enum eSD_ROW_SIZE {
   ROW_SIZE_8K  = 0x0,
   ROW_SIZE_16K = 0x1,
-} eSD_ROW_SIZE;
+};
 
 //DDR PHY PLL init routine
 void crystalhd_flea_ddr_pll_config(struct crystalhd_hw* hw, int32_t *speed_grade, int32_t num_plls, uint32_t tmode);
