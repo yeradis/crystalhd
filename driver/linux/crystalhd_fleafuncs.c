@@ -1930,8 +1930,8 @@ BC_STATUS crystalhd_flea_hw_pause(struct crystalhd_hw *hw, bool state)
 bool crystalhd_flea_peek_next_decoded_frame(struct crystalhd_hw *hw, uint64_t *meta_payload, uint32_t *picNumFlags, uint32_t PicWidth)
 {
 	unsigned long flags = 0;
-	crystalhd_dioq_t *ioq;
-	crystalhd_elem_t *tmp;
+	struct crystalhd_dioq *ioq;
+	struct crystalhd_elem *tmp;
 	crystalhd_rx_dma_pkt *rpkt;
 
 	*meta_payload = 0;
@@ -1939,7 +1939,7 @@ bool crystalhd_flea_peek_next_decoded_frame(struct crystalhd_hw *hw, uint64_t *m
 	ioq = hw->rx_rdyq;
 	spin_lock_irqsave(&ioq->lock, flags);
 
-	if ((ioq->count > 0) && (ioq->head != (crystalhd_elem_t *)&ioq->head)) {
+	if ((ioq->count > 0) && (ioq->head != (struct crystalhd_elem *)&ioq->head)) {
 		tmp = ioq->head;
 		spin_unlock_irqrestore(&ioq->lock, flags);
 		rpkt = (crystalhd_rx_dma_pkt *)tmp->data;
@@ -2751,7 +2751,7 @@ bool flea_GetPictureInfo(struct crystalhd_hw *hw, crystalhd_rx_dma_pkt * rx_pkt,
 	bool rtVal = true;
 
 	void *tmpPicInfo = NULL;
-	crystalhd_dio_req *dio = rx_pkt->dio_req;
+	struct crystalhd_dio_req *dio = rx_pkt->dio_req;
 	*PicNumber = 0;
 	*PicMetaData = 0;
 

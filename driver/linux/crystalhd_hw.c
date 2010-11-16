@@ -417,7 +417,7 @@ BC_STATUS crystalhd_hw_tx_req_complete(struct crystalhd_hw *hw,
 	return crystalhd_dioq_add(hw->tx_freeq, tx_req, false, 0);
 }
 
-BC_STATUS crystalhd_hw_fill_desc(crystalhd_dio_req *ioreq,
+BC_STATUS crystalhd_hw_fill_desc(struct crystalhd_dio_req *ioreq,
 										dma_descriptor *desc,
 										dma_addr_t desc_paddr_base,
 										uint32_t sg_cnt, uint32_t sg_st_ix,
@@ -523,7 +523,7 @@ BC_STATUS crystalhd_hw_fill_desc(crystalhd_dio_req *ioreq,
 	return BC_STS_SUCCESS;
 }
 
-BC_STATUS crystalhd_xlat_sgl_to_dma_desc(crystalhd_dio_req *ioreq,
+BC_STATUS crystalhd_xlat_sgl_to_dma_desc(struct crystalhd_dio_req *ioreq,
 												pdma_desc_mem pdesc_mem,
 												uint32_t *uv_desc_index,
 												struct device *dev, uint32_t destDRAMaddr)
@@ -707,7 +707,7 @@ BC_STATUS crystalhd_rx_pkt_done(struct crystalhd_hw *hw,
 	return hw->pfnPostRxSideBuff(hw, rx_pkt);
 }
 
-BC_STATUS crystalhd_hw_post_tx(struct crystalhd_hw *hw, crystalhd_dio_req *ioreq,
+BC_STATUS crystalhd_hw_post_tx(struct crystalhd_hw *hw, struct crystalhd_dio_req *ioreq,
 			     hw_comp_callback call_back,
 			     wait_queue_head_t *cb_event, uint32_t *list_id,
 			     uint8_t data_flags)
@@ -840,7 +840,7 @@ BC_STATUS crystalhd_hw_cancel_tx(struct crystalhd_hw *hw, uint32_t list_id)
 }
 
 BC_STATUS crystalhd_hw_add_cap_buffer(struct crystalhd_hw *hw,
-				    crystalhd_dio_req *ioreq, bool en_post)
+				    struct crystalhd_dio_req *ioreq, bool en_post)
 {
 	crystalhd_rx_dma_pkt *rpkt;
 	uint32_t tag, uv_desc_ix = 0;
@@ -885,7 +885,7 @@ BC_STATUS crystalhd_hw_add_cap_buffer(struct crystalhd_hw *hw,
 
 BC_STATUS crystalhd_hw_get_cap_buffer(struct crystalhd_hw *hw,
 										C011_PIB *pib,
-										crystalhd_dio_req **ioreq)
+										struct crystalhd_dio_req **ioreq)
 {
 	crystalhd_rx_dma_pkt *rpkt;
 	uint32_t timeout = BC_PROC_OUTPUT_TIMEOUT / 1000;

@@ -233,7 +233,7 @@ typedef struct _RX_LIST_{
 typedef struct _tx_dma_pkt_ {
 	dma_desc_mem		desc_mem;
 	hw_comp_callback	call_back;
-	crystalhd_dio_req	*dio_req;
+	struct crystalhd_dio_req	*dio_req;
 	wait_queue_head_t	*cb_event;
 	uint32_t		list_tag;
 
@@ -241,7 +241,7 @@ typedef struct _tx_dma_pkt_ {
 
 typedef struct _crystalhd_rx_dma_pkt {
 	dma_desc_mem			desc_mem;
-	crystalhd_dio_req		*dio_req;
+	struct crystalhd_dio_req		*dio_req;
 	uint32_t			pkt_tag;
 	uint32_t			flags;
 	BC_PIC_INFO_BLOCK		pib;
@@ -318,7 +318,7 @@ typedef BC_STATUS	(*HW_STOP_TX_DMA)(struct crystalhd_hw*);
 /* typedef bool		(*HW_RX_POST_INTR_PROCESSING)(struct crystalhd_adp*,uint32_t,uint32_t); */
 typedef void		(*HW_GET_DONE_SIZE)(struct crystalhd_hw *hw, uint32_t, uint32_t*, uint32_t*);
 /* typedef bool		(*HW_ADD_DRP_TO_FREE_LIST)(struct crystalhd_adp*,crystalhd_dio_req *ioreq); */
-typedef crystalhd_dio_req*	(*HW_FETCH_DONE_BUFFERS)(struct crystalhd_adp*,bool);
+typedef struct crystalhd_dio_req*	(*HW_FETCH_DONE_BUFFERS)(struct crystalhd_adp*,bool);
 /* typedef bool		(*HW_ADD_ROLLBACK_RXBUF)(struct crystalhd_adp*,crystalhd_dio_req *ioreq); */
 typedef bool		(*HW_PEEK_NEXT_DECODED_RXBUF)(struct crystalhd_hw*,uint64_t*,uint32_t*,uint32_t);
 typedef BC_STATUS	(*HW_FW_PASSTHRU_CMD)(struct crystalhd_hw*,PBC_FW_CMD);
@@ -358,16 +358,16 @@ struct crystalhd_hw {
 	uint32_t		pib_rel_Q_addr;
 	uint32_t		channelNum;
 
-	crystalhd_dioq_t	*tx_freeq;
-	crystalhd_dioq_t	*tx_actq;
+	struct crystalhd_dioq		*tx_freeq;
+	struct crystalhd_dioq		*tx_actq;
 
 	/* Rx DMA Engine Specific Locks */
 	spinlock_t		rx_lock;
 	uint32_t		rx_list_post_index;
 	list_sts		rx_list_sts[DMA_ENGINE_CNT];
-	crystalhd_dioq_t	*rx_rdyq;
-	crystalhd_dioq_t	*rx_freeq;
-	crystalhd_dioq_t	*rx_actq;
+	struct crystalhd_dioq	*rx_rdyq;
+	struct crystalhd_dioq	*rx_freeq;
+	struct crystalhd_dioq	*rx_actq;
 	uint32_t		stop_pending;
 
 	uint32_t		hw_pause_issued;
@@ -504,26 +504,26 @@ BC_STATUS crystalhd_hw_close(struct crystalhd_hw *hw, struct crystalhd_adp *adp)
 BC_STATUS crystalhd_hw_setup_dma_rings(struct crystalhd_hw *hw);
 BC_STATUS crystalhd_hw_free_dma_rings(struct crystalhd_hw *hw);
 BC_STATUS crystalhd_hw_tx_req_complete(struct crystalhd_hw *hw, uint32_t list_id, BC_STATUS cs);
-BC_STATUS crystalhd_hw_fill_desc(crystalhd_dio_req *ioreq,
+BC_STATUS crystalhd_hw_fill_desc(struct crystalhd_dio_req *ioreq,
 				dma_descriptor *desc,
 				dma_addr_t desc_paddr_base,
 				uint32_t sg_cnt, uint32_t sg_st_ix,
 				uint32_t sg_st_off, uint32_t xfr_sz,
 				struct device *dev, uint32_t destDRAMaddr);
-BC_STATUS crystalhd_xlat_sgl_to_dma_desc(crystalhd_dio_req *ioreq,
+BC_STATUS crystalhd_xlat_sgl_to_dma_desc(struct crystalhd_dio_req *ioreq,
 					pdma_desc_mem pdesc_mem,
 					uint32_t *uv_desc_index,
 					struct device *dev, uint32_t destDRAMaddr);
 BC_STATUS crystalhd_rx_pkt_done(struct crystalhd_hw *hw,
 				uint32_t list_index,
 				BC_STATUS comp_sts);
-BC_STATUS crystalhd_hw_post_tx(struct crystalhd_hw *hw, crystalhd_dio_req *ioreq,
+BC_STATUS crystalhd_hw_post_tx(struct crystalhd_hw *hw, struct crystalhd_dio_req *ioreq,
 				hw_comp_callback call_back,
 				wait_queue_head_t *cb_event, uint32_t *list_id,
 				uint8_t data_flags);
 BC_STATUS crystalhd_hw_cancel_tx(struct crystalhd_hw *hw, uint32_t list_id);
-BC_STATUS crystalhd_hw_add_cap_buffer(struct crystalhd_hw *hw,crystalhd_dio_req *ioreq, bool en_post);
-BC_STATUS crystalhd_hw_get_cap_buffer(struct crystalhd_hw *hw,C011_PIB *pib,crystalhd_dio_req **ioreq);
+BC_STATUS crystalhd_hw_add_cap_buffer(struct crystalhd_hw *hw,struct crystalhd_dio_req *ioreq, bool en_post);
+BC_STATUS crystalhd_hw_get_cap_buffer(struct crystalhd_hw *hw,C011_PIB *pib,struct crystalhd_dio_req **ioreq);
 BC_STATUS crystalhd_hw_start_capture(struct crystalhd_hw *hw);
 BC_STATUS crystalhd_hw_stop_capture(struct crystalhd_hw *hw, bool unmap);
 BC_STATUS crystalhd_hw_suspend(struct crystalhd_hw *hw);

@@ -383,7 +383,7 @@ static BC_STATUS bc_cproc_do_fw_cmd(struct crystalhd_cmd *ctx, crystalhd_ioctl_d
 	return sts;
 }
 
-static void bc_proc_in_completion(crystalhd_dio_req *dio_hnd,
+static void bc_proc_in_completion(struct crystalhd_dio_req *dio_hnd,
 				  wait_queue_head_t *event, BC_STATUS sts)
 {
 	if (!dio_hnd || !event) {
@@ -420,7 +420,7 @@ static BC_STATUS bc_cproc_codein_sleep(struct crystalhd_cmd *ctx)
 
 static BC_STATUS bc_cproc_hw_txdma(struct crystalhd_cmd *ctx,
 				   crystalhd_ioctl_data *idata,
-				   crystalhd_dio_req *dio)
+				   struct crystalhd_dio_req *dio)
 {
 	struct device *dev = chddev();
 	uint32_t tx_listid = 0;
@@ -521,7 +521,7 @@ static BC_STATUS bc_cproc_proc_input(struct crystalhd_cmd *ctx, crystalhd_ioctl_
 	struct device *dev = chddev();
 	void *ubuff;
 	uint32_t ub_sz;
-	crystalhd_dio_req *dio_hnd = NULL;
+	struct crystalhd_dio_req *dio_hnd = NULL;
 	BC_STATUS sts = BC_STS_SUCCESS;
 
 	if (!ctx || !idata) {
@@ -562,7 +562,7 @@ static BC_STATUS bc_cproc_add_cap_buff(struct crystalhd_cmd *ctx,
 	void *ubuff;
 	uint32_t ub_sz, uv_off;
 	bool en_422;
-	crystalhd_dio_req *dio_hnd = NULL;
+	struct crystalhd_dio_req *dio_hnd = NULL;
 	BC_STATUS sts = BC_STS_SUCCESS;
 
 	if (!ctx || !idata) {
@@ -600,7 +600,7 @@ static BC_STATUS bc_cproc_add_cap_buff(struct crystalhd_cmd *ctx,
 }
 
 static BC_STATUS bc_cproc_fmt_change(struct crystalhd_cmd *ctx,
-				     crystalhd_dio_req *dio)
+				     struct crystalhd_dio_req *dio)
 {
 	BC_STATUS sts = BC_STS_SUCCESS;
 
@@ -619,7 +619,7 @@ static BC_STATUS bc_cproc_fetch_frame(struct crystalhd_cmd *ctx,
 				      crystalhd_ioctl_data *idata)
 {
 	struct device *dev = chddev();
-	crystalhd_dio_req *dio = NULL;
+	struct crystalhd_dio_req *dio = NULL;
 	BC_STATUS sts = BC_STS_SUCCESS;
 	BC_DEC_OUT_BUFF *frame;
 

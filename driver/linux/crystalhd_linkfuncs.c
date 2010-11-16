@@ -548,7 +548,7 @@ bool crystalhd_link_stop_device(struct crystalhd_hw *hw)
 	return true;
 }
 
-uint32_t link_GetPicInfoLineNum(crystalhd_dio_req *dio, uint8_t *base)
+uint32_t link_GetPicInfoLineNum(struct crystalhd_dio_req *dio, uint8_t *base)
 {
 	uint32_t PicInfoLineNum = 0;
 
@@ -572,7 +572,7 @@ uint32_t link_GetPicInfoLineNum(crystalhd_dio_req *dio, uint8_t *base)
 	return PicInfoLineNum;
 }
 
-uint32_t link_GetMode422Data(crystalhd_dio_req *dio,
+uint32_t link_GetMode422Data(struct crystalhd_dio_req *dio,
 			       PBC_PIC_INFO_BLOCK pPicInfoLine, int type)
 {
 	int i;
@@ -600,7 +600,7 @@ uint32_t link_GetMode422Data(crystalhd_dio_req *dio,
 	return val;
 }
 
-uint32_t link_GetMetaDataFromPib(crystalhd_dio_req *dio,
+uint32_t link_GetMetaDataFromPib(struct crystalhd_dio_req *dio,
 				   PBC_PIC_INFO_BLOCK pPicInfoLine)
 {
 	uint32_t picture_meta_payload = 0;
@@ -613,7 +613,7 @@ uint32_t link_GetMetaDataFromPib(crystalhd_dio_req *dio,
 	return BC_SWAP32(picture_meta_payload);
 }
 
-uint32_t link_GetHeightFromPib(crystalhd_dio_req *dio,
+uint32_t link_GetHeightFromPib(struct crystalhd_dio_req *dio,
 				 PBC_PIC_INFO_BLOCK pPicInfoLine)
 {
 	uint32_t height = 0;
@@ -627,7 +627,7 @@ uint32_t link_GetHeightFromPib(crystalhd_dio_req *dio,
 }
 
 /* This function cannot be called from ISR context since it uses APIs that can sleep */
-bool link_GetPictureInfo(struct crystalhd_hw *hw, uint32_t picHeight, uint32_t picWidth, crystalhd_dio_req *dio,
+bool link_GetPictureInfo(struct crystalhd_hw *hw, uint32_t picHeight, uint32_t picWidth, struct crystalhd_dio_req *dio,
 			   uint32_t *PicNumber, uint64_t *PicMetaData)
 {
 	uint32_t PicInfoLineNum = 0, HeightInPib = 0, offset = 0, size = 0;
@@ -794,8 +794,8 @@ bool crystalhd_link_peek_next_decoded_frame(struct crystalhd_hw *hw,
 {
 	uint32_t PicNumber = 0;
 	unsigned long flags = 0;
-	crystalhd_dioq_t *ioq;
-	crystalhd_elem_t *tmp;
+	struct crystalhd_dioq *ioq;
+	struct crystalhd_elem *tmp;
 	crystalhd_rx_dma_pkt *rpkt;
 
 	*meta_payload = 0;
@@ -803,7 +803,7 @@ bool crystalhd_link_peek_next_decoded_frame(struct crystalhd_hw *hw,
 	ioq = hw->rx_rdyq;
 	spin_lock_irqsave(&ioq->lock, flags);
 
-	if ((ioq->count > 0) && (ioq->head != (crystalhd_elem_t *)&ioq->head)) {
+	if ((ioq->count > 0) && (ioq->head != (struct crystalhd_elem *)&ioq->head)) {
 		tmp = ioq->head;
 		spin_unlock_irqrestore(&ioq->lock, flags);
 		rpkt = (crystalhd_rx_dma_pkt *)tmp->data;
