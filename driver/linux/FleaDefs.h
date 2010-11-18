@@ -4,29 +4,7 @@
 /*
 * Include a whole bunch of RDB files for register definitions
 */
-#include "bchp_misc1.h"
-#include "bchp_misc2.h"
-#include "bchp_misc3.h"
-#include "bchp_scrub_ctrl.h"
-#include "bchp_wrap_misc_intr2.h"
-#include "bchp_armcr4_bridge.h"
-#include "bchp_intr.h"
-#include "bchp_pri_arb_control_regs.h"
-#include "bchp_ddr23_ctl_regs_0.h"
-#include "bchp_ddr23_phy_byte_lane_0.h"
-#include "bchp_ddr23_phy_byte_lane_1.h"
-#include "bchp_ddr23_phy_control_regs.h"
-#include "bchp_clk.h"
-#include "bchp_pcie_tl.h"
-#include "bchp_sun_gisb_arb.h"
-#include "bchp_misc_perst.h"
-#include "bchp_decode_cpuregs_0.h"
-#include "bchp_decode_cpuregs2_0.h"
-#include "bchp_pcie_cfg.h"
-#include "bchp_mfd.h"
-#include "bchp_sun_top_ctrl.h"
-#include "bchp_gio.h"
-#include "bchp_pri_client_regs.h"
+#include "bcm_70015_regs.h"
 
 // Assume we have 64MB DRam
 #define FLEA_TOTAL_DRAM_SIZE		64*1024*1024

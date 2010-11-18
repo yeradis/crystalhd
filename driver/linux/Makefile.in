@@ -9,7 +9,6 @@ INCLUDES  = -I$(KDIR)/include
 INCLUDES += -I$(src)/../../include
 INCLUDES += -I$(src)/../../include/link
 INCLUDES += -I$(src)/../../include/flea
-INCLUDES += -I$(src)/../../include/flea/70015/magnum/basemodules/chp/70015/rdb/a0
 
 EXTRA_CFLAGS   = -D__KERNEL__ -DMODULE $(INCLUDES) $(INC)
 EXTRA_CFLAGS  += -Wall -Wstrict-prototypes -Wno-trigraphs -Werror -O2
