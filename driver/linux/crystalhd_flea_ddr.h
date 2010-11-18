@@ -60,12 +60,12 @@ enum eSD_ROW_SIZE {
 void crystalhd_flea_ddr_pll_config(struct crystalhd_hw* hw, int32_t *speed_grade, int32_t num_plls, uint32_t tmode);
 
 //DDR controller init routine
-void crystalhd_flea_ddr_ctrl_init(struct crystalhd_hw *hw, 
-						int32_t port, 
+void crystalhd_flea_ddr_ctrl_init(struct crystalhd_hw *hw,
+						int32_t port,
                         int32_t ddr3,
-                        int32_t speed_grade, 
-                        int32_t col, 
-                        int32_t bank, 
+                        int32_t speed_grade,
+                        int32_t col,
+                        int32_t bank,
                         int32_t row,
                         uint32_t tmode );
 

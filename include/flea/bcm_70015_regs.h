@@ -40,7 +40,7 @@
  * Revision History:
  *
  * $brcm_Log: /magnum/basemodules/chp/70015/rdb/a0/bchp_misc1.h $
- * 
+ *
  * Hydra_Software_Devel/1   7/17/09 8:11p albertl
  * PR56880: Initial revision.
  *
@@ -102,7 +102,7 @@
  * Revision History:
  *
  * $brcm_Log: /magnum/basemodules/chp/70015/rdb/a0/bchp_misc2.h $
- * 
+ *
  * Hydra_Software_Devel/1   7/17/09 8:11p albertl
  * PR56880: Initial revision.
  *
@@ -152,7 +152,7 @@
  * Revision History:
  *
  * $brcm_Log: /magnum/basemodules/chp/70015/rdb/a0/bchp_misc3.h $
- * 
+ *
  * Hydra_Software_Devel/1   7/17/09 8:11p albertl
  * PR56880: Initial revision.
  *
@@ -193,7 +193,7 @@
  * Revision History:
  *
  * $brcm_Log: /magnum/basemodules/chp/70015/rdb/a0/bchp_scrub_ctrl.h $
- * 
+ *
  * Hydra_Software_Devel/1   7/17/09 8:18p albertl
  * PR56880: Initial revision.
  *
@@ -255,7 +255,7 @@
  * Revision History:
  *
  * $brcm_Log: /magnum/basemodules/chp/70015/rdb/a0/bchp_wrap_misc_intr2.h $
- * 
+ *
  * Hydra_Software_Devel/1   7/17/09 8:23p albertl
  * PR56880: Initial revision.
  *
@@ -313,7 +313,7 @@
  * Revision History:
  *
  * $brcm_Log: /magnum/basemodules/chp/70015/rdb/a0/bchp_armcr4_bridge.h $
- * 
+ *
  * Hydra_Software_Devel/1   7/17/09 8:28p albertl
  * PR56880: Initial revision.
  *
@@ -398,7 +398,7 @@
  * Revision History:
  *
  * $brcm_Log: /magnum/basemodules/chp/70015/rdb/a0/bchp_intr.h $
- * 
+ *
  * Hydra_Software_Devel/1   7/17/09 8:09p albertl
  * PR56880: Initial revision.
  *
@@ -444,7 +444,7 @@
  * Revision History:
  *
  * $brcm_Log: /magnum/basemodules/chp/70015/rdb/a0/bchp_pri_arb_control_regs.h $
- * 
+ *
  * Hydra_Software_Devel/1   7/17/09 8:14p albertl
  * PR56880: Initial revision.
  *
@@ -499,7 +499,7 @@
  * Revision History:
  *
  * $brcm_Log: /magnum/basemodules/chp/70015/rdb/a0/bchp_ddr23_ctl_regs_0.h $
- * 
+ *
  * Hydra_Software_Devel/1   7/17/09 7:59p albertl
  * PR56880: Initial revision.
  *
@@ -699,7 +699,7 @@
  * Revision History:
  *
  * $brcm_Log: /magnum/basemodules/chp/70015/rdb/a0/bchp_ddr23_phy_byte_lane_0.h $
- * 
+ *
  * Hydra_Software_Devel/1   7/17/09 7:59p albertl
  * PR56880: Initial revision.
  *
@@ -806,7 +806,7 @@
  * Revision History:
  *
  * $brcm_Log: /magnum/basemodules/chp/70015/rdb/a0/bchp_ddr23_phy_byte_lane_1.h $
- * 
+ *
  * Hydra_Software_Devel/1   7/17/09 7:59p albertl
  * PR56880: Initial revision.
  *
@@ -928,7 +928,7 @@
  * Revision History:
  *
  * $brcm_Log: /magnum/basemodules/chp/70015/rdb/a0/bchp_ddr23_phy_control_regs.h $
- * 
+ *
  * Hydra_Software_Devel/1   7/17/09 7:59p albertl
  * PR56880: Initial revision.
  *
@@ -1050,7 +1050,7 @@
  * Revision History:
  *
  * $brcm_Log: /magnum/basemodules/chp/70015/rdb/a0/bchp_clk.h $
- * 
+ *
  * Hydra_Software_Devel/1   7/17/09 7:58p albertl
  * PR56880: Initial revision.
  *
@@ -1146,7 +1146,7 @@
  * Revision History:
  *
  * $brcm_Log: /magnum/basemodules/chp/70015/rdb/a0/bchp_pcie_tl.h $
- * 
+ *
  * Hydra_Software_Devel/1   7/17/09 8:13p albertl
  * PR56880: Initial revision.
  *
@@ -1187,7 +1187,7 @@
  * Revision History:
  *
  * $brcm_Log: /magnum/basemodules/chp/70015/rdb/a0/bchp_sun_gisb_arb.h $
- * 
+ *
  * Hydra_Software_Devel/1   7/17/09 8:19p albertl
  * PR56880: Initial revision.
  *
@@ -1228,7 +1228,7 @@
  * Revision History:
  *
  * $brcm_Log: /magnum/basemodules/chp/70015/rdb/a0/bchp_misc_perst.h $
- * 
+ *
  * Hydra_Software_Devel/1   7/17/09 8:12p albertl
  * PR56880: Initial revision.
  *
@@ -1275,7 +1275,7 @@
  * Revision History:
  *
  * $brcm_Log: /magnum/basemodules/chp/70015/rdb/a0/bchp_sun_top_ctrl.h $
- * 
+ *
  * Hydra_Software_Devel/1   7/17/09 8:20p albertl
  * PR56880: Initial revision.
  *
@@ -1316,7 +1316,7 @@
  * Revision History:
  *
  * $brcm_Log: /magnum/basemodules/chp/70015/rdb/a0/bchp_gio.h $
- * 
+ *
  * Hydra_Software_Devel/1   7/17/09 8:07p albertl
  * PR56880: Initial revision.
  *
@@ -1358,7 +1358,7 @@
  * Revision History:
  *
  * $brcm_Log: /magnum/basemodules/chp/70015/rdb/a0/bchp_pri_client_regs.h $
- * 
+ *
  * Hydra_Software_Devel/1   7/17/09 8:16p albertl
  * PR56880: Initial revision.
  *

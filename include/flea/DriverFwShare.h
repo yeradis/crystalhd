@@ -3,20 +3,20 @@
 
 #ifndef USE_MULTI_DECODE_DEFINES
 #define HOST_TO_FW_PIC_DEL_INFO_ADDR		0x400	/*Original single Decode Offset*/
-#else			
+#else
 //#define HOST_TO_FW_PIC_DEL_INFO_ADDR		0x200	/*New offset that we plan to use eventually*/
 #define HOST_TO_FW_PIC_DEL_INFO_ADDR		0x400	//This is just for testing..remove this once tested
 #endif
 
 
-/* 
- * The TX address does not change between the 
+/*
+ * The TX address does not change between the
  * single decode and multiple decode.
  */
 #define TX_BUFF_UPDATE_ADDR					0x300	//This is relative to BORCH
 
-typedef 
-struct 
+typedef
+struct
 _PIC_DELIVERY_HOST_INFO_
 {
 /*
@@ -58,7 +58,7 @@ _TX_INPUT_BUFFER_INFO_
 	unsigned int SeqNum;				/* Sequence number of the tranfer that is done. Read-Modify-Write*/
 	unsigned int ChannelID;				/* To which Channel this buffer belongs to*/
 	unsigned int Reserved[2];
-}TX_INPUT_BUFFER_INFO,	
+}TX_INPUT_BUFFER_INFO,
 *PTX_INPUT_BUFFER_INFO;
 
 
