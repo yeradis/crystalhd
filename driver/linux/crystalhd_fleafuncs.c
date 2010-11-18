@@ -32,7 +32,6 @@
 #include "crystalhd_hw.h"
 #include "crystalhd_fleafuncs.h"
 #include "crystalhd_lnx.h"
-#include "bc_defines.h"
 #include "FleaDefs.h"
 #include "crystalhd_flea_ddr.h"
 
@@ -1243,7 +1242,7 @@ BCHP_SCRUB_CTRL_BI_CMAC_127_96		0x000f6018			CMAC Bits[127:96]
 	{
 		uint32_t offSet = (BCHP_SCRUB_CTRL_BI_CMAC_127_96 - (i * 4));
 
-		hw->pfnWriteDevRegister(hw->adp, offSet, bswap_32_1(*pCmacSig));
+		hw->pfnWriteDevRegister(hw->adp, offSet, cpu_to_be32(*pCmacSig));
 
 		pCmacSig++;
 	}

@@ -29,7 +29,6 @@
 #include "crystalhd_hw.h"
 #include "crystalhd_lnx.h"
 #include "crystalhd_linkfuncs.h"
-#include "bc_defines.h"
 
 #define OFFSETOF(_s_, _m_) ((size_t)(unsigned long)&(((_s_ *)0)->_m_))
 
@@ -1854,7 +1853,7 @@ BC_STATUS crystalhd_link_download_fw(struct crystalhd_hw *hw,
 	sig_reg = (uint32_t)DCI_SIGNATURE_DATA_7;
 	for (cnt = 0; cnt < 8; cnt++) {
 		uint32_t swapped_data = *temp_buff;
-		swapped_data = bswap_32_1(swapped_data);
+		swapped_data = cpu_to_be32(swapped_data);
 		hw->pfnWriteFPGARegister(hw->adp, sig_reg, swapped_data);
 		sig_reg -= 4;
 		temp_buff++;
