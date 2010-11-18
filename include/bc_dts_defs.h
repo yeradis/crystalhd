@@ -26,8 +26,6 @@
 #ifndef _BC_DTS_DEFS_H_
 #define _BC_DTS_DEFS_H_
 
-#include "bc_dts_types.h"
-
 /* BIT Mask */
 #define BC_BIT(_x)		(1 << (_x))
 
@@ -573,9 +571,9 @@ typedef enum _BC_MEDIA_SUBTYPE_ {
 } BC_MEDIA_SUBTYPE;
 
 typedef struct _BC_INPUT_FORMAT_ {
-	BOOL        FGTEnable;      /*Enable processing of FGT SEI*/
-	BOOL        MetaDataEnable; /*Enable retrieval of picture metadata to be sent to video pipeline.*/
-	BOOL        Progressive;    /*Instruct decoder to always try to send back progressive
+	int         FGTEnable;      /*Enable processing of FGT SEI*/
+	int         MetaDataEnable; /*Enable retrieval of picture metadata to be sent to video pipeline.*/
+	int         Progressive;    /*Instruct decoder to always try to send back progressive
 				     frames. If input content is 1080p, the decoder will
 				     ignore pull-down flags and always give 1080p output.
 				     If 1080i content is processed, the decoder will return

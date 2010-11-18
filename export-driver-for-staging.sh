@@ -25,7 +25,6 @@ cp -a $me/driver/linux/*.h $dest/
 # copy userspace headers
 cp -a $me/include/bc_dts_defs.h $dest/
 cp -a $me/include/bc_dts_glob_lnx.h $dest/
-cp -a $me/include/bc_dts_types.h $dest/
 
 # copy register defines for bcm70012 bcm70015
 cp -a $me/include/link/bcm_70012_regs.h $dest/
