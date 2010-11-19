@@ -126,7 +126,7 @@ union FLEA_INTR_BITS_COMMON
 		uint32_t	Reserved3:4;		/* Bit-20-23 */
 		uint32_t	PcieTgtUrAttn:1;	/* Bit-24 */
 		uint32_t	PcieTgtCaAttn:1;	/* Bit-25 */
-		uint32_t 	HaltIntr:1;			/* Bit-26 */
+		uint32_t	HaltIntr:1;			/* Bit-26 */
 		uint32_t	Reserved4:5;			/* Bit-27-31 */
 	};
 
@@ -186,4 +186,3 @@ enum FLEA_STATE_CH_EVENT {
 {_value_ |=  (0x01 << _bit_number_);}
 
 #endif
-

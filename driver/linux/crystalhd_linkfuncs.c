@@ -646,8 +646,8 @@ bool link_GetPictureInfo(struct crystalhd_hw *hw, uint32_t picHeight, uint32_t p
 	if (!dio || !picWidth)
 		goto getpictureinfo_err_nosem;
 
-/* 	if(down_interruptible(&hw->fetch_sem)) */
-/* 		goto getpictureinfo_err_nosem; */
+/*	if(down_interruptible(&hw->fetch_sem)) */
+/*		goto getpictureinfo_err_nosem; */
 
 	dio->pib_va = kmalloc(2 * sizeof(BC_PIC_INFO_BLOCK) + 16, GFP_KERNEL); /* since copy_from_user can sleep anyway */
 	if(dio->pib_va == NULL)
@@ -667,7 +667,7 @@ bool link_GetPictureInfo(struct crystalhd_hw *hw, uint32_t picHeight, uint32_t p
 	 */
 	/* Limit = Base + pRxDMAReq->RxYDMADesc.RxBuffSz; */
 	/* Limit = Base + (pRxDMAReq->RxYDoneSzInDword * 4); */
-/* 	Limit = dio->uinfo.xfr_buff + dio->uinfo.xfr_len; */
+/*	Limit = dio->uinfo.xfr_buff + dio->uinfo.xfr_len; */
 
 	PicInfoLineNum = link_GetPicInfoLineNum(dio, dio->pib_va);
 	if (PicInfoLineNum > 1092) {
@@ -707,12 +707,12 @@ bool link_GetPictureInfo(struct crystalhd_hw *hw, uint32_t picHeight, uint32_t p
 		goto getpictureinfo_err;
 	pPicInfoLine = (PBC_PIC_INFO_BLOCK)(dio->pib_va);
 
-/* 	if (((uint8_t *)pPicInfoLine < Base) || */
-/* 	    ((uint8_t *)pPicInfoLine > Limit)) { */
-/* 		dev_err(dev, "Base Limit Check Failed for Extracting " */
-/* 			"the PIB\n"); */
-/* 		goto getpictureinfo_err; */
-/* 	} */
+/*	if (((uint8_t *)pPicInfoLine < Base) || */
+/*	    ((uint8_t *)pPicInfoLine > Limit)) { */
+/*		dev_err(dev, "Base Limit Check Failed for Extracting " */
+/*			"the PIB\n"); */
+/*		goto getpictureinfo_err; */
+/*	} */
 
 	/*
 	 * -- Ajitabh[01-16-2009]:
@@ -756,12 +756,12 @@ bool link_GetPictureInfo(struct crystalhd_hw *hw, uint32_t picHeight, uint32_t p
 	if(dio->pib_va)
 		kfree(dio->pib_va);
 
-/* 	up(&hw->fetch_sem); */
+/*	up(&hw->fetch_sem); */
 
 	return true;
 
 getpictureinfo_err:
-/* 	up(&hw->fetch_sem); */
+/*	up(&hw->fetch_sem); */
 
 getpictureinfo_err_nosem:
 	if(dio->pib_va)
@@ -1465,10 +1465,10 @@ void crystalhd_link_hw_finalize_pause(struct crystalhd_hw *hw)
 	}
 	hw->rx_list_post_index = 0;
 
-/* 	aspm = crystalhd_reg_rd(hw->adp, PCIE_DLL_DATA_LINK_CONTROL); */
-/* 	aspm |= ASPM_L1_ENABLE; */
-/* 	dev_info(&hw->adp->pdev->dev, "aspm on\n"); */
-/* 	crystalhd_reg_wr(hw->adp, PCIE_DLL_DATA_LINK_CONTROL, aspm); */
+/*	aspm = crystalhd_reg_rd(hw->adp, PCIE_DLL_DATA_LINK_CONTROL); */
+/*	aspm |= ASPM_L1_ENABLE; */
+/*	dev_info(&hw->adp->pdev->dev, "aspm on\n"); */
+/*	crystalhd_reg_wr(hw->adp, PCIE_DLL_DATA_LINK_CONTROL, aspm); */
 }
 
 bool crystalhd_link_rx_list0_handler(struct crystalhd_hw *hw,

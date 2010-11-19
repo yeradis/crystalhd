@@ -154,7 +154,7 @@ struct dma_desc_mem {
 };
 
 enum list_sts {
-	sts_free 		= 0,
+	sts_free		= 0,
 
 	/* RX-Y Bits 0:7 */
 	rx_waiting_y_intr	= 0x00000001,

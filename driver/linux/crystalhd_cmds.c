@@ -704,8 +704,8 @@ static BC_STATUS bc_cproc_flush_cap_buffs(struct crystalhd_cmd *ctx,
 		return BC_STS_ERR_USAGE;
 
 	/* We should ack flush even when we are in paused/suspend state */
-/* 	if (!(ctx->state & BC_LINK_READY)) */
-/* 		return crystalhd_hw_stop_capture(&ctx->hw_ctx); */
+/*	if (!(ctx->state & BC_LINK_READY)) */
+/*		return crystalhd_hw_stop_capture(&ctx->hw_ctx); */
 
 	dev_dbg(dev, "number of rx success %u and failure %u\n", ctx->hw_ctx->stats.rx_success, ctx->hw_ctx->stats.rx_errors);
 	if(idata->udata.u.FlushRxCap.bDiscardOnly) {
@@ -797,7 +797,7 @@ static BC_STATUS bc_cproc_get_stats(struct crystalhd_cmd *ctx,
 		stats->DrvNextMDataPLD = 0;
 		if (pic_width <= 1920) {
 			/* get fetch lock to make sure that fetch is not in progress as wel peek */
- 			if(down_interruptible(&ctx->hw_ctx->fetch_sem))
+			if(down_interruptible(&ctx->hw_ctx->fetch_sem))
 				goto get_out;
 			if(ctx->hw_ctx->pfnPeekNextDeodedFr(ctx->hw_ctx,&stats->DrvNextMDataPLD, &stats->picNumFlags, pic_width)) {
 				/* Check in case we dropped a picture here */
@@ -997,7 +997,7 @@ BC_STATUS crystalhd_resume(struct crystalhd_cmd *ctx)
 
 	bc_cproc_mark_pwr_state(ctx, 2); /* Starting resume */
 
-/* 	ctx->state &= ~BC_LINK_SUSPEND; */
+/*	ctx->state &= ~BC_LINK_SUSPEND; */
 
 	return BC_STS_SUCCESS;
 }

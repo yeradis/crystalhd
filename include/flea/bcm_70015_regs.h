@@ -1374,4 +1374,3 @@
 #define BCHP_PRI_CLIENT_REGS_CLIENT_00_CONTROL   0x0040c004 /* Arbiter Client DEBLOCK Configuration Register */
 
 #endif /* #ifndef BCHP_PRI_CLIENT_REGS_H__ */
-

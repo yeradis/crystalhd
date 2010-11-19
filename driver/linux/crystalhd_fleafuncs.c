@@ -963,9 +963,9 @@ void crystalhd_flea_set_next_power_state(struct crystalhd_hw *hw,
 		return;
 	}
 
-/* 	printk("Trying Power State Transition from %x Because Of Event:%d \n", */
-/* 			hw->FleaPowerState, */
-/* 			PowerEvt); */
+/*	printk("Trying Power State Transition from %x Because Of Event:%d \n", */
+/*			hw->FleaPowerState, */
+/*			PowerEvt); */
 
 	if(PowerEvt == FLEA_EVT_STOP_DEVICE)
 	{
@@ -2759,8 +2759,8 @@ bool flea_GetPictureInfo(struct crystalhd_hw *hw, struct crystalhd_rx_dma_pkt * 
 	if (!dio)
 		goto getpictureinfo_err_nosem;
 
-/* 	if(down_interruptible(&hw->fetch_sem)) */
-/* 		goto getpictureinfo_err_nosem; */
+/*	if(down_interruptible(&hw->fetch_sem)) */
+/*		goto getpictureinfo_err_nosem; */
 
 	tmpPicInfo = kmalloc(2 * sizeof(BC_PIC_INFO_BLOCK) + 16, GFP_KERNEL); /* since copy_from_user can sleep anyway */
 	if(tmpPicInfo == NULL)
@@ -2855,7 +2855,7 @@ bool flea_GetPictureInfo(struct crystalhd_hw *hw, struct crystalhd_rx_dma_pkt * 
 		rx_pkt->pib.aspect_ratio			= pPicInfoLine->aspect_ratio;
 		rx_pkt->pib.colour_primaries		= pPicInfoLine->colour_primaries;
 		rx_pkt->pib.picture_meta_payload	= pPicInfoLine->picture_meta_payload;
-		rx_pkt->pib.frame_rate 				= pPicInfoLine->frame_rate;
+		rx_pkt->pib.frame_rate				= pPicInfoLine->frame_rate;
 		rx_pkt->pib.custom_aspect_ratio_width_height = pPicInfoLine->custom_aspect_ratio_width_height;
 		rx_pkt->pib.n_drop				= pPicInfoLine->n_drop;
 		rx_pkt->pib.ycom				= pPicInfoLine->ycom;
@@ -2905,12 +2905,12 @@ bool flea_GetPictureInfo(struct crystalhd_hw *hw, struct crystalhd_rx_dma_pkt * 
 	if(tmpPicInfo)
 		kfree(tmpPicInfo);
 
-/* 	up(&hw->fetch_sem); */
+/*	up(&hw->fetch_sem); */
 
 	return rtVal;
 
 getpictureinfo_err:
-/* 	up(&hw->fetch_sem); */
+/*	up(&hw->fetch_sem); */
 
 getpictureinfo_err_nosem:
 	if(dio->pib_va)

@@ -92,4 +92,3 @@ struct crystalhd_adp *chd_get_adp(void);
 struct device *chddev(void);
 
 #endif
-
