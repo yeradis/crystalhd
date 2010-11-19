@@ -30,6 +30,13 @@ struct device *chddev(void)
 	return &g_adp_info->pdev->dev;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 35)
+loff_t noop_llseek(struct file *file, loff_t offset, int origin)
+{
+	return file->f_pos;
+}
+#endif
+
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 18)
 static irqreturn_t chd_dec_isr(int irq, void *arg)
 #else
