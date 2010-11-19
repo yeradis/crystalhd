@@ -633,7 +633,8 @@ static int __devinit chd_dec_pci_probe(struct pci_dev *pdev,
 	pinfo = kzalloc(sizeof(struct crystalhd_adp), GFP_KERNEL);
 	if (!pinfo) {
 		dev_err(dev, "%s: Failed to allocate memory\n", __func__);
-		return -ENOMEM;
+		rc = -ENOMEM;
+		goto out;
 	}
 
 	pinfo->pdev = pdev;
@@ -641,7 +642,7 @@ static int __devinit chd_dec_pci_probe(struct pci_dev *pdev,
 	rc = pci_enable_device(pdev);
 	if (rc) {
 		dev_err(dev, "%s: Failed to enable PCI device\n", __func__);
-		return rc;
+		goto free_priv;
 	}
 
 	snprintf(pinfo->name, 31, "crystalhd_pci_e:%d:%d:%d",
@@ -652,8 +653,7 @@ static int __devinit chd_dec_pci_probe(struct pci_dev *pdev,
 	if (rc) {
 		dev_err(dev, "%s: Failed to set up memory regions.\n",
 			__func__);
-		pci_disable_device(pdev);
-		return -ENOMEM;
+		goto disable_device;
 	}
 
 	pinfo->present	= 1;
@@ -663,12 +663,14 @@ static int __devinit chd_dec_pci_probe(struct pci_dev *pdev,
 	spin_lock_init(&pinfo->lock);
 
 	/* setup api stuff.. */
-	chd_dec_init_chdev(pinfo);
+	rc = chd_dec_init_chdev(pinfo);
+	if (rc)
+		goto release_mem;
+
 	rc = chd_dec_enable_int(pinfo);
 	if (rc) {
 		dev_err(dev, "%s: _enable_int err:%d\n", __func__, rc);
-		pci_disable_device(pdev);
-		return -ENODEV;
+		goto cleanup_chdev;
 	}
 
 	/* Set dma mask... */
@@ -680,15 +682,15 @@ static int __devinit chd_dec_pci_probe(struct pci_dev *pdev,
 		pinfo->dmabits = 32;
 	} else {
 		dev_err(dev, "%s: Unabled to setup DMA %d\n", __func__, rc);
-		pci_disable_device(pdev);
-		return -ENODEV;
+		rc = -ENODEV;
+		goto cleanup_int;
 	}
 
 	sts = crystalhd_setup_cmd_context(&pinfo->cmds, pinfo);
 	if (sts != BC_STS_SUCCESS) {
 		dev_err(dev, "%s: cmd setup :%d\n", __func__, sts);
-		pci_disable_device(pdev);
-		return -ENODEV;
+		rc = -ENODEV;
+		goto cleanup_int;
 	}
 
 	pci_set_master(pdev);
@@ -697,7 +699,19 @@ static int __devinit chd_dec_pci_probe(struct pci_dev *pdev,
 
 	g_adp_info = pinfo;
 
-	return 0;
+out:
+	return rc;
+cleanup_int:
+	chd_dec_disable_int(pinfo);
+cleanup_chdev:
+	chd_dec_release_chdev(pinfo);
+release_mem:
+	chd_pci_release_mem(pinfo);
+disable_device:
+	pci_disable_device(pdev);
+free_priv:
+	kfree(pdev);
+	goto out;
 }
 
 int chd_dec_pci_suspend(struct pci_dev *pdev, pm_message_t state)
