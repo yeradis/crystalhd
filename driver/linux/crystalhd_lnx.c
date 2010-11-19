@@ -715,6 +715,7 @@ int chd_dec_pci_suspend(struct pci_dev *pdev, pm_message_t state)
 	sts = crystalhd_suspend(&adp->cmds, temp);
 	if (sts != BC_STS_SUCCESS) {
 		dev_err(dev, "Crystal HD Suspend %d\n", sts);
+		chd_dec_free_iodata(adp, temp, false);
 		return -ENODEV;
 	}
 
