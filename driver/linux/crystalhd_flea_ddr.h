@@ -29,7 +29,7 @@
 
 #define MEM_SYS_NUM_DDR_PLLS 2;
 
-//extern uint32_t rts_prog_vals[][5];
+/*extern uint32_t rts_prog_vals[][5]; */
 
 enum eDDR2_SPEED_GRADE {
   DDR2_400MHZ = 0x0,
@@ -56,10 +56,10 @@ enum eSD_ROW_SIZE {
   ROW_SIZE_16K = 0x1,
 };
 
-//DDR PHY PLL init routine
+/*DDR PHY PLL init routine */
 void crystalhd_flea_ddr_pll_config(struct crystalhd_hw* hw, int32_t *speed_grade, int32_t num_plls, uint32_t tmode);
 
-//DDR controller init routine
+/*DDR controller init routine */
 void crystalhd_flea_ddr_ctrl_init(struct crystalhd_hw *hw,
 						int32_t port,
                         int32_t ddr3,
@@ -69,5 +69,5 @@ void crystalhd_flea_ddr_ctrl_init(struct crystalhd_hw *hw,
                         int32_t row,
                         uint32_t tmode );
 
-////RTS Init routines
+/*RTS Init routines */
 void crystalhd_flea_ddr_arb_rts_init(struct crystalhd_hw *hw);

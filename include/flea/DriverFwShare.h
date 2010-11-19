@@ -4,8 +4,10 @@
 #ifndef USE_MULTI_DECODE_DEFINES
 #define HOST_TO_FW_PIC_DEL_INFO_ADDR		0x400	/*Original single Decode Offset*/
 #else
-//#define HOST_TO_FW_PIC_DEL_INFO_ADDR		0x200	/*New offset that we plan to use eventually*/
-#define HOST_TO_FW_PIC_DEL_INFO_ADDR		0x400	//This is just for testing..remove this once tested
+#if 0
+#define HOST_TO_FW_PIC_DEL_INFO_ADDR		0x200	/*New offset that we plan to use eventually*/
+#endif
+#define HOST_TO_FW_PIC_DEL_INFO_ADDR		0x400	/*This is just for testing..remove this once tested */
 #endif
 
 
@@ -13,7 +15,7 @@
  * The TX address does not change between the
  * single decode and multiple decode.
  */
-#define TX_BUFF_UPDATE_ADDR					0x300	//This is relative to BORCH
+#define TX_BUFF_UPDATE_ADDR					0x300	/*This is relative to BORCH */
 
 typedef
 struct
@@ -44,8 +46,8 @@ _PIC_DELIVERY_HOST_INFO_
 
 typedef enum _DRIVER_FW_FLAGS_{
 	DFW_FLAGS_CLEAR			=0,
-	DFW_FLAGS_TX_ABORT		=BC_BIT(0),	//Firmware is stopped and will not give anymore buffers.
-	DFW_FLAGS_WRAP			=BC_BIT(1)	//Instruct the Firmware to WRAP the input buffer pointer
+	DFW_FLAGS_TX_ABORT		=BC_BIT(0),	/*Firmware is stopped and will not give anymore buffers. */
+	DFW_FLAGS_WRAP			=BC_BIT(1)	/*Instruct the Firmware to WRAP the input buffer pointer */
 }DRIVER_FW_FLAGS;
 
 typedef struct

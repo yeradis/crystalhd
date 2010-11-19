@@ -30,7 +30,7 @@
 #include "crystalhd_lnx.h"
 #include "crystalhd_misc.h"
 
-// Some HW specific code defines
+/* Some HW specific code defines */
 extern uint32_t link_GetRptDropParam(struct crystalhd_hw *hw, uint32_t picHeight, uint32_t picWidth, void *);
 extern uint32_t flea_GetRptDropParam(struct crystalhd_hw *hw, void *);
 
@@ -506,30 +506,30 @@ void *crystalhd_dioq_fetch_wait(struct crystalhd_hw *hw, uint32_t to_secs, uint3
 		else
 			spin_unlock_irqrestore(&ioq->lock, flags);
 		if (rc == 0) {
-			// Found a packet. Check if it is a repeated picture or not
-			// Drop the picture if it is a repeated picture
-			// Lock against checks from get status calls
+			/* Found a packet. Check if it is a repeated picture or not */
+			/* Drop the picture if it is a repeated picture */
+			/* Lock against checks from get status calls */
 			if(down_interruptible(&hw->fetch_sem))
 				goto sem_error;
 			r_pkt = crystalhd_dioq_fetch(ioq);
-			// If format change packet, then return with out checking anything
+			/* If format change packet, then return with out checking anything */
 			if (r_pkt->flags & (COMP_FLAG_PIB_VALID | COMP_FLAG_FMT_CHANGE))
 				goto sem_rel_return;
 			if (hw->adp->pdev->device == BC_PCI_DEVID_LINK) {
 				picYcomp = link_GetRptDropParam(hw, hw->PICHeight, hw->PICWidth, (void *)r_pkt);
 			}
 			else {
-				// For Flea, we don't have the width and height handy since they
-				// come in the PIB in the picture, so this function will also
-				// populate the width and height
+				/* For Flea, we don't have the width and height handy since they */
+				/* come in the PIB in the picture, so this function will also */
+				/* populate the width and height */
 				picYcomp = flea_GetRptDropParam(hw, (void *)r_pkt);
-				// For flea it is the above function that indicated format change
+				/* For flea it is the above function that indicated format change */
 				if(r_pkt->flags & (COMP_FLAG_PIB_VALID | COMP_FLAG_FMT_CHANGE))
 					goto sem_rel_return;
 			}
 			if(!picYcomp || (picYcomp == hw->LastPicNo) ||
 				(picYcomp == hw->LastTwoPicNo)) {
-				//Discard picture
+				/*Discard picture */
 				if(picYcomp != 0) {
 					hw->LastTwoPicNo = hw->LastPicNo;
 					hw->LastPicNo = picYcomp;

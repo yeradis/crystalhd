@@ -82,7 +82,7 @@ enum _BC_DTS_GLOBALS {
 };
 
 /* definitions for HW Pause */
-// NAREN FIXME temporarily disable HW PAUSE
+/* NAREN FIXME temporarily disable HW PAUSE */
 #define HW_PAUSE_THRESHOLD (BC_RX_LIST_CNT)
 #define HW_RESUME_THRESHOLD (BC_RX_LIST_CNT/2)
 
@@ -153,7 +153,7 @@ typedef struct _BC_DTS_STATS {
 	uint8_t			drvRLL;
 	uint8_t			drvFLL;
 	uint8_t			eosDetected;
-	uint8_t			pwr_state_change; // 0 is Default (running/stopped), 1 is going to suspend, 2 is going to resume
+	uint8_t			pwr_state_change; /* 0 is Default (running/stopped), 1 is going to suspend, 2 is going to resume */
 
 	/* Stats from App */
 	uint32_t		opFrameDropped;

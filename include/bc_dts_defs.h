@@ -88,7 +88,7 @@ typedef struct _BC_REG_CONFIG{
 	uint32_t		DbgOptions;
 } BC_REG_CONFIG;
 
-//#if defined(__KERNEL__) || defined(__LINUX_USER__)
+/*#if defined(__KERNEL__) || defined(__LINUX_USER__) */
 #if defined(_WIN32) || defined(_WIN64)
 /* Align data structures */
 #define ALIGN(x)	__declspec(align(x))
@@ -413,13 +413,13 @@ enum _POUT_OPTIONAL_IN_FLAGS_{
 	BC_POUT_FLAGS_FLD_BOT	  = 0x80000,	/* Bottom Field data */
 };
 
-//Decoder Capability
+/*Decoder Capability */
 enum DECODER_CAP_FLAGS
 {
 	BC_DEC_FLAGS_H264		= 0x01,
 	BC_DEC_FLAGS_MPEG2		= 0x02,
 	BC_DEC_FLAGS_VC1		= 0x04,
-	BC_DEC_FLAGS_M4P2		= 0x08,	//MPEG-4 Part 2: Divx, Xvid etc.
+	BC_DEC_FLAGS_M4P2		= 0x08,	/*MPEG-4 Part 2: Divx, Xvid etc. */
 };
 
 #if defined(__KERNEL__) || defined(__LINUX_USER__) || defined(__LINUX__)
@@ -540,8 +540,8 @@ typedef struct _BC_HW_CAPABILITY_ {
 	BC_COLOR_SPACES		ColorCaps;
 	void*			Reserved1;	/* Expansion Of API */
 
-	//Decoder Capability
-	uint32_t		DecCaps;	//DECODER_CAP_FLAGS
+	/*Decoder Capability */
+	uint32_t		DecCaps;	/*DECODER_CAP_FLAGS */
 } BC_HW_CAPS, *PBC_HW_CAPS;
 
 typedef struct _BC_SCALING_PARAMS_ {
@@ -626,8 +626,8 @@ typedef struct _BC_INFO_CRYSTAL_ {
 		uint32_t version;
 	} fwVersion;
 
-	uint32_t Reserved1; // For future expansion
-	uint32_t Reserved2; // For future expansion
+	uint32_t Reserved1; /* For future expansion */
+	uint32_t Reserved2; /* For future expansion */
 } BC_INFO_CRYSTAL, *PBC_INFO_CRYSTAL;
 
 #endif	/* _BC_DTS_DEFS_H_ */

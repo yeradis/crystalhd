@@ -264,7 +264,7 @@ static int chd_dec_api_cmd(struct crystalhd_adp *adp, unsigned long ua,
 	rc = chd_dec_proc_user_data(adp, temp, ua, 0);
 	if (!rc) {
 		if(func == NULL)
-			sts = BC_STS_IO_USER_ABORT; // Can only happen when we are in suspend state
+			sts = BC_STS_IO_USER_ABORT; /* Can only happen when we are in suspend state */
 		else
 			sts = func(&adp->cmds, temp);
 		if (sts == BC_STS_PENDING)
@@ -387,7 +387,7 @@ static int chd_dec_close(struct inode *in, struct file *fd)
 			((bc_get_userhandle_count(ctx) == 0) && (ctx->hw_ctx != NULL))) {
 			ctx->cin_wait_exit = 1;
 			ctx->pwr_state_change = 0;
-			// Stop the HW Capture just in case flush did not get called before stop
+			/* Stop the HW Capture just in case flush did not get called before stop */
 			crystalhd_hw_stop_capture(ctx->hw_ctx, true);
 			crystalhd_hw_free_dma_rings(ctx->hw_ctx);
 			crystalhd_destroy_dio_pool(ctx->adp);
@@ -456,11 +456,11 @@ static int __devinit chd_dec_init_chdev(struct crystalhd_adp *adp)
 		goto device_create_fail;
 	}
 
-//	rc = crystalhd_create_elem_pool(adp, BC_LINK_ELEM_POOL_SZ);
-//	if (rc) {
-//		dev_err(xdev, "failed to create device\n");
-//		goto elem_pool_fail;
-//	}
+/*	rc = crystalhd_create_elem_pool(adp, BC_LINK_ELEM_POOL_SZ); */
+/*	if (rc) { */
+/*		dev_err(xdev, "failed to create device\n"); */
+/*		goto elem_pool_fail; */
+/*	} */
 
 	/* Allocate general purpose ioctl pool. */
 	for (i = 0; i < CHD_IODATA_POOL_SZ; i++) {
@@ -477,8 +477,8 @@ static int __devinit chd_dec_init_chdev(struct crystalhd_adp *adp)
 	return 0;
 
 kzalloc_fail:
-	//crystalhd_delete_elem_pool(adp);
-//elem_pool_fail:
+	/*crystalhd_delete_elem_pool(adp); */
+/*elem_pool_fail: */
 	device_destroy(crystalhd_class, MKDEV(adp->chd_dec_major, 0));
 device_create_fail:
 	class_destroy(crystalhd_class);
@@ -508,7 +508,7 @@ static void __devexit chd_dec_release_chdev(struct crystalhd_adp *adp)
 		kfree(temp);
 	} while (temp);
 
-	//crystalhd_delete_elem_pool(adp);
+	/*crystalhd_delete_elem_pool(adp); */
 }
 
 static int __devinit chd_pci_reserve_mem(struct crystalhd_adp *pinfo)

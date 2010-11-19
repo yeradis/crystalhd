@@ -227,7 +227,9 @@ void crystalhd_link_enable_uarts(struct crystalhd_hw *hw)
 void crystalhd_link_start_dram(struct crystalhd_hw *hw)
 {
 	hw->pfnWriteDevRegister(hw->adp, SDRAM_PARAM, ((40 / 5 - 1) <<  0) |
-	/* tras (40ns tras)/(5ns period) -1 ((15/5 - 1) <<  4) | // trcd */
+#if 0
+	 tras (40ns tras)/(5ns period) -1 ((15/5 - 1) <<  4) | /* trcd */
+#endif
 		      ((15 / 5 - 1) <<  7) |	/* trp */
 		      ((10 / 5 - 1) << 10) |	/* trrd */
 		      ((15 / 5 + 1) << 12) |	/* twr */
@@ -506,7 +508,7 @@ bool crystalhd_link_start_device(struct crystalhd_hw *hw)
 	crystalhd_link_start_dram(hw);
 	crystalhd_link_enable_uarts(hw);
 
-	// Disable L1 ASPM while video is playing as this causes performance problems otherwise
+	/* Disable L1 ASPM while video is playing as this causes performance problems otherwise */
 	reg_pwrmgmt = hw->pfnReadFPGARegister(hw->adp, PCIE_DLL_DATA_LINK_CONTROL);
 	reg_pwrmgmt &= ~ASPM_L1_ENABLE;
 
@@ -644,10 +646,10 @@ bool link_GetPictureInfo(struct crystalhd_hw *hw, uint32_t picHeight, uint32_t p
 	if (!dio || !picWidth)
 		goto getpictureinfo_err_nosem;
 
-// 	if(down_interruptible(&hw->fetch_sem))
-// 		goto getpictureinfo_err_nosem;
+/* 	if(down_interruptible(&hw->fetch_sem)) */
+/* 		goto getpictureinfo_err_nosem; */
 
-	dio->pib_va = kmalloc(2 * sizeof(BC_PIC_INFO_BLOCK) + 16, GFP_KERNEL); // since copy_from_user can sleep anyway
+	dio->pib_va = kmalloc(2 * sizeof(BC_PIC_INFO_BLOCK) + 16, GFP_KERNEL); /* since copy_from_user can sleep anyway */
 	if(dio->pib_va == NULL)
 		goto getpictureinfo_err;
 
@@ -665,7 +667,7 @@ bool link_GetPictureInfo(struct crystalhd_hw *hw, uint32_t picHeight, uint32_t p
 	 */
 	/* Limit = Base + pRxDMAReq->RxYDMADesc.RxBuffSz; */
 	/* Limit = Base + (pRxDMAReq->RxYDoneSzInDword * 4); */
-// 	Limit = dio->uinfo.xfr_buff + dio->uinfo.xfr_len;
+/* 	Limit = dio->uinfo.xfr_buff + dio->uinfo.xfr_len; */
 
 	PicInfoLineNum = link_GetPicInfoLineNum(dio, dio->pib_va);
 	if (PicInfoLineNum > 1092) {
@@ -705,12 +707,12 @@ bool link_GetPictureInfo(struct crystalhd_hw *hw, uint32_t picHeight, uint32_t p
 		goto getpictureinfo_err;
 	pPicInfoLine = (PBC_PIC_INFO_BLOCK)(dio->pib_va);
 
-// 	if (((uint8_t *)pPicInfoLine < Base) ||
-// 	    ((uint8_t *)pPicInfoLine > Limit)) {
-// 		dev_err(dev, "Base Limit Check Failed for Extracting "
-// 			"the PIB\n");
-// 		goto getpictureinfo_err;
-// 	}
+/* 	if (((uint8_t *)pPicInfoLine < Base) || */
+/* 	    ((uint8_t *)pPicInfoLine > Limit)) { */
+/* 		dev_err(dev, "Base Limit Check Failed for Extracting " */
+/* 			"the PIB\n"); */
+/* 		goto getpictureinfo_err; */
+/* 	} */
 
 	/*
 	 * -- Ajitabh[01-16-2009]:
@@ -754,12 +756,12 @@ bool link_GetPictureInfo(struct crystalhd_hw *hw, uint32_t picHeight, uint32_t p
 	if(dio->pib_va)
 		kfree(dio->pib_va);
 
-// 	up(&hw->fetch_sem);
+/* 	up(&hw->fetch_sem); */
 
 	return true;
 
 getpictureinfo_err:
-// 	up(&hw->fetch_sem);
+/* 	up(&hw->fetch_sem); */
 
 getpictureinfo_err_nosem:
 	if(dio->pib_va)
@@ -807,18 +809,18 @@ bool crystalhd_link_peek_next_decoded_frame(struct crystalhd_hw *hw,
 		spin_unlock_irqrestore(&ioq->lock, flags);
 		rpkt = (struct crystalhd_rx_dma_pkt *)tmp->data;
 		if (rpkt) {
-			// We are in process context here and have to check if we have repeated pictures
-			// Drop repeated pictures or garbabge pictures here
-			// This is because if we advertize a valid picture here, but later drop it
-			// It will cause single threaded applications to hang, or errors in applications that expect
-			// pictures not to be dropped once we have advertized their availability
+			/* We are in process context here and have to check if we have repeated pictures */
+			/* Drop repeated pictures or garbabge pictures here */
+			/* This is because if we advertize a valid picture here, but later drop it */
+			/* It will cause single threaded applications to hang, or errors in applications that expect */
+			/* pictures not to be dropped once we have advertized their availability */
 
-			// If format change packet, then return with out checking anything
+			/* If format change packet, then return with out checking anything */
 			if (!(rpkt->flags & (COMP_FLAG_PIB_VALID | COMP_FLAG_FMT_CHANGE))) {
 				link_GetPictureInfo(hw, hw->PICHeight, hw->PICWidth, rpkt->dio_req,
 									&PicNumber, meta_payload);
 				if(!PicNumber || (PicNumber == hw->LastPicNo) || (PicNumber == hw->LastTwoPicNo)) {
-					// discard picture
+					/* discard picture */
 					if(PicNumber != 0) {
 						hw->LastTwoPicNo = hw->LastPicNo;
 						hw->LastPicNo = PicNumber;
@@ -831,10 +833,10 @@ bool crystalhd_link_peek_next_decoded_frame(struct crystalhd_hw *hw,
 					*meta_payload = 0;
 				}
 				return true;
-				// Do not update the picture numbers here since they will be updated on the actual fetch of a valid picture
+				/* Do not update the picture numbers here since they will be updated on the actual fetch of a valid picture */
 			}
 			else
-				return false; // don't use the meta_payload information
+				return false; /* don't use the meta_payload information */
 		}
 		else
 			return false;
@@ -1463,10 +1465,10 @@ void crystalhd_link_hw_finalize_pause(struct crystalhd_hw *hw)
 	}
 	hw->rx_list_post_index = 0;
 
-// 	aspm = crystalhd_reg_rd(hw->adp, PCIE_DLL_DATA_LINK_CONTROL);
-// 	aspm |= ASPM_L1_ENABLE;
-// 	dev_info(&hw->adp->pdev->dev, "aspm on\n");
-// 	crystalhd_reg_wr(hw->adp, PCIE_DLL_DATA_LINK_CONTROL, aspm);
+/* 	aspm = crystalhd_reg_rd(hw->adp, PCIE_DLL_DATA_LINK_CONTROL); */
+/* 	aspm |= ASPM_L1_ENABLE; */
+/* 	dev_info(&hw->adp->pdev->dev, "aspm on\n"); */
+/* 	crystalhd_reg_wr(hw->adp, PCIE_DLL_DATA_LINK_CONTROL, aspm); */
 }
 
 bool crystalhd_link_rx_list0_handler(struct crystalhd_hw *hw,
@@ -1889,7 +1891,7 @@ BC_STATUS crystalhd_link_download_fw(struct crystalhd_hw *hw,
 
 	dev_dbg(dev, "Firmware Downloaded Successfully\n");
 
-	// Load command response addresses
+	/* Load command response addresses */
 	hw->fwcmdPostAddr = TS_Host2CpuSnd;
 	hw->fwcmdPostMbox = Hst2CpuMbx1;
 	hw->fwcmdRespMbox = Cpu2HstMbx1;
@@ -1944,7 +1946,7 @@ BC_STATUS crystalhd_link_do_fw_cmd(struct crystalhd_hw *hw, BC_FW_CMD *fw_cmd)
 
 	msleep_interruptible(50);
 
-	// FW commands should complete even if we got a signal from the upper layer
+	/* FW commands should complete even if we got a signal from the upper layer */
 	crystalhd_wait_on_event(&fw_cmd_event, hw->fwcmd_evt_sts,
 				20000, rc, true);
 
@@ -2043,7 +2045,7 @@ bool crystalhd_link_hw_interrupt_handle(struct crystalhd_adp *adp, struct crysta
 	return rc;
 }
 
-// Dummy private function
+/* Dummy private function */
 void crystalhd_link_notify_fll_change(struct crystalhd_hw *hw, bool bCleanupContext)
 {
 	return;

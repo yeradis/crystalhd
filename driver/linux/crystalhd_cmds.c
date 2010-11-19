@@ -679,7 +679,7 @@ static BC_STATUS bc_cproc_start_capture(struct crystalhd_cmd *ctx,
 
 	ctx->hw_ctx->DrvTotalFrmCaptured = 0;
 
-	ctx->hw_ctx->DefaultPauseThreshold = ctx->hw_ctx->PauseThreshold; // used to restore on FMTCH
+	ctx->hw_ctx->DefaultPauseThreshold = ctx->hw_ctx->PauseThreshold; /* used to restore on FMTCH */
 
 	ctx->hw_ctx->pfnNotifyHardware(ctx->hw_ctx, BC_EVENT_START_CAPTURE);
 
@@ -704,12 +704,12 @@ static BC_STATUS bc_cproc_flush_cap_buffs(struct crystalhd_cmd *ctx,
 		return BC_STS_ERR_USAGE;
 
 	/* We should ack flush even when we are in paused/suspend state */
-// 	if (!(ctx->state & BC_LINK_READY))
-// 		return crystalhd_hw_stop_capture(&ctx->hw_ctx);
+/* 	if (!(ctx->state & BC_LINK_READY)) */
+/* 		return crystalhd_hw_stop_capture(&ctx->hw_ctx); */
 
 	dev_dbg(dev, "number of rx success %u and failure %u\n", ctx->hw_ctx->stats.rx_success, ctx->hw_ctx->stats.rx_errors);
 	if(idata->udata.u.FlushRxCap.bDiscardOnly) {
-		// just flush without unmapping and then resume
+		/* just flush without unmapping and then resume */
 		crystalhd_hw_stop_capture(ctx->hw_ctx, false);
 		while((rpkt = crystalhd_dioq_fetch(ctx->hw_ctx->rx_actq)) != NULL)
 			crystalhd_dioq_add(ctx->hw_ctx->rx_freeq, rpkt, false, rpkt->pkt_tag);
@@ -760,8 +760,8 @@ static BC_STATUS bc_cproc_get_stats(struct crystalhd_cmd *ctx,
 	if(stats->DrvNextMDataPLD & BC_BIT(31))
 	{
 		flags |= 0x08;
-		// Also for single threaded applications, check to see if we have reduced the power down
-		// pause threshold to too low and increase it if the RLL is close to the threshold
+		/* Also for single threaded applications, check to see if we have reduced the power down */
+		/* pause threshold to too low and increase it if the RLL is close to the threshold */
 /*		if(pDrvStat->drvRLL >= pDevExt->pHwExten->PauseThreshold)
 			pDevExt->pHwExten->PauseThreshold++;
 		PeekNextTS = TRUE;*/
@@ -777,11 +777,11 @@ static BC_STATUS bc_cproc_get_stats(struct crystalhd_cmd *ctx,
 	if (ctx->state & BC_LINK_PAUSED)
 		stats->DrvPauseTime = 1;
 
-	// use bit 29 of the input status to indicate that we are trying to read VC1 status
-	// This is important for the BCM70012 which uses a different input queue for VC1
+	/* use bit 29 of the input status to indicate that we are trying to read VC1 status */
+	/* This is important for the BCM70012 which uses a different input queue for VC1 */
 	if(stats->DrvcpbEmptySize & BC_BIT(29))
 		flags = 0x2;
-	// Bit 30 is used to indicate that we are reading only the TX stats and to not touch the Ready list
+	/* Bit 30 is used to indicate that we are reading only the TX stats and to not touch the Ready list */
 	if(stats->DrvcpbEmptySize & BC_BIT(30))
 		readTxOnly = true;
 
@@ -791,16 +791,16 @@ static BC_STATUS bc_cproc_get_stats(struct crystalhd_cmd *ctx,
 	spin_unlock_irqrestore(&ctx->hw_ctx->lock, irqflags);
 
 	/* status peek ahead to retreive the next decoded frame timestamp */
-//	if (!readTxOnly && stats->drvRLL && (stats->DrvNextMDataPLD & BC_BIT(31))) {
+/*	if (!readTxOnly && stats->drvRLL && (stats->DrvNextMDataPLD & BC_BIT(31))) { */
 	if (!readTxOnly && stats->drvRLL) {
 		pic_width = stats->DrvNextMDataPLD & 0xffff;
 		stats->DrvNextMDataPLD = 0;
 		if (pic_width <= 1920) {
-			// get fetch lock to make sure that fetch is not in progress as wel peek
+			/* get fetch lock to make sure that fetch is not in progress as wel peek */
  			if(down_interruptible(&ctx->hw_ctx->fetch_sem))
 				goto get_out;
 			if(ctx->hw_ctx->pfnPeekNextDeodedFr(ctx->hw_ctx,&stats->DrvNextMDataPLD, &stats->picNumFlags, pic_width)) {
-				// Check in case we dropped a picture here
+				/* Check in case we dropped a picture here */
 				crystalhd_hw_stats(ctx->hw_ctx, &hw_stats);
 				stats->drvRLL = hw_stats.rdyq_count;
 				stats->drvFLL = hw_stats.freeq_count;
@@ -866,7 +866,7 @@ BC_STATUS bc_cproc_release_user(struct crystalhd_cmd *ctx, crystalhd_ioctl_data 
 		((bc_get_userhandle_count(ctx) == 0) && (ctx->hw_ctx != NULL))) {
 		ctx->cin_wait_exit = 1;
 		ctx->pwr_state_change = 0;
-		// Stop the HW Capture just in case flush did not get called before stop
+		/* Stop the HW Capture just in case flush did not get called before stop */
 		crystalhd_hw_stop_capture(ctx->hw_ctx, true);
 		crystalhd_hw_free_dma_rings(ctx->hw_ctx);
 		crystalhd_destroy_dio_pool(ctx->adp);
@@ -951,7 +951,7 @@ BC_STATUS crystalhd_suspend(struct crystalhd_cmd *ctx, crystalhd_ioctl_data *ida
 
 	ctx->state |= BC_LINK_SUSPEND;
 
-	bc_cproc_mark_pwr_state(ctx, 1); // going to suspend
+	bc_cproc_mark_pwr_state(ctx, 1); /* going to suspend */
 
 	if (ctx->state & BC_LINK_CAP_EN) {
 		idata->udata.u.FlushRxCap.bDiscardOnly = true;
@@ -995,9 +995,9 @@ BC_STATUS crystalhd_resume(struct crystalhd_cmd *ctx)
 {
 	dev_info(chddev(), "crystalhd_resume Success %x\n", ctx->state);
 
-	bc_cproc_mark_pwr_state(ctx, 2); // Starting resume
+	bc_cproc_mark_pwr_state(ctx, 2); /* Starting resume */
 
-// 	ctx->state &= ~BC_LINK_SUSPEND;
+/* 	ctx->state &= ~BC_LINK_SUSPEND; */
 
 	return BC_STS_SUCCESS;
 }
@@ -1180,7 +1180,7 @@ bool crystalhd_cmd_interrupt(struct crystalhd_cmd *ctx)
 		return false;
 	}
 
-	// If HW has not been initialized then all interrupts are spurious
+	/* If HW has not been initialized then all interrupts are spurious */
 	if ((ctx->hw_ctx == NULL) || (ctx->hw_ctx->pfnFindAndClearIntr == NULL))
 		return false;
 

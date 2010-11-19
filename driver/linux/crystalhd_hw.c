@@ -51,19 +51,19 @@ BC_STATUS crystalhd_hw_open(struct crystalhd_hw *hw, struct crystalhd_adp *adp)
 	hw->DefaultPauseThreshold = BC_RX_LIST_CNT - 2;
 	hw->ResumeThreshold = 3;
 
-	// Setup HW specific functions appropriately
+	/* Setup HW specific functions appropriately */
 	if (adp->pdev->device == BC_PCI_DEVID_FLEA) {
 		dev_dbg(dev, "crystalhd_hw_open: setting up functions, device = Flea\n");
 		hw->pfnStartDevice = crystalhd_flea_start_device;
 		hw->pfnStopDevice = crystalhd_flea_stop_device;
 		hw->pfnFindAndClearIntr = crystalhd_flea_hw_interrupt_handle;
-		hw->pfnReadDevRegister = crystalhd_flea_reg_rd;					// Done
-		hw->pfnWriteDevRegister = crystalhd_flea_reg_wr;				// Done
-		hw->pfnReadFPGARegister = crystalhd_flea_reg_rd;				// Done
-		hw->pfnWriteFPGARegister = crystalhd_flea_reg_wr;				// Done
+		hw->pfnReadDevRegister = crystalhd_flea_reg_rd;					/* Done */
+		hw->pfnWriteDevRegister = crystalhd_flea_reg_wr;				/* Done */
+		hw->pfnReadFPGARegister = crystalhd_flea_reg_rd;				/* Done */
+		hw->pfnWriteFPGARegister = crystalhd_flea_reg_wr;				/* Done */
 		hw->pfnCheckInputFIFO = crystalhd_flea_check_input_full;
-		hw->pfnDevDRAMRead = crystalhd_flea_mem_rd;						// Done
-		hw->pfnDevDRAMWrite = crystalhd_flea_mem_wr;					// Done
+		hw->pfnDevDRAMRead = crystalhd_flea_mem_rd;						/* Done */
+		hw->pfnDevDRAMWrite = crystalhd_flea_mem_wr;					/* Done */
 		hw->pfnDoFirmwareCmd = crystalhd_flea_do_fw_cmd;
 		hw->pfnFWDwnld = crystalhd_flea_download_fw;
 		hw->pfnHWGetDoneSize = crystalhd_flea_get_dnsz;
@@ -105,7 +105,7 @@ BC_STATUS crystalhd_hw_open(struct crystalhd_hw *hw, struct crystalhd_adp *adp)
 	spin_lock_init(&hw->rx_lock);
 	sema_init(&hw->fetch_sem, 1);
 
-	// Seed for error checking and debugging. Random numbers */
+	/* Seed for error checking and debugging. Random numbers */
 	hw->tx_ioq_tag_seed = 0x70023070;
 	hw->rx_pkt_tag_seed = 0x70029070;
 
@@ -130,7 +130,7 @@ BC_STATUS crystalhd_hw_close(struct crystalhd_hw *hw, struct crystalhd_adp *adp)
 		return BC_STS_SUCCESS;
 
 	/* Stop and DDR sleep will happen in here */
-	// Only stop the HW if we are the last user
+	/* Only stop the HW if we are the last user */
 	if(adp->cfg_users == 1)
 		crystalhd_hw_suspend(hw);
 
@@ -456,7 +456,7 @@ BC_STATUS crystalhd_hw_fill_desc(struct crystalhd_dio_req *ioreq,
 		memset(&desc[ix], 0, sizeof(desc[ix]));
 		desc[ix].buff_addr_low  = addr_temp.low_part;
 		desc[ix].buff_addr_high = addr_temp.high_part;
-		desc[ix].dma_dir        = ioreq->uinfo.dir_tx; // RX dma_dir = 0, TX dma_dir = 1
+		desc[ix].dma_dir        = ioreq->uinfo.dir_tx; /* RX dma_dir = 0, TX dma_dir = 1 */
 
 		/* Chain DMA descriptor.  */
 		addr_temp.full_addr = desc_phy_addr + sizeof(struct dma_descriptor);
@@ -476,7 +476,7 @@ BC_STATUS crystalhd_hw_fill_desc(struct crystalhd_dio_req *ioreq,
 		desc[ix].xfer_size = (len / 4);
 
 		count += len;
-		// If TX fill in the destination DRAM address if needed
+		/* If TX fill in the destination DRAM address if needed */
 		if(ioreq->uinfo.dir_tx) {
 			desc[ix].sdram_buff_addr = curDRAMaddr;
 			curDRAMaddr = destDRAMaddr + count;
@@ -498,7 +498,7 @@ BC_STATUS crystalhd_hw_fill_desc(struct crystalhd_dio_req *ioreq,
 		desc[ix].xfer_size	= 1;
 		desc[ix].fill_bytes	= 4 - ioreq->fb_size;
 		count += ioreq->fb_size;
-		// If TX fill in the destination DRAM address if needed
+		/* If TX fill in the destination DRAM address if needed */
 		if(ioreq->uinfo.dir_tx) {
 			desc[ix].sdram_buff_addr = curDRAMaddr;
 			curDRAMaddr = destDRAMaddr + count;
@@ -635,8 +635,8 @@ BC_STATUS crystalhd_rx_pkt_done(struct crystalhd_hw *hw,
 
 		if( hw->adp->pdev->device == BC_PCI_DEVID_FLEA)
 		{
-			//printk("pre-PD state %x RLL %x Ptsh %x ratio %d currentPS %d\n",
-			//	hw->FleaPowerState, crystalhd_dioq_count(hw->rx_rdyq) , hw->PauseThreshold, hw->PDRatio, hw->FleaPowerState);
+			/*printk("pre-PD state %x RLL %x Ptsh %x ratio %d currentPS %d\n", */
+			/*	hw->FleaPowerState, crystalhd_dioq_count(hw->rx_rdyq) , hw->PauseThreshold, hw->PDRatio, hw->FleaPowerState); */
 			if(hw->FleaPowerState == FLEA_PS_ACTIVE)
 			{
 				if(crystalhd_dioq_count(hw->rx_rdyq) >= hw->PauseThreshold)
@@ -650,8 +650,8 @@ BC_STATUS crystalhd_rx_pkt_done(struct crystalhd_hw *hw,
 				/* For now assume that if we have captured 100 pictures then we should have enough data for the analysis to start */
 				if((hw->PDRatio < 50) && (hw->PauseThreshold > 6) && (hw->DrvTotalFrmCaptured > 100))
 				{
-					//printk("Current PDRatio:%u, PauseThreshold:%u, DrvTotalFrmCaptured:%u  decress PauseThreshold\n",
-					//	hw->PDRatio, hw->PauseThreshold, hw->DrvTotalFrmCaptured);
+					/*printk("Current PDRatio:%u, PauseThreshold:%u, DrvTotalFrmCaptured:%u  decress PauseThreshold\n", */
+					/*	hw->PDRatio, hw->PauseThreshold, hw->DrvTotalFrmCaptured); */
 					hw->PauseThreshold--;
 				}
 				else {
@@ -684,21 +684,23 @@ BC_STATUS crystalhd_rx_pkt_done(struct crystalhd_hw *hw,
 					else
 						hw->PDRatio = (TickSpentInPD_Hi_f * 100) / totalTick_Hi_f;
 
-					//printk("Current PDRatio:%u, PauseThreshold:%u, DrvTotalFrmCaptured:%u  don't decress PauseThreshold\n",
-					//	hw->PDRatio, hw->PauseThreshold, hw->DrvTotalFrmCaptured);
+					/*printk("Current PDRatio:%u, PauseThreshold:%u, DrvTotalFrmCaptured:%u  don't decress PauseThreshold\n", */
+					/*	hw->PDRatio, hw->PauseThreshold, hw->DrvTotalFrmCaptured); */
 
-					//hw->PDRatio = ((uint32_t)(hw->TickSpentInPD))/((uint32_t)(currTick - hw->TickCntDecodePU)/100);
+					/*hw->PDRatio = ((uint32_t)(hw->TickSpentInPD))/((uint32_t)(currTick - hw->TickCntDecodePU)/100); */
 				}
 			}
 		}
 		else if( hw->hw_pause_issued == false )
 		{
-// 			if(crystalhd_dioq_count(hw->rx_rdyq) > hw->PauseThreshold)//HW_PAUSE_THRESHOLD
-// 			{
-// 				dev_info(&hw->adp->pdev->dev, "HW PAUSE\n");
-// 				hw->pfnIssuePause(hw, true);
-// 				hw->hw_pause_issued = true;
-// 			}
+#if 0
+			if(crystalhd_dioq_count(hw->rx_rdyq) > hw->PauseThreshold)/*HW_PAUSE_THRESHOLD */
+			{
+				dev_info(&hw->adp->pdev->dev, "HW PAUSE\n");
+				hw->pfnIssuePause(hw, true);
+				hw->hw_pause_issued = true;
+			}
+#endif
 		}
 
 		return sts;
@@ -804,7 +806,7 @@ BC_STATUS crystalhd_hw_post_tx(struct crystalhd_hw *hw, struct crystalhd_dio_req
 	 * the initialization should happen before that.
 	 */
 
-	// Save the transfer length
+	/* Save the transfer length */
 	hw->TxFwInputBuffInfo.HostXferSzInBytes = ioreq->uinfo.xfr_len;
 
 	hw->pfnStartTxDMA(hw, list_posted, desc_addr);
@@ -900,8 +902,8 @@ BC_STATUS crystalhd_hw_get_cap_buffer(struct crystalhd_hw *hw,
 
 	if( hw->adp->pdev->device == BC_PCI_DEVID_FLEA)
 	{
-		//printk("pre-PU state %x RLL %x Rtsh %x, currentPS %d,\n",
-		//	hw->FleaPowerState, crystalhd_dioq_count(hw->rx_rdyq) , hw->ResumeThreshold, hw->FleaPowerState);
+		/*printk("pre-PU state %x RLL %x Rtsh %x, currentPS %d,\n", */
+		/*	hw->FleaPowerState, crystalhd_dioq_count(hw->rx_rdyq) , hw->ResumeThreshold, hw->FleaPowerState); */
 		if( (hw->FleaPowerState == FLEA_PS_LP_PENDING) ||
 			(hw->FleaPowerState == FLEA_PS_LP_COMPLETE))
 		{
@@ -912,12 +914,14 @@ BC_STATUS crystalhd_hw_get_cap_buffer(struct crystalhd_hw *hw,
 	}
 	else if( hw->hw_pause_issued)
 	{
-// 		if(crystalhd_dioq_count(hw->rx_rdyq) < hw->PauseThreshold ) //HW_RESUME_THRESHOLD
-// 		{
-// 			dev_info(&hw->adp->pdev->dev, "HW RESUME with rdy list %u \n",crystalhd_dioq_count(hw->rx_rdyq));
-// 			hw->pfnIssuePause(hw, false);
-// 			hw->hw_pause_issued = false;
-// 		}
+#if 0
+		if(crystalhd_dioq_count(hw->rx_rdyq) < hw->PauseThreshold ) /*HW_RESUME_THRESHOLD */
+		{
+			dev_info(&hw->adp->pdev->dev, "HW RESUME with rdy list %u \n",crystalhd_dioq_count(hw->rx_rdyq));
+			hw->pfnIssuePause(hw, false);
+			hw->hw_pause_issued = false;
+		}
+#endif
 	}
 
 	if (!rpkt) {
@@ -991,7 +995,7 @@ BC_STATUS crystalhd_hw_stop_capture(struct crystalhd_hw *hw, bool unmap)
 	if(!unmap)
 		return BC_STS_SUCCESS;
 
-	// Clear up Active, Ready and Free lists one by one and release resources
+	/* Clear up Active, Ready and Free lists one by one and release resources */
 	do {
 		temp = crystalhd_dioq_fetch(hw->rx_actq);
 		if (temp)

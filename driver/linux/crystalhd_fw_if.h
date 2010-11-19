@@ -236,7 +236,7 @@ struct C011_PIB {
 };
 
 struct C011_TS_CMD {
-	uint32_t	eCmd; // eC011_TS_CMD
+	uint32_t	eCmd; /* eC011_TS_CMD */
 	uint32_t	ulParams[63];
 };
 

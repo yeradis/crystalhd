@@ -39,7 +39,7 @@
 #include "bc_dts_glob_lnx.h"
 #include "crystalhd_hw.h"
 
-// forward declare
+/* forward declare */
 struct crystalhd_hw;
 
 /* Global element pool for all Queue management.
@@ -89,7 +89,7 @@ struct crystalhd_dio_req {
 	void							*fb_va;
 	uint32_t						fb_size;
 	dma_addr_t						fb_pa;
-	void							*pib_va; // pointer to temporary buffer to extract metadata
+	void							*pib_va; /* pointer to temporary buffer to extract metadata */
 	struct crystalhd_dio_req		*next;
 };
 

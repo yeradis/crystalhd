@@ -196,21 +196,21 @@ enum ERROR_STATUS {
 	FW_CMD_ERROR		=0x0040,
 	DROP_REPEATED		=0x0080,
 	DROP_FLEA_FMTCH		=0x0100,/*We do not want to deliver the flea dummy frame*/
-	DROP_DATA_ERROR		=0x0200,//We were not able to get the PIB correctly so drop the frame.
-	DROP_SIZE_ERROR		=0x0400,//We were not able to get the size properly from hardware.
+	DROP_DATA_ERROR		=0x0200,/*We were not able to get the PIB correctly so drop the frame. */
+	DROP_SIZE_ERROR		=0x0400,/*We were not able to get the size properly from hardware. */
 	FORCE_CANCEL		=0x8000
 };
 
 enum LIST_STATUS {
-	ListStsFree=0,				// Initial state and state the buffer is moved to Ready Buffer list.
-	RxListWaitingForYIntr=1,	// When the Y Descriptor is posted.
-	RxListWaitingForUVIntr=2,	// When the UV descriptor is posted.
+	ListStsFree=0,				/* Initial state and state the buffer is moved to Ready Buffer list. */
+	RxListWaitingForYIntr=1,	/* When the Y Descriptor is posted. */
+	RxListWaitingForUVIntr=2,	/* When the UV descriptor is posted. */
 	TxListWaitingForIntr =4,
 };
 
 struct RX_DMA_LIST {
 	enum LIST_STATUS		ListSts;
-	//LIST_ENTRY		ActiveList;
+	/*LIST_ENTRY		ActiveList; */
 	uint32_t			ActiveListLen;
 	uint32_t			ListLockInd;					/* To Be Filled up During Init */
 	uint32_t			ulDiscCount;					/* Discontinuity On this list */
@@ -267,11 +267,11 @@ enum DECO_STATE {
 	DECO_STOPPED_BY_APP				= 4				/* After STOP Video I do not want to Throttle Decoder.So Special State */
 };
 
-//
-// These events can be used to notify the hardware layer
-// to set up it adapter in proper state...or for anyother
-// purpose for that matter.
-// We will use this for intermediae events as defined below
+/* */
+/* These events can be used to notify the hardware layer */
+/* to set up it adapter in proper state...or for anyother */
+/* purpose for that matter. */
+/* We will use this for intermediae events as defined below */
 
 enum BRCM_EVENT {
 	BC_EVENT_ADAPTER_INIT_FAILED	=0,
@@ -287,11 +287,11 @@ enum BRCM_EVENT {
 	BC_DISCARD_RX_BUFFERS			=10		/* Move all the Ready buffers to free list. Stop RX DMA. Post Rx Side buffers. */
 };
 
-struct crystalhd_hw; // forward declaration for the types
+struct crystalhd_hw; /* forward declaration for the types */
 
-//typedef void*		(*HW_VERIFY_DEVICE)(struct crystalhd_adp*);
-//typedef bool		(*HW_INIT_DEVICE_RESOURCES)(struct crystalhd_adp*);
-//typedef bool		(*HW_CLEAN_DEVICE_RESOURCES)(struct crystalhd_adp*);
+/*typedef void*		(*HW_VERIFY_DEVICE)(struct crystalhd_adp*); */
+/*typedef bool		(*HW_INIT_DEVICE_RESOURCES)(struct crystalhd_adp*); */
+/*typedef bool		(*HW_CLEAN_DEVICE_RESOURCES)(struct crystalhd_adp*); */
 typedef bool		(*HW_START_DEVICE)(struct crystalhd_hw*);
 typedef bool		(*HW_STOP_DEVICE)(struct crystalhd_hw*);
 /* typedef bool	(*HW_XLAT_AND_FIRE_SGL)(struct crystalhd_adp*,PVOID,PSCATTER_GATHER_LIST,uint32_t); */
@@ -382,11 +382,11 @@ struct crystalhd_hw {
 	uint32_t	LastTwoPicNo;	/* For Repeated Frame Detection on Interlace clip*/
 	uint32_t	LastSessNum;	/* For Session Change Detection */
 
-	struct semaphore fetch_sem; // semaphore between fetch and probe of the next picture information, since both will be in process context
+	struct semaphore fetch_sem; /* semaphore between fetch and probe of the next picture information, since both will be in process context */
 
-	uint32_t	RxCaptureState; // 0 if capture is not enabled, 1 if capture is enabled, 2 if stop rxdma is pending
+	uint32_t	RxCaptureState; /* 0 if capture is not enabled, 1 if capture is enabled, 2 if stop rxdma is pending */
 
-	// BCM70015 mods
+	/* BCM70015 mods */
 	uint32_t	PicQSts;		/* This is the bitmap given by PiCQSts Interrupt*/
 	uint32_t	TxBuffInfoAddr;		/* Address of the TX Fifo in DRAM*/
 	uint32_t	FleaRxPicDelAddr;	/* Memory address where the pictures are fired*/
@@ -426,34 +426,37 @@ struct crystalhd_hw {
 	uint32_t			PDRatio; /* % of time spent in power down. Goal is to keep this close to 50 */
 	uint32_t			DefaultPauseThreshold; /* default threshold to set when we start power management */
 
-//	uint32_t			FreeListLen;
-//	uint32_t			ReadyListLen;
+/*	uint32_t			FreeListLen; */
+/*	uint32_t			ReadyListLen; */
 
-//
-//	Counters needed for monitoring purposes.
-//	These counters are per session and will be reset to zero in
-//  start capture.
-//
+/* */
+/*	Counters needed for monitoring purposes. */
+/*	These counters are per session and will be reset to zero in */
+/*  start capture. */
+/* */
 	uint32_t					DrvPauseCnt;					 /* Number of Times the driver has issued pause.*/
-	//uint32_t					DrvServiceIntrCnt;				 /* Number of interrutps the driver serviced. */
-	//uint32_t					DrvIgnIntrCnt;					 /* Number of Interrupts Driver Ignored.NOT OUR INTR. */
-	//uint32_t					DrvTotalFrmDropped;				 /* Number of frames dropped by the driver.*/
+#if 0
+	uint32_t					DrvServiceIntrCnt;				 /* Number of interrutps the driver serviced. */
+	uint32_t					DrvIgnIntrCnt;					 /* Number of Interrupts Driver Ignored.NOT OUR INTR. */
+	uint32_t					DrvTotalFrmDropped;				 /* Number of frames dropped by the driver.*/
+#endif
 	uint32_t					DrvTotalFrmCaptured;			 /* Numner of Good Frames Captured*/
-	//uint32_t					DrvTotalHWErrs;					 /* Total HW Errors.*/
-	//uint32_t					DrvTotalPIBFlushCnt;			 /* Number of Times the driver flushed PIB Queues.*/
-	//uint32_t					DrvMissedPIBCnt;				 /* Number of Frames for which the PIB was not found.*/
-	//uint64_t					TickCntOnPause;
-	//uint32_t					TotalTimeInPause;				/* In Milliseconds */
-	//uint32_t					RepeatedFramesCnt;
-//
+#if 0
+	uint32_t					DrvTotalHWErrs;					 /* Total HW Errors.*/
+	uint32_t					DrvTotalPIBFlushCnt;			 /* Number of Times the driver flushed PIB Queues.*/
+	uint32_t					DrvMissedPIBCnt;				 /* Number of Frames for which the PIB was not found.*/
+	uint64_t					TickCntOnPause; */
+	uint32_t					TotalTimeInPause;				/* In Milliseconds */
+	uint32_t					RepeatedFramesCnt; */
+#endif
 
-//	HW_VERIFY_DEVICE			pfnVerifyDevice;
-//	HW_INIT_DEVICE_RESOURCES		pfnInitDevResources;
-//	HW_CLEAN_DEVICE_RESOURCES		pfnCleanDevResources;
+/*	HW_VERIFY_DEVICE			pfnVerifyDevice; */
+/*	HW_INIT_DEVICE_RESOURCES		pfnInitDevResources; */
+/*	HW_CLEAN_DEVICE_RESOURCES		pfnCleanDevResources; */
 	HW_START_DEVICE				pfnStartDevice;
 	HW_STOP_DEVICE				pfnStopDevice;
-//	HW_XLAT_AND_FIRE_SGL			pfnTxXlatAndFireSGL;
-//	HW_RX_XLAT_SGL				pfnRxXlatSgl;
+/*	HW_XLAT_AND_FIRE_SGL			pfnTxXlatAndFireSGL; */
+/*	HW_RX_XLAT_SGL				pfnRxXlatSgl; */
 	HW_FIND_AND_CLEAR_INTR		pfnFindAndClearIntr;
 	HW_READ_DEVICE_REG			pfnReadDevRegister;
 	HW_WRITE_DEVICE_REG			pfnWriteDevRegister;
@@ -461,30 +464,30 @@ struct crystalhd_hw {
 	HW_WRITE_FPGA_REG			pfnWriteFPGARegister;
 	HW_READ_DEV_MEM				pfnDevDRAMRead;
 	HW_WRITE_DEV_MEM			pfnDevDRAMWrite;
-//	HW_INIT_DRAM				pfnInitDRAM;
-//	HW_DISABLE_INTR				pfnDisableIntr;
-//	HW_ENABLE_INTR				pfnEnableIntr;
+/*	HW_INIT_DRAM				pfnInitDRAM; */
+/*	HW_DISABLE_INTR				pfnDisableIntr; */
+/*	HW_ENABLE_INTR				pfnEnableIntr; */
 	HW_POST_RX_SIDE_BUFF			pfnPostRxSideBuff;
 	HW_CHECK_INPUT_FIFO			pfnCheckInputFIFO;
 	HW_START_TX_DMA				pfnStartTxDMA;
 	HW_STOP_TX_DMA				pfnStopTxDMA;
 	HW_GET_DONE_SIZE			pfnHWGetDoneSize;
-//	HW_EVENT_NOTIFICATION			pfnNotifyHardware;
-//	HW_ADD_DRP_TO_FREE_LIST			pfnAddRxDRPToFreeList;
-//	HW_FETCH_DONE_BUFFERS			pfnFetchReadyRxDRP;
-//	HW_ADD_ROLLBACK_RXBUF			pfnRollBackRxBuf;
+/*	HW_EVENT_NOTIFICATION			pfnNotifyHardware; */
+/*	HW_ADD_DRP_TO_FREE_LIST			pfnAddRxDRPToFreeList; */
+/*	HW_FETCH_DONE_BUFFERS			pfnFetchReadyRxDRP; */
+/*	HW_ADD_ROLLBACK_RXBUF			pfnRollBackRxBuf; */
 	HW_PEEK_NEXT_DECODED_RXBUF		pfnPeekNextDeodedFr;
 	HW_FW_PASSTHRU_CMD			pfnDoFirmwareCmd;
-//	HW_GET_FW_DONE_OS_CMD			pfnGetFWDoneCmdOsCntxt;
-//	HW_CANCEL_FW_CMDS			pfnCancelFWCmds;
-//	SEARCH_FOR_PIB				pfnSearchPIB;
-//	HW_DO_DRAM_PWR_MGMT			pfnDRAMPwrMgmt;
+/*	HW_GET_FW_DONE_OS_CMD			pfnGetFWDoneCmdOsCntxt; */
+/*	HW_CANCEL_FW_CMDS			pfnCancelFWCmds; */
+/*	SEARCH_FOR_PIB				pfnSearchPIB; */
+/*	HW_DO_DRAM_PWR_MGMT			pfnDRAMPwrMgmt; */
 	HW_FW_DOWNLOAD				pfnFWDwnld;
 	HW_ISSUE_DECO_PAUSE			pfnIssuePause;
 	HW_STOP_DMA_ENGINES			pfnStopRXDMAEngines;
-//	FIRE_RX_REQ_TO_HW			pfnFireRx;
-//	PIC_POST_PROC				pfnPostProcessPicture;
-//	FIRE_TX_CMD_TO_HW			pfnFireTx;
+/*	FIRE_RX_REQ_TO_HW			pfnFireRx; */
+/*	PIC_POST_PROC				pfnPostProcessPicture; */
+/*	FIRE_TX_CMD_TO_HW			pfnFireTx; */
 	NOTIFY_FLL_CHANGE			pfnNotifyFLLChange;
 	HW_EVENT_NOTIFICATION		pfnNotifyHardware;
 };
