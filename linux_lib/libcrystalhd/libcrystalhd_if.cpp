@@ -274,7 +274,7 @@ static __attribute__((aligned(4))) uint8_t ExtData[] =
 { 0x00, 0x00};
 
 
-static BC_STATUS DtsSetupHardware(HANDLE hDevice, BOOL IgnClkChk)
+BC_STATUS DtsSetupHardware(HANDLE hDevice, BOOL IgnClkChk)
 {
 	BC_STATUS sts = BC_STS_SUCCESS;
 	DTS_LIB_CONTEXT *Ctx;

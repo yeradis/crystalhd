@@ -56,11 +56,17 @@ typedef enum _BC_STATUS {
 	BC_STS_CERT_VERIFY_ERROR = 23,
 	BC_STS_DEC_EXIST_OPEN	= 24,
 	BC_STS_PENDING		= 25,
-	BC_STS_CLK_NOCHG	= 26,
+	BC_STS_PWR_MGMT		= 26,
 
 	/* Must be the last one.*/
 	BC_STS_ERROR		= -1
 } BC_STATUS;
+
+typedef enum _BC_HW_STATE {
+	BC_HW_RUNNING	= 0,
+	BC_HW_SUSPEND	= 1,
+	BC_HW_RESUME	= 2
+} BC_HW_STATE;
 
 /*------------------------------------------------------*
  *    Registry Key Definitions				*

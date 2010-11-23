@@ -1029,6 +1029,7 @@ BC_STATUS crystalhd_link_stop_tx_dma_engine(struct crystalhd_hw *hw)
 	dev_dbg(dev, "Stopping TX DMA Engine..\n");
 
 	if (!(dma_cntrl & DMA_START_BIT)) {
+		hw->tx_list_post_index = 0;
 		dev_dbg(dev, "Already Stopped\n");
 		return BC_STS_SUCCESS;
 	}

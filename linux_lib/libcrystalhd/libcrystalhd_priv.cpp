@@ -2475,6 +2475,8 @@ BC_STATUS txBufFree(pTXBUFFER txBuf)
 }
 
 // TX Thread
+// This thread has dual purpose. First is to send TX data. Second is to detect if we have restarted from any suspend/hibernate action
+// and to restore the HW state
 void * txThreadProc(void *ctx)
 {
 	DTS_LIB_CONTEXT* Ctx = (DTS_LIB_CONTEXT*)ctx;
@@ -2493,20 +2495,70 @@ void * txThreadProc(void *ctx)
 
 	while(!Ctx->txThreadExit)
 	{
+		// First check the status of the HW
+		// Get the real HW free size and also mark as we want TX information only
+		pStat.cpbEmptySize = (0x3 << 31);
+
+		sts = DtsGetDriverStatus(hDevice, &pStat);
+		if(sts != BC_STS_SUCCESS)
+		{
+			pStat.cpbEmptySize = 0;
+			DebugLog_Trace(LDIL_ERR,"txThreadProc: Got status %d from GetDriverStatus\n", sts);
+			usleep(2 * 1000);
+			continue;
+		}
+
+		if(pStat.PowerStateChange == BC_HW_SUSPEND)
+		{
+			// HW is in suspend mode
+			usleep(5 * 1000); // sleep 5 ms and then continue
+			continue;
+		}
+
+		if(pStat.PowerStateChange == BC_HW_RESUME)
+		{
+			DebugLog_Trace(LDIL_ERR,"Trying to resume from S3/S5\n");
+			// HW is up, but needs to be initialized
+			DtsSetCoreClock(hDevice, 180); // For LINK
+			sts = DtsSetupHardware(hDevice, true);
+			if(sts != BC_STS_SUCCESS)
+			{
+				// At this point we are dead. Can't do much'
+				DebugLog_Trace(LDIL_ERR,"Cannot Recover from S3/S5 RESUME SetupHardware failed %d\n", sts);
+				usleep(1000 * 1000);
+				continue; // Try again and pray for the best
+			}
+			Ctx->State = BC_DEC_STATE_CLOSE; // Because the HW was reset below us
+			sts = DtsOpenDecoder(hDevice, 0);
+			if(sts != BC_STS_SUCCESS)
+			{
+				// At this point we are dead. Can't do much'
+				DebugLog_Trace(LDIL_ERR,"Cannot Recover from S3/S5 RESUME OpenDecoder failed %d\n", sts);
+				usleep(1000 * 1000);
+				continue; // Try again and pray for the best
+			}
+			sts = DtsStartDecoder(hDevice);
+			if(sts != BC_STS_SUCCESS)
+			{
+				// At this point we are dead. Can't do much'
+				DebugLog_Trace(LDIL_ERR,"Cannot Recover from S3/S5 RESUME StartDecoder failed %d\n", sts);
+				usleep(1000 * 1000);
+				continue; // Try again and pray for the best
+			}
+			sts = DtsStartCapture(hDevice);
+			if(sts != BC_STS_SUCCESS)
+			{
+				// At this point we are dead. Can't do much'
+				DebugLog_Trace(LDIL_ERR,"Cannot Recover from S3/S5 RESUME StartCapture failed %d\n", sts);
+				usleep(1000 * 1000);
+				continue; // Try again and pray for the best
+			}
+			DebugLog_Trace(LDIL_ERR,"Resume from S3/S5 Done\n");
+		}
+
 		// Check if we have data to send.
 		if(Ctx->circBuf.busySize != 0)
 		{
-			// Get the real HW free size and also mark as we want TX information only
-			pStat.cpbEmptySize = (0x3 << 31);
-
-			sts = DtsGetDriverStatus(hDevice, &pStat);
-			if(sts != BC_STS_SUCCESS)
-			{
-				// Figure out what to do
-				// For now just try again
-				pStat.cpbEmptySize = 0;
-			}
-
 			if(pStat.cpbEmptySize == 0)
 			{
 				usleep(3000);
@@ -2529,11 +2581,12 @@ void * txThreadProc(void *ctx)
 			else
 			{
 				// signal error to the next procinput
+				DebugLog_Trace(LDIL_ERR,"txThreadProc: Got status %d from TxDmaText\n", sts);
 			}
 		} else
 			usleep(5 * 1000);
-
 	}
+
 	free(localBuffer);
 	localBuffer = NULL;
 	return FALSE;

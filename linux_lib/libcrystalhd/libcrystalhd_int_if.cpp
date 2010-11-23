@@ -280,7 +280,7 @@ DtsSetCoreClock(
 	}
 #endif
 	if(freq == 0)
-		return BC_STS_CLK_NOCHG;
+		return BC_STS_SUCCESS;
 
 	n = freq/5;
 
@@ -322,7 +322,7 @@ DtsSetCoreClock(
 		i++;
 	}
 
-	return BC_STS_CLK_NOCHG;
+	return BC_STS_ERROR;
 }
 
 DRVIFLIB_INT_API BC_STATUS

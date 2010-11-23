@@ -68,6 +68,8 @@ static GstFlowReturn bcmdec_send_buff_detect_error(GstBcmDec *bcmdec, GstBuffer 
 	guint32 rll=0;
 	guint32 nextPicNumFlags = 0;
 
+	GST_DEBUG_OBJECT(bcmdec, "Attempting to Send Buffer");
+
 	sts = decif_send_buffer(&bcmdec->decif, pbuffer, size, tCurrent, flags);
 
 	if (sts != BC_STS_SUCCESS) {
@@ -1427,7 +1429,7 @@ static void * bcmdec_process_output(void *ctx)
 
 		GST_DEBUG_OBJECT(bcmdec, "wait over streaming = %d", bcmdec->streaming);
 		while (bcmdec->streaming && !bcmdec->last_picture_set) {
-			GST_DEBUG_OBJECT(bcmdec, "Getting Status\n");
+			GST_DEBUG_OBJECT(bcmdec, "Getting Status");
 			// NAREN FIXME - This is HARDCODED right now till we get HW PAUSE and RESUME working from the driver
 			uint32_t rll;
 			gboolean tmp;
@@ -1444,6 +1446,7 @@ static void * bcmdec_process_output(void *ctx)
 			}
 
 			if(rll == 0) {
+				GST_DEBUG_OBJECT(bcmdec, "No Picture Found");
 				usleep(3 * 1000);
 				continue;
 			}
@@ -2561,13 +2564,13 @@ static void * bcmdec_process_get_rbuf(void *ctx)
 				if (!bcmdec->silent)
 					GST_DEBUG_OBJECT(bcmdec, "mbuf full == TRUE %u", bcmdec->gst_buf_que_sz);
 
-				usleep(1000 * 1000); // Sleep for a second since we have 350 buffers queued up
+				usleep(100 * 1000); // Sleep since we have buffers queued up
 				continue;
 			}
 
 			bufSz = bcmdec->output_params.width * bcmdec->output_params.height * BUF_MULT;
 
-			//GST_DEBUG_OBJECT(bcmdec, "process get rbuf gst_pad_alloc_buffer_and_set_caps ....");
+			GST_DEBUG_OBJECT(bcmdec, "process get rbuf gst_pad_alloc_buffer_and_set_caps ....");
 			ret = gst_pad_alloc_buffer_and_set_caps(bcmdec->srcpad, GST_BUFFER_OFFSET_NONE,
 								bufSz, GST_PAD_CAPS(bcmdec->srcpad), &gstbuf);
 			if (ret != GST_FLOW_OK) {

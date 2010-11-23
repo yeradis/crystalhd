@@ -46,6 +46,7 @@ enum _crystalhd_state{
 	BC_LINK_FMT_CHG		= 0x04,
 	BC_LINK_SUSPEND		= 0x10,
 	BC_LINK_PAUSED		= 0x20,
+	BC_LINK_RESUME		= 0x40,
 	BC_LINK_READY	= (BC_LINK_INIT | BC_LINK_CAP_EN | BC_LINK_FMT_CHG),
 };
 

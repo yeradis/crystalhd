@@ -271,7 +271,7 @@ static int chd_dec_api_cmd(struct crystalhd_adp *adp, unsigned long ua,
 	rc = chd_dec_proc_user_data(adp, temp, ua, 0);
 	if (!rc) {
 		if(func == NULL)
-			sts = BC_STS_IO_USER_ABORT; /* Can only happen when we are in suspend state */
+			sts = BC_STS_PWR_MGMT; /* Can only happen when we are in suspend state */
 		else
 			sts = func(&adp->cmds, temp);
 		if (sts == BC_STS_PENDING)
@@ -387,18 +387,23 @@ static int chd_dec_close(struct inode *in, struct file *fd)
 		ctx->user[uc->uid].mode = DTS_MODE_INV;
 		ctx->user[uc->uid].in_use = 0;
 
-		dev_dbg(chddev(), "Closing user[%x] handle with mode %x\n", uc->uid, mode);
+		dev_info(chddev(), "Closing user[%x] handle with mode %x\n", uc->uid, mode);
 
 		if (((mode & 0xFF) == DTS_DIAG_MODE) ||
 			((mode & 0xFF) == DTS_PLAYBACK_MODE) ||
 			((bc_get_userhandle_count(ctx) == 0) && (ctx->hw_ctx != NULL))) {
 			ctx->cin_wait_exit = 1;
-			ctx->pwr_state_change = 0;
+			ctx->pwr_state_change = BC_HW_RUNNING;
 			/* Stop the HW Capture just in case flush did not get called before stop */
-			crystalhd_hw_stop_capture(ctx->hw_ctx, true);
-			crystalhd_hw_free_dma_rings(ctx->hw_ctx);
-			crystalhd_destroy_dio_pool(ctx->adp);
-			crystalhd_delete_elem_pool(ctx->adp);
+			/* And only if we had actually started it */
+			if(ctx->hw_ctx->rx_freeq != NULL) {
+				crystalhd_hw_stop_capture(ctx->hw_ctx, true);
+				crystalhd_hw_free_dma_rings(ctx->hw_ctx);
+			}
+			if(ctx->adp->fill_byte_pool)
+				crystalhd_destroy_dio_pool(ctx->adp);
+			if(ctx->adp->elem_pool_head)
+				crystalhd_delete_elem_pool(ctx->adp);
 			ctx->state = BC_LINK_INVALID;
 			crystalhd_hw_close(ctx->hw_ctx, ctx->adp);
 			kfree(ctx->hw_ctx);

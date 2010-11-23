@@ -1131,6 +1131,7 @@ BC_STATUS crystalhd_flea_download_fw(struct crystalhd_hw *hw, uint8_t *pBuffer, 
 	/*uint32_t HBCnt=0; */
 
 	bool bRetVal = true;
+	bool bSecure = true; // Default production cards. Can be false only for internal Broadcom dev cards
 
 	dev_dbg(&hw->adp->pdev->dev, "[%s]: Sz:%d\n", __func__, buffSz);
 
@@ -1152,38 +1153,41 @@ BC_STATUS crystalhd_flea_download_fw(struct crystalhd_hw *hw, uint8_t *pBuffer, 
 /*   Can we set both the bits at the same time?? Security Arch Doc describes the steps */
 /*   and the first step is to enable scrubbing and then scrambling. */
 
-	dev_dbg(&hw->adp->pdev->dev,"[crystalhd_flea_download_fw]: step 1. Enable scrubbing\n");
-
-	/*Enable Scrubbing */
-	regVal = hw->pfnReadDevRegister(hw->adp, BCHP_SCRUB_CTRL_SCRUB_ENABLE);
-	regVal |= SCRUB_ENABLE_BIT;
-	hw->pfnWriteDevRegister(hw->adp, BCHP_SCRUB_CTRL_SCRUB_ENABLE, regVal);
-
-	/*Enable Scrambling */
-	regVal |= DRAM_SCRAM_ENABLE_BIT;
-	hw->pfnWriteDevRegister(hw->adp, BCHP_SCRUB_CTRL_SCRUB_ENABLE, regVal);
-
-
-/*-- Step 2. Poll for SCRAM_KEY_DONE_INT. */
-	dev_dbg(&hw->adp->pdev->dev,"[crystalhd_flea_download_fw]: step 2. Poll for SCRAM_KEY_DONE_INT\n");
-
-	pollCnt=0;
-	while(pollCnt < FLEA_MAX_POLL_CNT)
+	if(bSecure)
 	{
-		regVal = hw->pfnReadDevRegister(hw->adp, BCHP_WRAP_MISC_INTR2_PCI_STATUS);
+		dev_dbg(&hw->adp->pdev->dev,"[crystalhd_flea_download_fw]: step 1. Enable scrubbing\n");
 
-		if(regVal & SCRAM_KEY_DONE_INT_BIT)
-			break;
+		/* Enable Scrubbing */
+		regVal = hw->pfnReadDevRegister(hw->adp, BCHP_SCRUB_CTRL_SCRUB_ENABLE);
+		regVal |= SCRUB_ENABLE_BIT;
+		hw->pfnWriteDevRegister(hw->adp, BCHP_SCRUB_CTRL_SCRUB_ENABLE, regVal);
 
-		pollCnt++;
-		msleep_interruptible(1); /*1 Milli Sec delay*/
-	}
+		/* Enable Scrambling */
+		regVal |= DRAM_SCRAM_ENABLE_BIT;
+		hw->pfnWriteDevRegister(hw->adp, BCHP_SCRUB_CTRL_SCRUB_ENABLE, regVal);
 
-	/*-- Will Assert when we do not see SCRAM_KEY_DONE_INTTERRUPT */
-	if(!(regVal & SCRAM_KEY_DONE_INT_BIT))
-	{
-		dev_err(&hw->adp->pdev->dev,"[crystalhd_flea_download_fw]: step 2. Did not get scram key done interrupt.\n");
-		return BC_STS_ERROR;
+
+		//-- Step 2. Poll for SCRAM_KEY_DONE_INT.
+		dev_dbg(&hw->adp->pdev->dev,"[crystalhd_flea_download_fw]: step 2. Poll for SCRAM_KEY_DONE_INT\n");
+
+		pollCnt=0;
+		while(pollCnt < FLEA_MAX_POLL_CNT)
+		{
+			regVal = hw->pfnReadDevRegister(hw->adp, BCHP_WRAP_MISC_INTR2_PCI_STATUS);
+
+			if(regVal & SCRAM_KEY_DONE_INT_BIT)
+				break;
+
+			pollCnt++;
+			msleep_interruptible(1); /*1 Milli Sec delay*/
+		}
+
+		/* -- Will Assert when we do not see SCRAM_KEY_DONE_INTERRUPT */
+		if(!(regVal & SCRAM_KEY_DONE_INT_BIT))
+		{
+			dev_err(&hw->adp->pdev->dev,"[crystalhd_flea_download_fw]: step 2. Did not get scram key done interrupt.\n");
+			return BC_STS_ERROR;
+		}
 	}
 
 	/*Clear the interrupts by writing the register value back*/
@@ -1192,6 +1196,8 @@ BC_STATUS crystalhd_flea_download_fw(struct crystalhd_hw *hw, uint8_t *pBuffer, 
 
 /*-- Step 3. Write the BORCH and STARCH addresses. */
 	borchStachAddr = GetScrubEndAddr(buffSz);
+	if(!bSecure)
+		borchStachAddr = (buffSz - 1) & BCHP_SCRUB_CTRL_BORCH_END_ADDRESS_BORCH_END_ADDR_MASK;
 
 	hw->pfnWriteDevRegister(hw->adp, BCHP_SCRUB_CTRL_BORCH_END_ADDRESS, borchStachAddr);
 	hw->pfnWriteDevRegister(hw->adp, BCHP_SCRUB_CTRL_STARCH_END_ADDRESS, borchStachAddr);
@@ -1221,7 +1227,10 @@ BC_STATUS crystalhd_flea_download_fw(struct crystalhd_hw *hw, uint8_t *pBuffer, 
 	dev_dbg(&hw->adp->pdev->dev,"[crystalhd_flea_download_fw]: step 4. Write the firmware to DRAM. Sz:%d Bytes\n",
 			buffSz - FLEA_FW_SIG_LEN_IN_BYTES - LENGTH_FIELD_SIZE);
 
-	hw->pfnDevDRAMWrite(hw, FW_DOWNLOAD_START_ADDR, (buffSz - FLEA_FW_SIG_LEN_IN_BYTES - LENGTH_FIELD_SIZE)/4, (uint32_t *)pBuffer);
+	if(bSecure)
+		hw->pfnDevDRAMWrite(hw, FW_DOWNLOAD_START_ADDR, (buffSz - FLEA_FW_SIG_LEN_IN_BYTES - LENGTH_FIELD_SIZE)/4, (uint32_t *)pBuffer);
+	else
+		hw->pfnDevDRAMWrite(hw, FW_DOWNLOAD_START_ADDR, buffSz/4, (uint32_t*)pBuffer);
 
 /* -- Step 5. Write the signature to CMAC register. */
 /*
@@ -1236,17 +1245,21 @@ BCHP_SCRUB_CTRL_BI_CMAC_95_64		0x000f6014			CMAC Bits[95:64]
 BCHP_SCRUB_CTRL_BI_CMAC_127_96		0x000f6018			CMAC Bits[127:96]
 ==================================================================================
 */
-	dev_dbg(&hw->adp->pdev->dev,"[crystalhd_flea_download_fw]: step 5. Write the signature to CMAC register.\n");
-	cmacOffset = buffSz - FLEA_FW_SIG_LEN_IN_BYTES;
-	pCmacSig = (uint32_t *) &pBuffer[cmacOffset];
 
-	for(i=0;i < FLEA_FW_SIG_LEN_IN_DWORD;i++)
+	if(bSecure)
 	{
-		uint32_t offSet = (BCHP_SCRUB_CTRL_BI_CMAC_127_96 - (i * 4));
+		dev_dbg(&hw->adp->pdev->dev,"[crystalhd_flea_download_fw]: step 5. Write the signature to CMAC register.\n");
+		cmacOffset = buffSz - FLEA_FW_SIG_LEN_IN_BYTES;
+		pCmacSig = (uint32_t *) &pBuffer[cmacOffset];
 
-		hw->pfnWriteDevRegister(hw->adp, offSet, cpu_to_be32(*pCmacSig));
+		for(i=0;i < FLEA_FW_SIG_LEN_IN_DWORD;i++)
+		{
+			uint32_t offSet = (BCHP_SCRUB_CTRL_BI_CMAC_127_96 - (i * 4));
 
-		pCmacSig++;
+			hw->pfnWriteDevRegister(hw->adp, offSet, cpu_to_be32(*pCmacSig));
+
+			pCmacSig++;
+		}
 	}
 
 /*-- Step 6. Write the ARM run bit to 1. */
@@ -1257,91 +1270,71 @@ BCHP_SCRUB_CTRL_BI_CMAC_127_96		0x000f6018			CMAC Bits[127:96]
 	regVal |= ARM_RUN_REQ_BIT;
 	hw->pfnWriteDevRegister(hw->adp, BCHP_ARMCR4_BRIDGE_REG_BRIDGE_CTL, regVal);
 
-/*-- Step 7. Poll for Boot Verification done/failure interrupt. */
-	dev_dbg(&hw->adp->pdev->dev,"[crystalhd_flea_download_fw]: step 7. Poll for Boot Verification done/failure interrupt.\n");
-
-	pollCnt=0;
-	while(1)
+	if(bSecure)
 	{
-		regVal = hw->pfnReadDevRegister(hw->adp, BCHP_WRAP_MISC_INTR2_PCI_STATUS);
+		/* -- Step 7. Poll for Boot Verification done/failure interrupt.*/
+		dev_dbg(&hw->adp->pdev->dev,"[crystalhd_flea_download_fw]: step 7. Poll for Boot Verification done/failure interrupt.\n");
 
-		if(regVal & BOOT_VER_FAIL_BIT ) /*|| regVal & SHARF_ERR_INTR) */
 		{
-			dev_err(&hw->adp->pdev->dev,"[crystalhd_flea_download_fw]: step 7. Error bit occured. RetVal:%x\n", regVal);
+			regVal = hw->pfnReadDevRegister(hw->adp, BCHP_WRAP_MISC_INTR2_PCI_STATUS);
 
-			bRetVal = false;
-			break;
+			if(regVal & BOOT_VER_FAIL_BIT )
+			{
+				dev_err(&hw->adp->pdev->dev,"[crystalhd_flea_download_fw]: step 7. Error bit occured. RetVal:%x\n", regVal);
+
+				bRetVal = false;
+				break;
+			}
+
+			if(regVal & BOOT_VER_DONE_BIT)
+			{
+				dev_dbg(&hw->adp->pdev->dev,"[crystalhd_flea_download_fw]: step 7. Done  RetVal:%x\n", regVal);
+
+				bRetVal = true; /*This is the only place we return TRUE from*/
+				break;
+			}
+
+			pollCnt++;
+			if( pollCnt >= FLEA_MAX_POLL_CNT )
+			{
+				dev_err(&hw->adp->pdev->dev,"[crystalhd_flea_download_fw]: step 7. Both done and failure bits are not set.\n");
+				bRetVal = false;
+				break;
+			}
+
+			msleep_interruptible(5); /*5 Milli Sec delay*/
 		}
 
-		if(regVal & BOOT_VER_DONE_BIT)
+		if( !bRetVal )
 		{
-			dev_dbg(&hw->adp->pdev->dev,"[crystalhd_flea_download_fw]: step 7. Done  RetVal:%x\n", regVal);
-
-			bRetVal = true; /*This is the only place we return TRUE from*/
-			break;
+			dev_info(&hw->adp->pdev->dev,"[crystalhd_flea_download_fw]: step 7. Firmware image signature failure.\n");
+			return BC_STS_ERROR;
 		}
 
-		pollCnt++;
-		if( pollCnt >= FLEA_MAX_POLL_CNT )
-		{
-			dev_err(&hw->adp->pdev->dev,"[crystalhd_flea_download_fw]: step 7. Both done and failure bits are not set.\n");
-			bRetVal = false;
-			break;
-		}
+		/*Clear the interrupts by writing the register value back*/
+		regVal &= 0x00FFFFFF; //Mask off the reserved bits.[24-31]
+		hw->pfnWriteDevRegister(hw->adp, BCHP_WRAP_MISC_INTR2_PCI_CLEAR, regVal);
 
-		msleep_interruptible(5); /*5 Milli Sec delay*/
+		msleep_interruptible(10); /*10 Milli Sec delay*/
 	}
-
-	if( !bRetVal )
-	{
-		dev_info(&hw->adp->pdev->dev,"[crystalhd_flea_download_fw]: step 7. Firmware image signature failure.\n");
-		return BC_STS_ERROR;
-	}
-
-	/*Clear the interrupts by writing the register value back*/
-	regVal &= 0x00FFFFFF; /*Mask off the reserved bits.[24-31] */
-	hw->pfnWriteDevRegister(hw->adp, BCHP_WRAP_MISC_INTR2_PCI_CLEAR, regVal);
-
-	msleep_interruptible(10); /*10 Milli Sec delay*/
-
-/*
--- It was seen on Dell390 systems that the firmware command was fired before the
--- firmware was actually ready to accept the firmware commands. The driver did
--- not recieve a response for the firmware commands and this was causing the DIL to timeout
--- ,reclaim the resources and crash. The following code looks for the heartbeat and
--- to make sure that we return from this function only when we get the heart beat making sure
--- that the firmware is running.
-*/
+	else
+		bRetVal = true;
 
 	/*
-	 * By default enable everything except the RX_MBOX_WRITE_WRKARND [scratch workaround]
-	 * to be backward compatible. The firmware will enable the workaround
-	 * by writing to scratch 5. In future the firmware can disable the workarounds
-	 * and we will not have to WHQL the driver at all.
-	 */
-	/*hw->EnWorkArounds = RX_PIC_Q_STS_WRKARND | RX_DRAM_WRITE_WRKARND; */
+	   -- It was seen on Dell390 systems that the firmware command was fired before the
+	   -- firmware was actually ready to accept the firmware commands. The driver did
+	   -- not recieve a response for the firmware commands and this was causing the DIL to timeout
+	   -- ,reclaim the resources and crash. The following code looks for the heartbeat and
+	   -- to make sure that we return from this function only when we get the heart beat making sure
+	   -- that the firmware is running.
+	   */
+
 	bRetVal = crystalhd_flea_detect_fw_alive(hw);
 	if( !bRetVal )
 	{
 		dev_info(&hw->adp->pdev->dev,"[crystalhd_flea_download_fw]: step 8. Detect firmware heart beat failed.\n");
 		return BC_STS_ERROR;
 	}
-
-	/*if(bRetVal == TRUE)
-	{
-		ULONG EnaWorkArnds;
-		hw->pfnReadDevRegister(hw->adp,
-			RX_POST_CONFIRM_SCRATCH,
-			&EnaWorkArnds);
-
-		if( ((EnaWorkArnds & 0xffff0000) >> 16) ==	FLEA_WORK_AROUND_SIG)
-		{
-			pHWExt->EnWorkArounds = EnaWorkArnds & 0xffff;
-			DebugPrint(BRCM_COMP_ID,
-				BRCM_DBG_LEVEL,
-				"WorkArounds Enable Value[%x]\n",pHWExt->EnWorkArounds);
-		}
-	}*/
 
 	dev_dbg(&hw->adp->pdev->dev, "[%s]: Complete.\n", __func__);
 	return BC_STS_SUCCESS;
@@ -2002,6 +1995,7 @@ void crystalhd_flea_stop_rx_dma_engine(struct crystalhd_hw *hw)
 
 	if((hw->rx_list_sts[0] == sts_free) && (hw->rx_list_sts[1] == sts_free)) {
 		hw->RxCaptureState = 0;
+		hw->RxSeqNum = 0;
 		return; /* Nothing to be done */
 	}
 
@@ -2049,6 +2043,7 @@ void crystalhd_flea_stop_rx_dma_engine(struct crystalhd_hw *hw)
 		printk("Failed to stop RX DMA\n");
 
 	hw->RxCaptureState = 0;
+	hw->RxSeqNum = 0;
 
 	crystalhd_flea_clear_rx_errs_intrs(hw);
 }
@@ -2081,12 +2076,14 @@ BC_STATUS crystalhd_flea_hw_fire_rxdma(struct crystalhd_hw *hw,
 
 	spin_lock_irqsave(&hw->rx_lock, flags);
 	if (hw->rx_list_sts[hw->rx_list_post_index]) {
+		dev_dbg(dev, "HW list is busy\n");
 		spin_unlock_irqrestore(&hw->rx_lock, flags);
 		return BC_STS_BUSY;
 	}
 
 	if (!TEST_BIT(hw->PicQSts, hw->channelNum)) {
 		/* NO pictures available for this channel */
+		dev_dbg(dev, "No Picture Available for DMA\n");
 		spin_unlock_irqrestore(&hw->rx_lock, flags);
 		return BC_STS_BUSY;
 	}
@@ -2203,6 +2200,10 @@ BC_STATUS crystalhd_flea_stop_tx_dma_engine(struct crystalhd_hw *hw)
 	dev_dbg(dev, "Stopping TX DMA Engine..\n");
 
 	if (!(dma_cntrl & BCHP_MISC1_TX_SW_DESC_LIST_CTRL_STS_TX_DMA_RUN_STOP_MASK)) {
+		hw->TxList0Sts = ListStsFree;
+		hw->TxList1Sts = ListStsFree;
+		hw->tx_list_post_index = 0;
+
 		dev_dbg(dev, "Already Stopped\n");
 		return BC_STS_SUCCESS;
 	}

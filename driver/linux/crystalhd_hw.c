@@ -756,7 +756,7 @@ BC_STATUS crystalhd_hw_post_tx(struct crystalhd_hw *hw, struct crystalhd_dio_req
 	tx_dma_packet = (struct tx_dma_pkt *)crystalhd_dioq_fetch(hw->tx_freeq);
 	if (!tx_dma_packet) {
 		dev_err(dev, "No empty elements..\n");
-		return BC_STS_ERR_USAGE;
+		return BC_STS_INSUFF_RES;
 	}
 
 	sts = crystalhd_xlat_sgl_to_dma_desc(ioreq,
@@ -1025,7 +1025,30 @@ BC_STATUS crystalhd_hw_suspend(struct crystalhd_hw *hw)
 	}
 
 	if (!hw->pfnStopDevice(hw)) {
-		dev_err(&hw->adp->pdev->dev, "Failed to Stop Device!!\n");
+		dev_info(&hw->adp->pdev->dev, "Failed to Stop Device!!\n");
+		return BC_STS_ERROR;
+	}
+
+	return BC_STS_SUCCESS;
+}
+
+BC_STATUS crystalhd_hw_resume(struct crystalhd_hw *hw)
+{
+	if (!hw) {
+		printk(KERN_ERR "%s: Invalid Arguments\n", __func__);
+		return BC_STS_INV_ARG;
+	}
+
+	// Reset list state
+	hw->rx_list_sts[0] = sts_free;
+	hw->rx_list_sts[1] = sts_free;
+	hw->TxList0Sts = ListStsFree;
+	hw->TxList1Sts = ListStsFree;
+	hw->rx_list_post_index = 0;
+	hw->tx_list_post_index = 0;
+
+	if (hw->pfnStartDevice(hw)) {
+		dev_info(&hw->adp->pdev->dev, "Failed to Start Device!!\n");
 		return BC_STS_ERROR;
 	}
 

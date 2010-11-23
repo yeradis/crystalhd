@@ -359,6 +359,7 @@ BC_STATUS DtsPrepareMdata(DTS_LIB_CONTEXT *Ctx, uint64_t timeStamp, DTS_INPUT_MD
 BC_STATUS DtsNotifyOperatingMode(HANDLE hDevice, uint32_t Mode);
 BC_STATUS DtsReleaseUserHandle(DTS_LIB_CONTEXT *Ctx);
 BC_STATUS DtsGetHWFeatures(uint32_t *pciids);
+BC_STATUS DtsSetupHardware(HANDLE hDevice, BOOL IgnClkChk);
 
 /* Internal helper function */
 uint32_t DtsGetWidthfromResolution(DTS_LIB_CONTEXT *Ctx, uint32_t Resolution);
