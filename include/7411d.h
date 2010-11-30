@@ -557,8 +557,7 @@ typedef struct {
 
 /* picture information block (PIB) */
 /* used in picInfomode, userdataMode */
-typedef struct
-{
+struct C011_PIB {
    uint32_t	bFormatChange;
    uint32_t	resolution;
    uint32_t	channelId;
@@ -569,7 +568,7 @@ typedef struct
    uint32_t	yComponent;
    PPB		ppb;
 
-} C011_PIB;
+};
 
 /* size of picture information block */
 #define C011_PIB_SIZE	       (sizeof(C011_PIB))
