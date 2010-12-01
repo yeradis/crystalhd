@@ -85,7 +85,7 @@ gboolean parse_find_strt_code(Parse *parse, guint8 input_format, guint8 *in_buff
 
 gint FindBSStartCode(guint8 *Buf, gint ZerosInStartcode)
 {
-	BOOL bStartCode = TRUE;
+	bool bStartCode = TRUE;
 	gint i;
 
 	for (i = 0; i < ZerosInStartcode; i++)

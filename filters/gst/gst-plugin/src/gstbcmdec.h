@@ -350,12 +350,6 @@ bcmdec_process_flush_start(GstBcmDec* filter);
 static void
 bcmdec_process_flush_stop(GstBcmDec* filter);
 
-static BC_STATUS
-bcmdec_resume_callback(GstBcmDec* filter);
-
-static BC_STATUS
-bcmdec_suspend_callback(GstBcmDec* filter);
-
 static gboolean
 bcmdec_mul_inst_cor(GstBcmDec* filter);
 
