@@ -25,6 +25,7 @@
  **********************************************************************/
 
 #include "crystalhd_lnx.h"
+#include "crystalhd_hw.h"
 
 static struct crystalhd_user *bc_cproc_get_uid(struct crystalhd_cmd *ctx)
 {
@@ -921,7 +922,6 @@ static const struct crystalhd_cmd_tbl	g_crystalhd_cproc_tbl[] = {
 };
 
 /*=============== Cmd Proc Functions.. ===================================*/
-
 /**
  * crystalhd_suspend - Power management suspend request.
  * @ctx: Command layer context.
@@ -946,7 +946,7 @@ BC_STATUS crystalhd_suspend(struct crystalhd_cmd *ctx, crystalhd_ioctl_data *ida
 {
 	struct device *dev = chddev();
 	BC_STATUS sts = BC_STS_SUCCESS;
-	crystalhd_rx_dma_pkt *rpkt = NULL;
+	struct crystalhd_rx_dma_pkt *rpkt = NULL;
 
 	if (!ctx || !idata) {
 		dev_err(dev, "Invalid Parameters\n");

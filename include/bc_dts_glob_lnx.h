@@ -220,7 +220,11 @@ enum _DECOUT_COMPLETION_FLAGS{
 
 typedef struct _BC_DEC_OUT_BUFF{
 	BC_DEC_YUV_BUFFS	OutPutBuffs;
-	struct C011_PIB		PibInfo;
+#if !defined(__KERNEL__)
+	C011_PIB		PibInfo;
+#else
+	struct C011_PIB PibInfo;
+#endif
 	uint32_t		Flags;
 	uint32_t		BadFrCnt;
 } BC_DEC_OUT_BUFF;
@@ -319,7 +323,7 @@ typedef struct _crystalhd_ioctl_data {
 
 enum _crystalhd_kmod_ver{
 	crystalhd_kmod_major	= 3,
-	crystalhd_kmod_minor	= 9,
+	crystalhd_kmod_minor	= 10,
 	crystalhd_kmod_rev		= 0,
 };
 

@@ -244,7 +244,6 @@ struct crystalhd_rx_dma_pkt {
 	BC_PIC_INFO_BLOCK		pib;
 	dma_addr_t			uv_phy_addr;
 	struct  crystalhd_rx_dma_pkt	*next;
-
 };
 
 struct crystalhd_hw_stats{

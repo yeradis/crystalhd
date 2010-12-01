@@ -833,7 +833,7 @@ void crystalhd_flea_notify_fll_change(struct crystalhd_hw *hw, bool bCleanupCont
 static
 void crystalhd_flea_init_power_state(struct crystalhd_hw *hw)
 {
-	hw->FleaEnablePWM = true;	/* enable by default */
+	hw->FleaEnablePWM = false;	/* enable by default */
 	hw->FleaPowerState = FLEA_PS_NONE;
 }
 
@@ -1062,11 +1062,11 @@ void crystalhd_flea_set_next_power_state(struct crystalhd_hw *hw,
 
 	if(hw->FleaPowerState != NextPS)
 	{
-		/*printk("%s:State Transition [FromSt:%x ToSt:%x] Because Of Event:%d \n", */
-		/*	__FUNCTION__, */
-		/*	hw->FleaPowerState, */
-		/*	NextPS, */
-		/*	PowerEvt); */
+		printk("%s:State Transition [FromSt:%x ToSt:%x] Because Of Event:%d \n",
+			__FUNCTION__,
+			hw->FleaPowerState,
+			NextPS,
+			PowerEvt);
 
 		crystalhd_flea_set_power_state(hw,NextPS);
 	}
@@ -1274,7 +1274,8 @@ BCHP_SCRUB_CTRL_BI_CMAC_127_96		0x000f6018			CMAC Bits[127:96]
 	{
 		/* -- Step 7. Poll for Boot Verification done/failure interrupt.*/
 		dev_dbg(&hw->adp->pdev->dev,"[crystalhd_flea_download_fw]: step 7. Poll for Boot Verification done/failure interrupt.\n");
-
+		pollCnt=0;
+		while(1)
 		{
 			regVal = hw->pfnReadDevRegister(hw->adp, BCHP_WRAP_MISC_INTR2_PCI_STATUS);
 
