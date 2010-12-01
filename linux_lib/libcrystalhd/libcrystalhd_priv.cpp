@@ -38,6 +38,7 @@
 #include "libcrystalhd_if.h"
 #include "libcrystalhd_int_if.h"
 #include "libcrystalhd_priv.h"
+#include "libcrystalhd_parser.h"
 
 /*============== Global shared area usage ======================*/
 /* Global mode settings */
@@ -791,14 +792,14 @@ BOOL DtsCheckRptPic(DTS_LIB_CONTEXT *Ctx, BC_DTS_PROC_OUT *pOut)
 	}
 
 
-	if (Ctx->bEOSCheck && Ctx->bEOS == FALSE)
+	if (Ctx->bEOSCheck && !Ctx->bEOS)
 	{
-		if (bRepeat == TRUE)
+		if (bRepeat)
 			Ctx->EOSCnt ++;
 
 		if (Ctx->EOSCnt >= BC_EOS_PIC_COUNT)
 		{
-			Ctx->bEOS = TRUE;
+			Ctx->bEOS = true;
 			pOut->PicInfo.flags |= VDEC_FLAG_LAST_PICTURE;
 		}
 	}
@@ -2488,6 +2489,8 @@ void * txThreadProc(void *ctx)
 	HANDLE hDevice = (HANDLE)Ctx;
 	BC_DTS_STATUS pStat;
 	int ret = 0;
+	uint32_t waitForPictCount = 0;
+	uint32_t numPicCaptured = 0;
 
 	ret = posix_memalign((void**)&localBuffer, 128, CIRC_TX_BUF_SIZE);
 	if(ret)
@@ -2508,11 +2511,35 @@ void * txThreadProc(void *ctx)
 			continue;
 		}
 
+		//DebugLog_Trace(LDIL_ERR,"txThreadProc: Got hw size %u and data size %u\n", pStat.cpbEmptySize, Ctx->circBuf.busySize);
+
 		if(pStat.PowerStateChange == BC_HW_SUSPEND)
 		{
-			// HW is in suspend mode
-			usleep(5 * 1000); // sleep 5 ms and then continue
+			// HW is in suspend mode, sleep 30 ms and then try again
+			usleep(30 * 1000);
 			continue;
+		}
+
+		// hack for indicating EOS when the HW does not signal one
+		// We will check if the HW does not produce a picture for 1s and does not signal EOS either
+		// This way exit maximum in 1s
+		if(Ctx->bEOSCheck)
+		{
+			if(numPicCaptured == pStat.FramesCaptured)
+				waitForPictCount++;
+
+			if(waitForPictCount >= BC_EOS_PIC_COUNT)
+				Ctx->bEOS = true;
+
+			usleep(30 * 1000);
+		}
+		else
+			waitForPictCount = 0;
+
+		if(numPicCaptured != pStat.FramesCaptured)
+		{
+			waitForPictCount = 0;
+			numPicCaptured = pStat.FramesCaptured;
 		}
 
 		if(pStat.PowerStateChange == BC_HW_RESUME)
@@ -2553,6 +2580,22 @@ void * txThreadProc(void *ctx)
 				usleep(1000 * 1000);
 				continue; // Try again and pray for the best
 			}
+			// Force sending SPS/PPS previously stored
+			DtsClrPendMdataList(Ctx);
+			Ctx->LastPicNum = -1;
+			Ctx->LastSessNum = -1;
+			Ctx->EOSCnt = 0;
+			Ctx->DrvStatusEOSCnt = 0;
+			Ctx->bEOS = FALSE;
+			Ctx->PESConvParams.m_lStartCodeDataSize = 0;
+
+			Ctx->PESConvParams.m_bAddSpsPps = true;
+			// Throw away any potential partial data, since we need a complete picture to start decoding
+			txBufFlush(&Ctx->circBuf);
+			// But in case we were already in the mode to be hunting for EOS
+			// and did not send it to HW, resend it so the playback can end gracefully
+			if(Ctx->bEOSCheck)
+				DtsSendEOS(hDevice, 0);
 			DebugLog_Trace(LDIL_ERR,"Resume from S3/S5 Done\n");
 		}
 
