@@ -2662,9 +2662,9 @@ DRVIFLIB_INT_API BC_STATUS DtsGetHWFeatures(uint32_t *pciids)
 
 	if(pIo.RetSts == BC_STS_SUCCESS) {
 		*pciids = pIo.u.pciCfg.pci_cfg_space[0] |
-					(pIo.u.pciCfg.pci_cfg_space[0] << 8) |
-					(pIo.u.pciCfg.pci_cfg_space[0] << 16) |
-					(pIo.u.pciCfg.pci_cfg_space[0] << 24);
+					(pIo.u.pciCfg.pci_cfg_space[1] << 8) |
+					(pIo.u.pciCfg.pci_cfg_space[2] << 16) |
+					(pIo.u.pciCfg.pci_cfg_space[3] << 24);
 		//*pciids = *(uint32_t*)pIo.u.pciCfg.pci_cfg_space;
 		close(drvHandle);
 		return BC_STS_SUCCESS;

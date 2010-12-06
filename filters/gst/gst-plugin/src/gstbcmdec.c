@@ -99,13 +99,13 @@ GLB_INST_STS *g_inst_sts = NULL;
  *
  * describe the real formats here.
  */
-static GstStaticPadTemplate sink_factory_bcm70015 = GST_STATIC_PAD_TEMPLATE("sink", GST_PAD_SINK, GST_PAD_ALWAYS,
+GstStaticPadTemplate sink_factory_bcm70015 = GST_STATIC_PAD_TEMPLATE("sink", GST_PAD_SINK, GST_PAD_ALWAYS,
 		GST_STATIC_CAPS("video/mpeg, " "mpegversion = (int) {2, 4}," "systemstream =(boolean) false; "
 						"video/x-h264;" "video/x-vc1;" "video/x-wmv, " "wmvversion = (int) {3};"
 						"video/x-msmpeg, " "msmpegversion = (int) {43};"
 						"video/x-divx, " "divxversion = (int) {3, 4, 5};" "video/x-xvid;"));
 
-static GstStaticPadTemplate sink_factory_bcm70012 = GST_STATIC_PAD_TEMPLATE("sink", GST_PAD_SINK, GST_PAD_ALWAYS,
+GstStaticPadTemplate sink_factory_bcm70012 = GST_STATIC_PAD_TEMPLATE("sink", GST_PAD_SINK, GST_PAD_ALWAYS,
 		GST_STATIC_CAPS("video/mpeg, " "mpegversion = (int) {2}," "systemstream =(boolean) false; "
 						"video/x-h264;" "video/x-vc1;" "video/x-wmv, " "wmvversion = (int) {3};"));
 
@@ -134,10 +134,12 @@ static void gst_bcmdec_base_init(gpointer gclass)
 	static GstElementDetails element_details;
 	BC_HW_CAPS hwCaps;
 
+	GST_DEBUG_OBJECT(gclass, "gst_bcmdec_base_init");
+
 	element_details.klass = (gchar *)"Codec/Decoder/Video";
 	element_details.longname = (gchar *)"Generic Video Decoder";
 	element_details.description = (gchar *)"Decodes various Video Formats using CrystalHD Decoders";
-	element_details.author = (gchar *)"BRCM";
+	element_details.author = (gchar *)"Broadcom Corp.";
 
 	GstElementClass *element_class = GST_ELEMENT_CLASS(gclass);
 
@@ -145,8 +147,10 @@ static void gst_bcmdec_base_init(gpointer gclass)
 	decif_getcaps(NULL, &hwCaps);
 
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get (&src_factory));
-	if(hwCaps.DecCaps & BC_DEC_FLAGS_M4P2)
+	if(hwCaps.DecCaps & BC_DEC_FLAGS_M4P2) {
+		GST_DEBUG_OBJECT(gclass, "Found M4P2 support");
 		gst_element_class_add_pad_template(element_class, gst_static_pad_template_get (&sink_factory_bcm70015));
+	}
 	else
 		gst_element_class_add_pad_template(element_class, gst_static_pad_template_get (&sink_factory_bcm70012));
 	gst_element_class_set_details(element_class, &element_details);
@@ -160,6 +164,8 @@ static void gst_bcmdec_class_init(GstBcmDecClass *klass)
 
 	gobject_class = (GObjectClass *)klass;
 	gstelement_class = (GstElementClass *)klass;
+
+	GST_DEBUG_OBJECT(klass, "gst_bcmdec_class_init");
 
 	gstelement_class->change_state = gst_bcmdec_change_state;
 
@@ -561,8 +567,12 @@ static gboolean gst_bcmdec_sink_set_caps(GstPad *pad, GstCaps *caps)
 			}
 			else if(bcmdec->input_format == BC_MSUBTYPE_MPEG2VIDEO)
 			{
-				// FOR MPEG-2 don't need any additional codec_data is most cases
+				// For MPEG-2 don't need any additional codec_data is most cases
 				GST_DEBUG_OBJECT(bcmdec, "no codec_data for MPEG-2. Trying to decode anyway");
+			}
+			else if(bcmdec->input_format == BC_MSUBTYPE_DIVX){
+				// For DIVX don't need any additional codec_data is most cases
+				GST_DEBUG_OBJECT(bcmdec, "no codec_data for MPEG-4. Trying to decode anyway");
 			}
 			else {
 				GST_DEBUG_OBJECT(bcmdec, "no codec_data. Don't know how to handle");
@@ -2671,7 +2681,5 @@ static gboolean plugin_init(GstPlugin *bcmdec)
 }
 
 /* gstreamer looks for this structure to register bcmdec */
-GST_PLUGIN_DEFINE(GST_VERSION_MAJOR, GST_VERSION_MINOR,
-		  "bcmdec", "Video decoder", plugin_init, VERSION,
-		  "LGPL", "bcmdec", "http://broadcom.com/")
+GST_PLUGIN_DEFINE(GST_VERSION_MAJOR, GST_VERSION_MINOR, "bcmdec", "Video decoder", plugin_init, VERSION, "LGPL", "bcmdec", "http://broadcom.com/")
 
