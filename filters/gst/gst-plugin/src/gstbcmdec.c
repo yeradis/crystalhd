@@ -362,13 +362,7 @@ static gboolean gst_bcmdec_sink_event(GstPad* pad, GstEvent* event)
 
 static GstCaps *gst_bcmdec_getcaps (GstPad * pad)
 {
-	GstBcmDec *bcmdec;
-  	GstCaps *caps;
-	bcmdec = GST_BCMDEC(gst_pad_get_parent(pad));
-
-	caps = gst_caps_copy (gst_pad_get_pad_template_caps (pad));
-
-	return caps;
+	return gst_caps_copy (gst_pad_get_pad_template_caps (pad));
 }
 
 /* this function handles the link with other elements */
@@ -624,7 +618,6 @@ static GstFlowReturn gst_bcmdec_chain(GstPad *pad, GstBuffer *buf)
 {
 	GstBcmDec *bcmdec;
 //	BC_STATUS sts = BC_STS_SUCCESS;
-	guint32 buf_sz = 0;
 	guint32 offset = 0;
 	GstClockTime tCurrent = 0;
 	guint8 *pbuffer;
@@ -655,7 +648,6 @@ static GstFlowReturn gst_bcmdec_chain(GstPad *pad, GstBuffer *buf)
 		}
 		tCurrent = GST_BUFFER_TIMESTAMP(buf);
 	}
-	buf_sz = GST_BUFFER_SIZE(buf);
 
 	if (bcmdec->play_pending) {
 		bcmdec->play_pending = FALSE;
@@ -697,7 +689,6 @@ static gboolean gst_bcmdec_src_event(GstPad *pad, GstEvent *event)
 static gboolean bcmdec_negotiate_format(GstBcmDec *bcmdec)
 {
 	GstCaps *caps;
-	guint32 fourcc;
 	gboolean result;
 	guint num = (guint)(bcmdec->output_params.framerate * 1000);
 	guint den = 1000;
@@ -706,10 +697,8 @@ static gboolean bcmdec_negotiate_format(GstBcmDec *bcmdec)
 	GstVideoFormat vidFmt;
 
 #ifdef YV12__
-	fourcc = GST_STR_FOURCC("YV12");
 	vidFmt = GST_VIDEO_FORMAT_YV12;
 #else
-	fourcc = GST_STR_FOURCC("YUY2");
 	vidFmt = GST_VIDEO_FORMAT_YUY2;
 #endif
 	GST_DEBUG_OBJECT(bcmdec, "framerate = %f", bcmdec->output_params.framerate);
@@ -858,8 +847,6 @@ static GstStateChangeReturn gst_bcmdec_change_state(GstElement *element, GstStat
 	GstStateChangeReturn result = GST_STATE_CHANGE_SUCCESS;
 	GstBcmDec *bcmdec = GST_BCMDEC(element);
 	BC_STATUS sts = BC_STS_SUCCESS;
-	GstClockTime clock_time;
-	GstClockTime base_clock_time;
 	int ret = 0;
 
 	switch (transition) {
@@ -903,11 +890,14 @@ static GstStateChangeReturn gst_bcmdec_change_state(GstElement *element, GstStat
 		GST_DEBUG_OBJECT(bcmdec, "GST_STATE_CHANGE_PAUSED_TO_PLAYING");
 		bcmdec->gst_clock = gst_element_get_clock(element);
 		if (bcmdec->gst_clock) {
-			//printf("clock available %p\n",bcmdec->gst_clock);
+#if 0
+			GstClockTime clock_time, base_clock_time;
+			printf("clock available %p\n",bcmdec->gst_clock);
 			base_clock_time = gst_element_get_base_time(element);
-			//printf("base clock time %lld\n",base_clock_time);
+			printf("base clock time %lld\n",base_clock_time);
 			clock_time = gst_clock_get_time(bcmdec->gst_clock);
-			//printf(" clock time %lld\n",clock_time);
+			printf(" clock time %lld\n",clock_time);
+#endif
 		}
 		break;
 
