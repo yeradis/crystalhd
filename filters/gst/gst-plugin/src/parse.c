@@ -25,6 +25,7 @@
 #include <glib.h>
 #include <gst/gst.h>
 #include "bc_dts_defs.h"
+#include "bc_dts_types.h"
 #include "parse.h"
 
 void parse_init(Parse *parse)
