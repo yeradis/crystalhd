@@ -650,7 +650,7 @@ static int __devinit chd_dec_pci_probe(struct pci_dev *pdev,
 		goto free_priv;
 	}
 
-	snprintf(pinfo->name, 31, "crystalhd_pci_e:%d:%d:%d",
+	snprintf(pinfo->name, sizeof(pinfo->name), "crystalhd_pci_e:%d:%d:%d",
 		 pdev->bus->number, PCI_SLOT(pdev->devfn),
 		 PCI_FUNC(pdev->devfn));
 
