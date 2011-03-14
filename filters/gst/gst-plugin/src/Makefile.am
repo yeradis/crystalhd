@@ -29,7 +29,7 @@ libgstbcmdec_la_SOURCES = gstbcmdec.c decif.c parse.c
 # flags used to compile this plugin
 # add other _CFLAGS and _LIBS as needed
 libgstbcmdec_la_CFLAGS = $(GST_CFLAGS) $(BCMDEC_CFLAGS)
-libgstbcmdec_la_LIBADD = $(GST_LIBS) $(GST_PLUGINS_BASE_LIBS) -lgstvideo-@GST_MAJORMINOR@ 
+libgstbcmdec_la_LIBADD = $(GST_LIBS) $(GST_PLUGINS_BASE_LIBS)
 libgstbcmdec_la_LDFLAGS = $(GST_PLUGIN_LDFLAGS) $(BCMDEC_LDFLAGS)
 
 # headers we need but don't want installed
