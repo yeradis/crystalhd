@@ -24,6 +24,7 @@
  * along with this driver.  If not, see <http://www.gnu.org/licenses/>.
  **********************************************************************/
 
+#include <linux/delay.h>
 #include "crystalhd_hw.h"
 #include "crystalhd_flea_ddr.h"
 
