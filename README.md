@@ -1,4 +1,2 @@
-crystalhd
-=========
-
-Broadcom Crystal HD Hardware Decoder (BCM70012/70015) driver on Ubuntu
+# Crystal HD Hardware Decoder Driver on Ubuntu 13.04 Linux kernel 3.8.0-25
+## Broadcom BCM70012 & BCM70015
