@@ -1093,7 +1093,7 @@ BC_STATUS crystalhd_user_open(struct crystalhd_cmd *ctx,
  *
  * Called at the time of driver load.
  */
-BC_STATUS __devinit crystalhd_setup_cmd_context(struct crystalhd_cmd *ctx,
+BC_STATUS __init crystalhd_setup_cmd_context(struct crystalhd_cmd *ctx,
 				    struct crystalhd_adp *adp)
 {
 	struct device *dev = &adp->pdev->dev;
@@ -1136,7 +1136,7 @@ BC_STATUS __devinit crystalhd_setup_cmd_context(struct crystalhd_cmd *ctx,
  *
  * Called at the time of driver un-load.
  */
-BC_STATUS __devexit crystalhd_delete_cmd_context(struct crystalhd_cmd *ctx)
+BC_STATUS __exit crystalhd_delete_cmd_context(struct crystalhd_cmd *ctx)
 {
 	dev_dbg(chddev(), "Deleting Command context..\n");
 
