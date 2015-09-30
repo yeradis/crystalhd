@@ -538,8 +538,7 @@ static int __init chd_pci_reserve_mem(struct crystalhd_adp *pinfo)
 	        bar0, i2o_len, bar2, mem_len);
 
 	/* bar-0 */
-	rc = check_mem_region(bar0, i2o_len);
-	if (rc) {
+	if (!request_mem_region(bar0, i2o_len, "crystalhd")) {
 		printk(KERN_ERR "No valid mem region...\n");
 		return -ENOMEM;
 	}
@@ -554,8 +553,7 @@ static int __init chd_pci_reserve_mem(struct crystalhd_adp *pinfo)
 	pinfo->pci_i2o_len   = i2o_len;
 
 	/* bar-2 */
-	rc = check_mem_region(bar2, mem_len);
-	if (rc) {
+	if (!request_mem_region(bar2, mem_len, "crystalhd")) {
 		printk(KERN_ERR "No valid mem region...\n");
 		return -ENOMEM;
 	}
@@ -589,9 +587,11 @@ static void __exit chd_pci_release_mem(struct crystalhd_adp *pinfo)
 
 	if (pinfo->mem_addr)
 		iounmap(pinfo->mem_addr);
+		release_mem_region(pinfo->pci_mem_start, pinfo->pci_mem_len);
 
 	if (pinfo->i2o_addr)
 		iounmap(pinfo->i2o_addr);
+		release_mem_region(pinfo->pci_i2o_start, pinfo->pci_i2o_len)
 
 	pci_release_regions(pinfo->pdev);
 }
