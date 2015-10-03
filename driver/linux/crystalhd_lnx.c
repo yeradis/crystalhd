@@ -558,7 +558,7 @@ static int __init chd_pci_reserve_mem(struct crystalhd_adp *pinfo)
 		return -ENOMEM;
 	}
 	
-	pinfo->mem_addr = pci_ioremap_nbar(pinfo->pdev, 2);
+	pinfo->mem_addr = pci_ioremap_bar(pinfo->pdev, 2);
 	if (!pinfo->mem_addr) {
 		printk(KERN_ERR "Failed to remap mem region...\n");
 		return -ENOMEM;
