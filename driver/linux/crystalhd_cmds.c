@@ -85,7 +85,7 @@ static BC_STATUS bc_cproc_notify_mode(struct crystalhd_cmd *ctx,
 		return BC_STS_ERR_USAGE;
 	}
 
-	if ((idata->udata.u.NotifyMode.Mode && 0xFF) == DTS_MONITOR_MODE) {
+	if ((idata->udata.u.NotifyMode.Mode & 0xFF) == DTS_MONITOR_MODE) {
 		ctx->user[idata->u_id].mode = idata->udata.u.NotifyMode.Mode;
 		return BC_STS_SUCCESS;
 	}

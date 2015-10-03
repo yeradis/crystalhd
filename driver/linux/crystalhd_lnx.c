@@ -538,32 +538,10 @@ static int __init chd_pci_reserve_mem(struct crystalhd_adp *pinfo)
 	        bar0, i2o_len, bar2, mem_len);
 
 	/* bar-0 */
-	if (!request_mem_region(bar0, i2o_len, "crystalhd")) {
-		printk(KERN_ERR "No valid mem region...\n");
-		return -ENOMEM;
-	}
-
-	pinfo->i2o_addr = ioremap_nocache(bar0, i2o_len);
-	if (!pinfo->i2o_addr) {
-		printk(KERN_ERR "Failed to remap i2o region...\n");
-		return -ENOMEM;
-	}
-
 	pinfo->pci_i2o_start = bar0;
 	pinfo->pci_i2o_len   = i2o_len;
 
 	/* bar-2 */
-	if (!request_mem_region(bar2, mem_len, "crystalhd")) {
-		printk(KERN_ERR "No valid mem region...\n");
-		return -ENOMEM;
-	}
-
-	pinfo->mem_addr = ioremap_nocache(bar2, mem_len);
-	if (!pinfo->mem_addr) {
-		printk(KERN_ERR "Failed to remap mem region...\n");
-		return -ENOMEM;
-	}
-
 	pinfo->pci_mem_start = bar2;
 	pinfo->pci_mem_len   = mem_len;
 
@@ -572,6 +550,18 @@ static int __init chd_pci_reserve_mem(struct crystalhd_adp *pinfo)
 	if (rc < 0) {
 		printk(KERN_ERR "Region request failed: %d\n", rc);
 		return rc;
+	}
+	
+	pinfo->i2o_addr = pci_ioremap_bar(pinfo->pdev, 0);
+	if (!pinfo->i2o_addr) {
+		printk(KERN_ERR "Failed to remap i2o region...\n");
+		return -ENOMEM;
+	}
+	
+	pinfo->mem_addr = pci_ioremap_bar(pinfo->pdev, 2);
+	if (!pinfo->mem_addr) {
+		printk(KERN_ERR "Failed to remap mem region...\n");
+		return -ENOMEM;
 	}
 
 	dev_dbg(dev, "i2o_addr:0x%08lx   Mapped addr:0x%08lx  \n",
