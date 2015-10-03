@@ -577,11 +577,9 @@ static void __exit chd_pci_release_mem(struct crystalhd_adp *pinfo)
 
 	if (pinfo->mem_addr)
 		iounmap(pinfo->mem_addr);
-		release_mem_region(pinfo->pci_mem_start, pinfo->pci_mem_len);
 
 	if (pinfo->i2o_addr)
 		iounmap(pinfo->i2o_addr);
-		release_mem_region(pinfo->pci_i2o_start, pinfo->pci_i2o_len);
 
 	pci_release_regions(pinfo->pdev);
 }
