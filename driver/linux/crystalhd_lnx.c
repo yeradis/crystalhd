@@ -498,7 +498,7 @@ fail:
 	return rc;
 }
 
-static void __exit chd_dec_release_chdev(struct crystalhd_adp *adp)
+static void chd_dec_release_chdev(struct crystalhd_adp *adp)
 {
 	crystalhd_ioctl_data *temp = NULL;
 	if (!adp)
@@ -570,7 +570,7 @@ static int __init chd_pci_reserve_mem(struct crystalhd_adp *pinfo)
 	return 0;
 }
 
-static void __exit chd_pci_release_mem(struct crystalhd_adp *pinfo)
+static void chd_pci_release_mem(struct crystalhd_adp *pinfo)
 {
 	if (!pinfo)
 		return;
@@ -800,7 +800,7 @@ static struct pci_device_id chd_dec_pci_id_table[] = {
 #endif
 MODULE_DEVICE_TABLE(pci, chd_dec_pci_id_table);
 
-static struct pci_driver bc_chd_driver = {
+static struct pci_driver bc_chd_driver __refdata = {
 	.name     = "crystalhd",
 	.probe    = chd_dec_pci_probe,
 	.remove   = __exit_p(chd_dec_pci_remove),
