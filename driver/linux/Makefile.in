@@ -12,7 +12,6 @@ INCLUDES += -I$(src)/../../include/flea
 
 FIRMWARE  = ../../firmware/fwbin/70015/bcm70015fw.bin
 FIRMWARE += ../../firmware/fwbin/70012/bcm70012fw.bin
-FIRMWARE += ../../firmware/fwbin/70012/bcmFilePlayFw.bin
 
 EXTRA_CFLAGS   = -D__KERNEL__ -DMODULE $(INCLUDES) $(INC)
 EXTRA_CFLAGS  += -Wall -Wstrict-prototypes -Wno-trigraphs -Werror -O2
