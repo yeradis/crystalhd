@@ -70,3 +70,6 @@ Btw this instructions referred to http://knowledge.evot.biz/documentation/how-to
 
 So, the sources on this repository are updated with the fixes and patches in order to make your life easier.
 
+## History
+
+See [HISTORY.md](HISTORY.md) for a rough history of the various versions of this driver floating around the web.
