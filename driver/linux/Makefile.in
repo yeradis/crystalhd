@@ -10,6 +10,10 @@ INCLUDES += -I$(src)/../../include
 INCLUDES += -I$(src)/../../include/link
 INCLUDES += -I$(src)/../../include/flea
 
+FIRMWARE  = ../../firmware/fwbin/70015/bcm70015fw.bin
+FIRMWARE += ../../firmware/fwbin/70012/bcm70012fw.bin
+FIRMWARE += ../../firmware/fwbin/70012/bcmFilePlayFw.bin
+
 EXTRA_CFLAGS   = -D__KERNEL__ -DMODULE $(INCLUDES) $(INC)
 EXTRA_CFLAGS  += -Wall -Wstrict-prototypes -Wno-trigraphs -Werror -O2
 
@@ -38,6 +42,10 @@ install:
 		install -d /lib/modules/$(shell uname -r)/kernel/drivers/video/broadcom ; \
 		install -m 0644 crystalhd.ko /lib/modules/$(shell uname -r)/kernel/drivers/video/broadcom ; \
 	fi
+	if [ ! -d /lib/firmware ] ; \
+		then install -d /lib/firmware ; \
+	fi
+	install -t /lib/firmware $(FIRMWARE)
 	/sbin/depmod -a
 
 clean:

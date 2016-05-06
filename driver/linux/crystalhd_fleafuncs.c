@@ -593,6 +593,8 @@ void crystalhd_flea_runtime_power_dn(struct crystalhd_hw *hw)
 	hw->pfnWriteDevRegister(hw->adp,
 		BCHP_DECODE_CPUREGS2_0_REG_WATCHDOG_TMR,
 		0xffffffff);
+#else
+	regVal = 0;
 #endif
 
 	/* Stop memory arbiter first to freese memory access */
