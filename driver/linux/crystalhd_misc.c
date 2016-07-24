@@ -652,8 +652,15 @@ BC_STATUS crystalhd_map_dio(struct crystalhd_adp *adp, void *ubuff,
 	}
 
 	down_read(&current->mm->mmap_sem);
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,6,0)
+	res = get_user_pages_remote(current, current->mm, uaddr, nr_pages, rw == READ,
+			     0, dio->pages, NULL);
+#else
 	res = get_user_pages(current, current->mm, uaddr, nr_pages, rw == READ,
 			     0, dio->pages, NULL);
+#endif
+
 	up_read(&current->mm->mmap_sem);
 
 	/* Save for release..*/
@@ -751,7 +758,12 @@ BC_STATUS crystalhd_unmap_dio(struct crystalhd_adp *adp, struct crystalhd_dio_re
 				if (!PageReserved(page) &&
 				    (dio->direction == DMA_FROM_DEVICE))
 					SetPageDirty(page);
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,6,0)
+				put_page(page);
+#else
 				page_cache_release(page);
+#endif
 			}
 		}
 	}
