@@ -24,6 +24,11 @@
  * along with this driver.  If not, see <http://www.gnu.org/licenses/>.
  **********************************************************************/
 
+#include <linux/version.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,9,0)
+#include <linux/sched/signal.h>
+#endif
+
 #include "crystalhd_lnx.h"
 #include "crystalhd_hw.h"
 
