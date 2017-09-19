@@ -27,6 +27,10 @@
 #include <linux/pci.h>
 #include <linux/delay.h>
 #include <linux/device.h>
+#include <linux/version.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,11,0)
+#include <linux/sched/signal.h>
+#endif
 #include <asm/tsc.h>
 #include <asm/msr.h>
 #include "crystalhd_hw.h"
@@ -593,6 +597,8 @@ void crystalhd_flea_runtime_power_dn(struct crystalhd_hw *hw)
 	hw->pfnWriteDevRegister(hw->adp,
 		BCHP_DECODE_CPUREGS2_0_REG_WATCHDOG_TMR,
 		0xffffffff);
+#else
+	regVal = 0;
 #endif
 
 	/* Stop memory arbiter first to freese memory access */

@@ -1,0 +1,25 @@
+DKMS is a program/framework that enables generating Linux kernel modules
+whose sources generally reside outside the kernel source tree.  The concept
+is to have DKMS modules automatically rebuilt when a new kernel is
+installed.
+
+source: https://en.wikipedia.org/wiki/Dynamic_Kernel_Module_Support
+
+How to configure the crystalhd module for DKMS:
+
+- Install DKMS
+
+- Copy or link this source to the directory /usr/src/crystalhd-0.1/, e.g. as root:
+
+    $ ln -s $PWD /usr/src/crystalhd-0.1
+
+- Run (as root):
+
+    $ dkms add -m crystalhd -v 0.1
+
+- Test a build:
+
+    $ dkms build -m crystalhd -v 0.1
+
+From now on this driver should be automatically build and installed for
+newly-installed kernels.

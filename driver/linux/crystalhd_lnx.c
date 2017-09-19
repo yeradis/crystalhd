@@ -498,7 +498,7 @@ fail:
 	return rc;
 }
 
-static void __exit chd_dec_release_chdev(struct crystalhd_adp *adp)
+static void chd_dec_release_chdev(struct crystalhd_adp *adp)
 {
 	crystalhd_ioctl_data *temp = NULL;
 	if (!adp)
@@ -538,34 +538,10 @@ static int __init chd_pci_reserve_mem(struct crystalhd_adp *pinfo)
 	        bar0, i2o_len, bar2, mem_len);
 
 	/* bar-0 */
-	rc = check_mem_region(bar0, i2o_len);
-	if (rc) {
-		printk(KERN_ERR "No valid mem region...\n");
-		return -ENOMEM;
-	}
-
-	pinfo->i2o_addr = ioremap_nocache(bar0, i2o_len);
-	if (!pinfo->i2o_addr) {
-		printk(KERN_ERR "Failed to remap i2o region...\n");
-		return -ENOMEM;
-	}
-
 	pinfo->pci_i2o_start = bar0;
 	pinfo->pci_i2o_len   = i2o_len;
 
 	/* bar-2 */
-	rc = check_mem_region(bar2, mem_len);
-	if (rc) {
-		printk(KERN_ERR "No valid mem region...\n");
-		return -ENOMEM;
-	}
-
-	pinfo->mem_addr = ioremap_nocache(bar2, mem_len);
-	if (!pinfo->mem_addr) {
-		printk(KERN_ERR "Failed to remap mem region...\n");
-		return -ENOMEM;
-	}
-
 	pinfo->pci_mem_start = bar2;
 	pinfo->pci_mem_len   = mem_len;
 
@@ -575,6 +551,18 @@ static int __init chd_pci_reserve_mem(struct crystalhd_adp *pinfo)
 		printk(KERN_ERR "Region request failed: %d\n", rc);
 		return rc;
 	}
+	
+	pinfo->i2o_addr = pci_ioremap_bar(pinfo->pdev, 0);
+	if (!pinfo->i2o_addr) {
+		printk(KERN_ERR "Failed to remap i2o region...\n");
+		return -ENOMEM;
+	}
+	
+	pinfo->mem_addr = pci_ioremap_bar(pinfo->pdev, 2);
+	if (!pinfo->mem_addr) {
+		printk(KERN_ERR "Failed to remap mem region...\n");
+		return -ENOMEM;
+	}
 
 	dev_dbg(dev, "i2o_addr:0x%08lx   Mapped addr:0x%08lx  \n",
 	        (unsigned long)pinfo->i2o_addr, (unsigned long)pinfo->mem_addr);
@@ -582,7 +570,7 @@ static int __init chd_pci_reserve_mem(struct crystalhd_adp *pinfo)
 	return 0;
 }
 
-static void __exit chd_pci_release_mem(struct crystalhd_adp *pinfo)
+static void chd_pci_release_mem(struct crystalhd_adp *pinfo)
 {
 	if (!pinfo)
 		return;
@@ -797,7 +785,7 @@ int chd_dec_pci_resume(struct pci_dev *pdev)
 }
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 24)
-static DEFINE_PCI_DEVICE_TABLE(chd_dec_pci_id_table) = {
+static struct pci_device_id chd_dec_pci_id_table[] = {
 	{ PCI_VDEVICE(BROADCOM, 0x1612), 8 },
 	{ PCI_VDEVICE(BROADCOM, 0x1615), 8 },
 	{ 0, },
@@ -812,7 +800,7 @@ static struct pci_device_id chd_dec_pci_id_table[] = {
 #endif
 MODULE_DEVICE_TABLE(pci, chd_dec_pci_id_table);
 
-static struct pci_driver bc_chd_driver = {
+static struct pci_driver bc_chd_driver __refdata = {
 	.name     = "crystalhd",
 	.probe    = chd_dec_pci_probe,
 	.remove   = __exit_p(chd_dec_pci_remove),

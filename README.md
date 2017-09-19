@@ -11,7 +11,7 @@ After a lot a retries to get the rigth experience with the Crystal HD on Ubuntu,
 
 Get the driver source code from the git repository.
 
-    git clone https://github.com/yeradis/crystalhd.git   
+    git clone https://github.com/dbason/crystalhd.git
 
 _The original repo source is available at git://git.linuxtv.org/jarod/crystalhd.git_
     
@@ -70,3 +70,6 @@ Btw this instructions referred to http://knowledge.evot.biz/documentation/how-to
 
 So, the sources on this repository are updated with the fixes and patches in order to make your life easier.
 
+## History
+
+See [HISTORY.md](HISTORY.md) for a rough history of the various versions of this driver floating around the web.

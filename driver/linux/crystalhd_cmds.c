@@ -24,6 +24,11 @@
  * along with this driver.  If not, see <http://www.gnu.org/licenses/>.
  **********************************************************************/
 
+#include <linux/version.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,9,0)
+#include <linux/sched/signal.h>
+#endif
+
 #include "crystalhd_lnx.h"
 #include "crystalhd_hw.h"
 
@@ -85,7 +90,7 @@ static BC_STATUS bc_cproc_notify_mode(struct crystalhd_cmd *ctx,
 		return BC_STS_ERR_USAGE;
 	}
 
-	if ((idata->udata.u.NotifyMode.Mode && 0xFF) == DTS_MONITOR_MODE) {
+	if ((idata->udata.u.NotifyMode.Mode & 0xFF) == DTS_MONITOR_MODE) {
 		ctx->user[idata->u_id].mode = idata->udata.u.NotifyMode.Mode;
 		return BC_STS_SUCCESS;
 	}

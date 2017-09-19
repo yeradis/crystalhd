@@ -907,9 +907,10 @@ BC_STATUS crystalhd_hw_get_cap_buffer(struct crystalhd_hw *hw,
 		if( (hw->FleaPowerState == FLEA_PS_LP_PENDING) ||
 			(hw->FleaPowerState == FLEA_PS_LP_COMPLETE))
 		{
-			if(crystalhd_dioq_count(hw->rx_rdyq)  <= hw->ResumeThreshold)
+			if (crystalhd_dioq_count(hw->rx_rdyq)  <= hw->ResumeThreshold) {
 				hw->pfnIssuePause(hw, false);	/*Need this Notification For Flea*/
 				hw->hw_pause_issued = false;
+			}
 		}
 	}
 	else if( hw->hw_pause_issued)
